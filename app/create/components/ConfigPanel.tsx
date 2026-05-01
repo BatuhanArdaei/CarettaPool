@@ -154,6 +154,20 @@ export default function ConfigPanel({ config, onChange }: Props) {
         </div>
       </Section>
 
+      <Section title="Şelale">
+        <Toggle
+          options={[
+            { value: 'on', label: 'Var' },
+            { value: 'off', label: 'Yok' },
+          ]}
+          value={config.waterfall ? 'on' : 'off'}
+          onChange={(v) => set('waterfall', v === 'on')}
+        />
+        <p className="text-xs text-slate-500">
+          Paslanmaz çelik kavisli su perdesi (havuzun kısa kenarına yerleşir).
+        </p>
+      </Section>
+
       <Section title="Işıklandırma">
         <Toggle
           options={[
@@ -212,6 +226,40 @@ export default function ConfigPanel({ config, onChange }: Props) {
           value={config.cladding}
           onChange={(v) => set('cladding', v as CladdingType)}
         />
+        <div className="mt-3">
+          <p className="label">Özel desen</p>
+          <div className="grid grid-cols-5 gap-2">
+            {(['texture1', 'texture2', 'texture3', 'texture4', 'texture5'] as CladdingType[]).map(
+              (t, i) => {
+                const isSelected = config.cladding === t;
+                return (
+                  <button
+                    key={t}
+                    type="button"
+                    onClick={() => set('cladding', t)}
+                    className={`relative h-14 overflow-hidden rounded-lg border-2 transition ${
+                      isSelected
+                        ? 'border-brand-600 ring-2 ring-brand-200'
+                        : 'border-slate-200 hover:border-slate-400'
+                    }`}
+                    title={`Desen ${i + 1}`}
+                  >
+                    <span
+                      className="absolute inset-0 bg-cover bg-center"
+                      style={{ backgroundImage: `url(/textures/${t}.jpeg), url(/textures/${t}.jpg)` }}
+                    />
+                    <span className="absolute bottom-0 left-0 right-0 bg-black/55 py-0.5 text-center text-[10px] font-medium text-white">
+                      {i + 1}
+                    </span>
+                  </button>
+                );
+              }
+            )}
+          </div>
+          <p className="mt-1 text-xs text-slate-500">
+            <code>public/textures/texture1.jpeg</code> gibi dosyaları havuz zeminine uygular.
+          </p>
+        </div>
       </Section>
     </aside>
   );

@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, useMemo, useRef } from 'react';
+import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { Canvas, useFrame } from '@react-three/fiber';
 import { OrbitControls, Sky, Stars } from '@react-three/drei';
 import * as THREE from 'three';
@@ -73,13 +73,15 @@ export default function PoolScene({ config }: { config: PoolConfig }) {
         )}
         <Garden ground={config.ground} isNight={isNight} />
         <Trees isNight={isNight} />
+        <Villa isNight={isNight} />
+        <Fence isNight={isNight} />
         <Pool config={config} />
         <OrbitControls
-          enablePan
+          enablePan={false}
           enableZoom
           enableRotate
           minDistance={4}
-          maxDistance={45}
+          maxDistance={22}
           maxPolarAngle={Math.PI / 2.05}
           target={[0, POOL_HEIGHT / 2, 0]}
         />
@@ -107,11 +109,11 @@ function Garden({ ground, isNight }: { ground: GroundType; isNight: boolean }) {
 function Trees({ isNight }: { isNight: boolean }) {
   const positions = useMemo<[number, number, number][]>(
     () => [
-      [-11, 0, -9],
-      [10, 0, -8],
-      [-12, 0, 7],
-      [12, 0, 9],
-      [-7, 0, -12],
+      [10, 0, -11],
+      [-13, 0, 9],
+      [13, 0, 10],
+      [-8, 0, -14],
+      [8, 0, 13],
     ],
     []
   );
@@ -140,6 +142,160 @@ function Trees({ isNight }: { isNight: boolean }) {
   );
 }
 
+function Villa({ isNight }: { isNight: boolean }) {
+  const wall = isNight ? '#a89a82' : '#f0e6d2';
+  const trim = isNight ? '#5a4630' : '#8a6a44';
+  const roof = isNight ? '#5a2818' : '#a04428';
+  const windowMat = isNight ? '#1a2438' : '#7eb3d6';
+  const door = isNight ? '#2a1a0c' : '#4a2e16';
+
+  // Villa is positioned in a far corner of the garden, rotated to face the pool.
+  return (
+    <group position={[-12, 0, -11]} rotation={[0, Math.PI / 4, 0]}>
+      {/* Main body */}
+      <mesh position={[0, 1.6, 0]} castShadow receiveShadow>
+        <boxGeometry args={[5.5, 3.2, 4.2]} />
+        <meshStandardMaterial color={wall} />
+      </mesh>
+
+      {/* Roof — pyramid (cone with 4 sides) */}
+      <mesh position={[0, 3.85, 0]} rotation={[0, Math.PI / 4, 0]} castShadow>
+        <coneGeometry args={[3.9, 1.5, 4]} />
+        <meshStandardMaterial color={roof} />
+      </mesh>
+
+      {/* Door */}
+      <mesh position={[0, 0.9, 2.11]} castShadow>
+        <boxGeometry args={[0.95, 1.85, 0.05]} />
+        <meshStandardMaterial color={door} />
+      </mesh>
+
+      {/* Windows on the front facade */}
+      {[[-1.7, 1.8], [1.7, 1.8]].map(([x, y], i) => (
+        <mesh key={`fw-${i}`} position={[x, y, 2.11]}>
+          <boxGeometry args={[0.95, 0.95, 0.05]} />
+          <meshStandardMaterial
+            color={windowMat}
+            emissive={isNight ? '#f4c673' : '#000000'}
+            emissiveIntensity={isNight ? 0.55 : 0}
+            metalness={0.4}
+            roughness={0.3}
+          />
+        </mesh>
+      ))}
+
+      {/* Window on side */}
+      <mesh position={[-2.78, 1.8, 0]} rotation={[0, -Math.PI / 2, 0]}>
+        <boxGeometry args={[1.6, 0.9, 0.05]} />
+        <meshStandardMaterial
+          color={windowMat}
+          emissive={isNight ? '#f4c673' : '#000000'}
+          emissiveIntensity={isNight ? 0.55 : 0}
+          metalness={0.4}
+          roughness={0.3}
+        />
+      </mesh>
+
+      {/* Trim above door */}
+      <mesh position={[0, 1.95, 2.13]}>
+        <boxGeometry args={[1.2, 0.12, 0.06]} />
+        <meshStandardMaterial color={trim} />
+      </mesh>
+
+      {/* Front porch step */}
+      <mesh position={[0, 0.05, 2.6]} receiveShadow>
+        <boxGeometry args={[2, 0.1, 0.8]} />
+        <meshStandardMaterial color="#cfd1d4" />
+      </mesh>
+
+      {/* Warm porch light at night */}
+      {isNight && (
+        <pointLight
+          position={[0, 2.2, 2.4]}
+          color="#ffd6a0"
+          intensity={1.2}
+          distance={6}
+          decay={1.8}
+        />
+      )}
+    </group>
+  );
+}
+
+function Fence({ isNight }: { isNight: boolean }) {
+  const wood = isNight ? '#3a2818' : '#6b4628';
+  const fenceHalfX = 16;
+  const fenceHalfZ = 16;
+  const segments: { from: [number, number]; to: [number, number] }[] = [
+    { from: [-fenceHalfX, -fenceHalfZ], to: [fenceHalfX, -fenceHalfZ] },
+    { from: [-fenceHalfX, fenceHalfZ], to: [fenceHalfX, fenceHalfZ] },
+    { from: [-fenceHalfX, -fenceHalfZ], to: [-fenceHalfX, fenceHalfZ] },
+    { from: [fenceHalfX, -fenceHalfZ], to: [fenceHalfX, fenceHalfZ] },
+  ];
+  return (
+    <group>
+      {segments.map((seg, i) => (
+        <FenceSegment
+          key={i}
+          from={seg.from}
+          to={seg.to}
+          color={wood}
+          isNight={isNight}
+        />
+      ))}
+    </group>
+  );
+}
+
+function FenceSegment({
+  from,
+  to,
+  color,
+  isNight,
+}: {
+  from: [number, number];
+  to: [number, number];
+  color: string;
+  isNight: boolean;
+}) {
+  const [x1, z1] = from;
+  const [x2, z2] = to;
+  const dx = x2 - x1;
+  const dz = z2 - z1;
+  const length = Math.hypot(dx, dz);
+  const angle = Math.atan2(dz, dx);
+  const cx = (x1 + x2) / 2;
+  const cz = (z1 + z2) / 2;
+
+  const postH = 1.05;
+  const postSize: [number, number, number] = [0.09, postH, 0.09];
+  const spacing = 1.6;
+  const numIntervals = Math.max(1, Math.round(length / spacing));
+  const posts: number[] = [];
+  for (let i = 0; i <= numIntervals; i++) {
+    posts.push((i / numIntervals) * length - length / 2);
+  }
+  const railYs = [0.3, 0.7];
+  const railColor = isNight ? '#2a1d10' : '#7a5230';
+
+  return (
+    <group position={[cx, 0, cz]} rotation={[0, -angle, 0]}>
+      {posts.map((u, i) => (
+        <mesh key={`p${i}`} position={[u, postH / 2, 0]} castShadow>
+          <boxGeometry args={postSize} />
+          <meshStandardMaterial color={color} />
+        </mesh>
+      ))}
+      {railYs.map((y, i) => (
+        <mesh key={`r${i}`} position={[0, y, 0]} castShadow>
+          <boxGeometry args={[length, 0.07, 0.04]} />
+          <meshStandardMaterial color={railColor} />
+        </mesh>
+      ))}
+    </group>
+  );
+}
+
 function Pool({ config }: { config: PoolConfig }) {
   const w = config.width;
   const l = config.length;
@@ -151,6 +307,7 @@ function Pool({ config }: { config: PoolConfig }) {
 
   const frame = frameColorHex(config.frameColor);
   const inner = claddingColor(config.cladding);
+  const claddingTex = useCladdingTexture(config.cladding);
 
   return (
     <group>
@@ -167,7 +324,10 @@ function Pool({ config }: { config: PoolConfig }) {
         receiveShadow
       >
         <planeGeometry args={[w - PANEL_T * 2 - 0.02, l - PANEL_T * 2 - 0.02]} />
-        <meshStandardMaterial color={inner} />
+        <meshStandardMaterial
+          color={claddingTex ? '#ffffff' : inner}
+          map={claddingTex}
+        />
       </mesh>
 
       {/* Inner cladding rim — visible above water line */}
@@ -226,6 +386,11 @@ function Pool({ config }: { config: PoolConfig }) {
       {/* LED accent strips — top + bottom perimeter inside the pool */}
       {config.lighting.enabled && (
         <LedStrips color={config.lighting.color} w={w} l={l} top={top} />
+      )}
+
+      {/* Stainless steel waterfall feature (optional) */}
+      {config.waterfall && (
+        <Waterfall halfL={halfL} top={top} waterY={waterY} />
       )}
 
       {/* In-pool ladder */}
@@ -1308,6 +1473,123 @@ function StairRail({
   );
 }
 
+function Waterfall({
+  halfL,
+  top,
+  waterY,
+}: {
+  halfL: number;
+  top: number;
+  waterY: number;
+}) {
+  // Stainless steel cascade: flat vertical plate post + half-torus arch
+  // curving over into the pool with a falling water sheet.
+  const archR = 0.32;
+  const tubeR = 0.07;
+  const postH = 0.7;
+
+  // Flat plate-like post (wide, thin) sitting on the coping
+  const postW = 0.36;
+  const postT = 0.05;
+
+  const postZ = -halfL + 0.12;
+  const postY = top + postH / 2;
+  const postTopY = top + postH;
+
+  const arcCenterZ = postZ + archR;
+  const arcEndZ = postZ + 2 * archR;
+
+  const sheetWidth = 0.36;
+  const sheetTopY = postTopY - 0.08;
+  const sheetBotY = waterY + 0.02;
+  const sheetH = sheetTopY - sheetBotY;
+
+  // Brushed-steel look that doesn't depend on env map (metalness kept low)
+  const steelMatProps = {
+    color: '#d8dde4',
+    metalness: 0.25,
+    roughness: 0.45,
+    emissive: '#1a1f24',
+    emissiveIntensity: 0.05,
+  };
+
+  return (
+    <group>
+      {/* Flat vertical plate post */}
+      <mesh position={[0, postY, postZ]} castShadow>
+        <boxGeometry args={[postW, postH, postT]} />
+        <meshStandardMaterial {...steelMatProps} />
+      </mesh>
+
+      {/* Side rims giving the plate a slight U-channel look */}
+      <mesh
+        position={[postW / 2 - 0.012, postY, postZ + 0.025]}
+        castShadow
+      >
+        <boxGeometry args={[0.025, postH, 0.06]} />
+        <meshStandardMaterial {...steelMatProps} />
+      </mesh>
+      <mesh
+        position={[-postW / 2 + 0.012, postY, postZ + 0.025]}
+        castShadow
+      >
+        <boxGeometry args={[0.025, postH, 0.06]} />
+        <meshStandardMaterial {...steelMatProps} />
+      </mesh>
+
+      {/* Half-torus arch (in YZ plane) */}
+      <mesh
+        position={[0, postTopY, arcCenterZ]}
+        rotation={[0, Math.PI / 2, 0]}
+        castShadow
+      >
+        <torusGeometry args={[archR, tubeR, 16, 32, Math.PI]} />
+        <meshStandardMaterial {...steelMatProps} />
+      </mesh>
+
+      {/* Wider scoop opening at the arch end */}
+      <mesh
+        position={[0, postTopY, arcEndZ]}
+        rotation={[Math.PI / 2, 0, 0]}
+      >
+        <ringGeometry args={[tubeR * 0.35, tubeR * 1.1, 20]} />
+        <meshStandardMaterial
+          {...steelMatProps}
+          side={THREE.DoubleSide}
+        />
+      </mesh>
+
+      {/* Water sheet falling from the arch end */}
+      <mesh position={[0, (sheetTopY + sheetBotY) / 2, arcEndZ]}>
+        <planeGeometry args={[sheetWidth, sheetH]} />
+        <meshStandardMaterial
+          color="#a4daee"
+          transparent
+          opacity={0.55}
+          roughness={0.05}
+          metalness={0.2}
+          side={THREE.DoubleSide}
+        />
+      </mesh>
+
+      {/* Splash ring at the water surface */}
+      <mesh
+        position={[0, waterY + 0.012, arcEndZ]}
+        rotation={[-Math.PI / 2, 0, 0]}
+      >
+        <ringGeometry args={[0.08, 0.22, 24]} />
+        <meshStandardMaterial
+          color="#d4ecf6"
+          transparent
+          opacity={0.7}
+          roughness={0.2}
+          side={THREE.DoubleSide}
+        />
+      </mesh>
+    </group>
+  );
+}
+
 function groundColor(g: GroundType, isNight = false): string {
   const day = {
     gravel: '#b0b0a8',
@@ -1330,7 +1612,57 @@ function claddingColor(c: CladdingType): string {
     case 'blue_mosaic': return '#2563eb';
     case 'gray_stone': return '#6b7280';
     case 'turquoise': return '#14b8a6';
+    case 'texture1':
+    case 'texture2':
+    case 'texture3':
+    case 'texture4':
+    case 'texture5':
+      return '#cfd5dc';
   }
+}
+
+function useCladdingTexture(cladding: CladdingType): THREE.Texture | null {
+  const [tex, setTex] = useState<THREE.Texture | null>(null);
+
+  useEffect(() => {
+    if (!cladding.startsWith('texture')) {
+      setTex(null);
+      return;
+    }
+    const loader = new THREE.TextureLoader();
+    let cancelled = false;
+    const tryLoad = (ext: string) =>
+      new Promise<THREE.Texture>((resolve, reject) => {
+        loader.load(`/textures/${cladding}.${ext}`, resolve, undefined, reject);
+      });
+
+    (async () => {
+      let loaded: THREE.Texture | null = null;
+      for (const ext of ['jpeg', 'jpg', 'png']) {
+        try {
+          loaded = await tryLoad(ext);
+          break;
+        } catch {
+          /* try next ext */
+        }
+      }
+      if (cancelled) return;
+      if (loaded) {
+        loaded.colorSpace = THREE.SRGBColorSpace;
+        loaded.wrapS = loaded.wrapT = THREE.RepeatWrapping;
+        loaded.repeat.set(2, 3);
+        setTex(loaded);
+      } else {
+        setTex(null);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [cladding]);
+
+  return tex;
 }
 
 function frameColorHex(c: FrameColor): string {

@@ -23,9 +23,15 @@ const CLADDING_PRICES = {
   blue_mosaic: 18000,
   gray_stone: 26000,
   turquoise: 14000,
+  texture1: 32000,
+  texture2: 32000,
+  texture3: 32000,
+  texture4: 32000,
+  texture5: 32000,
 } as const;
 
 const LIGHTING_PRICE = 9000;
+const WATERFALL_PRICE = 25000;
 const PLATFORM_BASE_PRICE = 35000; // her zaman dahil
 const SEGMENT_PRICE_PER_EXTRA = 3500; // her ek bölme için
 
@@ -37,6 +43,7 @@ export interface PriceBreakdown {
   cladding: number;
   platform: number;
   lighting: number;
+  waterfall: number;
   subtotal: number;
   discount: number;
   total: number;
@@ -54,8 +61,10 @@ export function calculateBasePrice(config: PoolConfig): PriceBreakdown {
   const cladding = CLADDING_PRICES[config.cladding];
   const platform = PLATFORM_BASE_PRICE;
   const lighting = config.lighting.enabled ? LIGHTING_PRICE : 0;
+  const waterfall = config.waterfall ? WATERFALL_PRICE : 0;
 
-  const subtotal = base + frame + panel + ground + cladding + platform + lighting;
+  const subtotal =
+    base + frame + panel + ground + cladding + platform + lighting + waterfall;
 
   return {
     base,
@@ -65,6 +74,7 @@ export function calculateBasePrice(config: PoolConfig): PriceBreakdown {
     cladding,
     platform,
     lighting,
+    waterfall,
     subtotal,
     discount: 0,
     total: subtotal,

@@ -86,6 +86,7 @@ export default function PricePanel({
               : 'Kapalı'
           }
         />
+        <SummaryItem label="Şelale" value={config.waterfall ? 'Var' : 'Yok'} />
         <SummaryItem label="Zemin Altı" value={groundLabel(config.ground)} />
         <SummaryItem label="İç Kaplama" value={claddingLabel(config.cladding)} />
       </ul>
@@ -98,6 +99,7 @@ export default function PricePanel({
         {breakdown.ground > 0 && <PriceLine label="Zemin altı" value={breakdown.ground} />}
         {breakdown.cladding > 0 && <PriceLine label="İç kaplama" value={breakdown.cladding} />}
         {breakdown.lighting > 0 && <PriceLine label="Işıklandırma" value={breakdown.lighting} />}
+        {breakdown.waterfall > 0 && <PriceLine label="Şelale" value={breakdown.waterfall} />}
       </div>
 
       <div className="border-t border-slate-200 pt-4 text-sm">

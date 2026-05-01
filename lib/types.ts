@@ -3,7 +3,16 @@ export type PanelType = 'glass' | 'closed';
 export type PanelSegments = 1 | 2 | 3 | 4;
 export type LightColor = 'blue' | 'white' | 'green' | 'purple' | 'rgb';
 export type GroundType = 'gravel' | 'wood' | 'grass' | 'concrete';
-export type CladdingType = 'white' | 'blue_mosaic' | 'gray_stone' | 'turquoise';
+export type CladdingType =
+  | 'white'
+  | 'blue_mosaic'
+  | 'gray_stone'
+  | 'turquoise'
+  | 'texture1'
+  | 'texture2'
+  | 'texture3'
+  | 'texture4'
+  | 'texture5';
 export type PlatformDirection = 'north' | 'south' | 'east' | 'west';
 export type PoolSide = 'north' | 'south' | 'east' | 'west';
 
@@ -23,6 +32,7 @@ export interface PoolConfig {
   ground: GroundType;
   cladding: CladdingType;
   platformDirection: PlatformDirection;
+  waterfall: boolean;
 }
 
 export const defaultPoolConfig: PoolConfig = {
@@ -36,6 +46,7 @@ export const defaultPoolConfig: PoolConfig = {
   ground: 'grass',
   cladding: 'white',
   platformDirection: 'east',
+  waterfall: false,
 };
 
 export function panelKey(side: PoolSide, index: number): string {
