@@ -2,8 +2,16 @@
 
 import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { Canvas, useFrame } from '@react-three/fiber';
-import { OrbitControls, Sky, Stars } from '@react-three/drei';
+import {
+  Environment,
+  GizmoHelper,
+  GizmoViewcube,
+  OrbitControls,
+  Sky,
+  Stars,
+} from '@react-three/drei';
 import * as THREE from 'three';
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import {
   POOL_SIDES,
   getPanelType,
@@ -24,7 +32,13 @@ const PANEL_T = 0.04;
 const BASIN_FLOOR = 0.06;
 const PLATFORM_DEPTH = 2.0;
 
-export default function PoolScene({ config }: { config: PoolConfig }) {
+export default function PoolScene({
+  config,
+  controlsRef,
+}: {
+  config: PoolConfig;
+  controlsRef?: React.MutableRefObject<{ reset: () => void } | null>;
+}) {
   const isNight = config.lighting.enabled;
   return (
     <Canvas shadows camera={{ position: [12, 9, 14], fov: 42 }}>
@@ -61,30 +75,61 @@ export default function PoolScene({ config }: { config: PoolConfig }) {
         ) : (
           <>
             <Sky sunPosition={[100, 30, 100]} turbidity={2} rayleigh={1} />
-            <ambientLight intensity={0.55} />
+            <ambientLight intensity={0.5} />
+            {/* Sun directional light — same direction as the visible sun sphere */}
             <directionalLight
-              position={[15, 20, 10]}
-              intensity={1.1}
+              position={[20, 18, 18]}
+              intensity={1.4}
+              color="#fff5dc"
               castShadow
-              shadow-mapSize-width={1024}
-              shadow-mapSize-height={1024}
+              shadow-mapSize-width={2048}
+              shadow-mapSize-height={2048}
             />
+            {/* Visible sun disk in the sky */}
+            <mesh position={[100, 30, 100]}>
+              <sphereGeometry args={[7, 24, 24]} />
+              <meshBasicMaterial color="#fff8d6" toneMapped={false} />
+            </mesh>
+            {/* Soft halo around the sun */}
+            <mesh position={[100, 30, 100]}>
+              <sphereGeometry args={[10, 16, 16]} />
+              <meshBasicMaterial
+                color="#ffe8a0"
+                transparent
+                opacity={0.35}
+                toneMapped={false}
+                depthWrite={false}
+              />
+            </mesh>
           </>
         )}
+        {/* Environment IBL — gives glass/metal materials proper reflections */}
+        <Environment preset={isNight ? 'night' : 'sunset'} background={false} />
         <Garden ground={config.ground} isNight={isNight} />
         <Trees isNight={isNight} />
-        <Villa isNight={isNight} />
+        <VillaSlot isNight={isNight} />
         <Fence isNight={isNight} />
         <Pool config={config} />
         <OrbitControls
-          enablePan={false}
+          ref={controlsRef as React.MutableRefObject<null>}
+          enablePan
           enableZoom
           enableRotate
           minDistance={4}
-          maxDistance={22}
+          maxDistance={18}
           maxPolarAngle={Math.PI / 2.05}
           target={[0, POOL_HEIGHT / 2, 0]}
         />
+        {/* Navigation cube — click faces to snap to that view */}
+        <GizmoHelper alignment="bottom-right" margin={[60, 60]}>
+          <GizmoViewcube
+            color="#0e7490"
+            opacity={0.85}
+            strokeColor="#155e75"
+            textColor="#ffffff"
+            faces={['Sağ', 'Sol', 'Üst', 'Alt', 'Ön', 'Arka']}
+          />
+        </GizmoHelper>
       </Suspense>
     </Canvas>
   );
@@ -109,11 +154,14 @@ function Garden({ ground, isNight }: { ground: GroundType; isNight: boolean }) {
 function Trees({ isNight }: { isNight: boolean }) {
   const positions = useMemo<[number, number, number][]>(
     () => [
-      [10, 0, -11],
-      [-13, 0, 9],
-      [13, 0, 10],
-      [-8, 0, -14],
-      [8, 0, 13],
+      [18, 0, -10],
+      [-18, 0, 6],
+      [20, 0, 14],
+      [-16, 0, 20],
+      [12, 0, 21],
+      [-20, 0, -8],
+      [22, 0, 4],
+      [-22, 0, -16],
     ],
     []
   );
@@ -142,90 +190,409 @@ function Trees({ isNight }: { isNight: boolean }) {
   );
 }
 
+function VillaSlot({ isNight }: { isNight: boolean }) {
+  // Tries to load `/models/villa.glb`. If the file is missing/unreachable,
+  // gracefully falls back to the procedural <Villa> below.
+  const [glbScene, setGlbScene] = useState<THREE.Group | null>(null);
+  const [tried, setTried] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    const loader = new GLTFLoader();
+    loader.load(
+      '/models/villa.glb',
+      (gltf) => {
+        if (cancelled) return;
+        gltf.scene.traverse((obj) => {
+          if (obj instanceof THREE.Mesh) {
+            obj.castShadow = true;
+            obj.receiveShadow = true;
+          }
+        });
+        setGlbScene(gltf.scene);
+        setTried(true);
+      },
+      undefined,
+      () => {
+        if (cancelled) return;
+        setGlbScene(null);
+        setTried(true);
+      }
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  if (glbScene) {
+    // Adjust these defaults for the specific GLB you ship.
+    return (
+      <primitive
+        object={glbScene}
+        position={[0, 0, -22]}
+        rotation={[0, 0, 0]}
+        scale={1}
+      />
+    );
+  }
+  // Render the procedural villa until/unless a GLB is found.
+  if (!tried) return null; // wait for the load attempt before showing fallback
+  return <Villa isNight={isNight} />;
+}
+
 function Villa({ isNight }: { isNight: boolean }) {
-  const wall = isNight ? '#a89a82' : '#f0e6d2';
-  const trim = isNight ? '#5a4630' : '#8a6a44';
-  const roof = isNight ? '#5a2818' : '#a04428';
-  const windowMat = isNight ? '#1a2438' : '#7eb3d6';
-  const door = isNight ? '#2a1a0c' : '#4a2e16';
+  // Modern flat-roof concrete duplex with cantilevered upper floor and glass facade.
+  const concrete = isNight ? '#7d7b73' : '#d8d6cb';
+  const concreteDark = isNight ? '#5a5851' : '#aeaca2';
+  const trimBlack = isNight ? '#0a0d12' : '#1a1d22';
+  const glassDark = isNight ? '#0f1722' : '#2a3848';
+  const glassFrame = isNight ? '#080a0e' : '#15181c';
+  const door = isNight ? '#1c120a' : '#3e2818';
+  const pavement = isNight ? '#2a2826' : '#5a5854';
+  const lit = isNight ? '#fbcd6e' : '#000000';
+  const litI = isNight ? 0.45 : 0;
 
-  // Villa is positioned in a far corner of the garden, rotated to face the pool.
+  // Layout — main two-story block + side single-story wing.
+  const W = 9.5;     // main block width (X)
+  const D = 7.0;     // main block depth (Z)
+  const H1 = 3.6;    // ground floor height
+  const H2 = 3.4;    // upper floor height
+  const cantilever = 1.8; // upper floor projects this far over entrance
+  const wingW = 5.5;
+  const wingD = 5.5;
+  const wingH = 3.6;
+
   return (
-    <group position={[-12, 0, -11]} rotation={[0, Math.PI / 4, 0]}>
-      {/* Main body */}
-      <mesh position={[0, 1.6, 0]} castShadow receiveShadow>
-        <boxGeometry args={[5.5, 3.2, 4.2]} />
-        <meshStandardMaterial color={wall} />
+    <group position={[0, 0, -22]} rotation={[0, 0, 0]}>
+      {/* ENTRANCE PAVEMENT — asphalt-like pad in front */}
+      <mesh position={[0, 0.02, D / 2 + 1.5]} receiveShadow>
+        <boxGeometry args={[W + 1.5, 0.04, 3.0]} />
+        <meshStandardMaterial color={pavement} roughness={0.95} />
       </mesh>
 
-      {/* Roof — pyramid (cone with 4 sides) */}
-      <mesh position={[0, 3.85, 0]} rotation={[0, Math.PI / 4, 0]} castShadow>
-        <coneGeometry args={[3.9, 1.5, 4]} />
-        <meshStandardMaterial color={roof} />
+      {/* === GROUND FLOOR — concrete shell === */}
+      {/* Back wall */}
+      <mesh position={[0, H1 / 2, -D / 2]} castShadow receiveShadow>
+        <boxGeometry args={[W, H1, 0.2]} />
+        <meshStandardMaterial color={concrete} roughness={0.85} />
+      </mesh>
+      {/* Left side wall */}
+      <mesh position={[-W / 2, H1 / 2, 0]} castShadow receiveShadow>
+        <boxGeometry args={[0.2, H1, D]} />
+        <meshStandardMaterial color={concrete} roughness={0.85} />
+      </mesh>
+      {/* Right side wall */}
+      <mesh position={[W / 2, H1 / 2, 0]} castShadow receiveShadow>
+        <boxGeometry args={[0.2, H1, D]} />
+        <meshStandardMaterial color={concrete} roughness={0.85} />
+      </mesh>
+      {/* Ground slab */}
+      <mesh position={[0, 0.04, 0]} receiveShadow>
+        <boxGeometry args={[W, 0.08, D]} />
+        <meshStandardMaterial color={concreteDark} roughness={0.9} />
       </mesh>
 
-      {/* Door */}
-      <mesh position={[0, 0.9, 2.11]} castShadow>
-        <boxGeometry args={[0.95, 1.85, 0.05]} />
-        <meshStandardMaterial color={door} />
+      {/* Inner front wall behind glass (recessed entrance) */}
+      <mesh position={[0, H1 / 2, -D / 4]} castShadow>
+        <boxGeometry args={[W * 0.55, H1, 0.18]} />
+        <meshStandardMaterial color={concrete} roughness={0.85} />
       </mesh>
 
-      {/* Windows on the front facade */}
-      {[[-1.7, 1.8], [1.7, 1.8]].map(([x, y], i) => (
-        <mesh key={`fw-${i}`} position={[x, y, 2.11]}>
-          <boxGeometry args={[0.95, 0.95, 0.05]} />
-          <meshStandardMaterial
-            color={windowMat}
-            emissive={isNight ? '#f4c673' : '#000000'}
-            emissiveIntensity={isNight ? 0.55 : 0}
-            metalness={0.4}
-            roughness={0.3}
-          />
+      {/* === GROUND FLOOR FRONT GLASS WALLS === */}
+      {/* Two large floor-to-ceiling glass panels flanking the entrance */}
+      <GlassWall
+        position={[-W * 0.27, H1 / 2, D / 2 + 0.02]}
+        width={W * 0.42}
+        height={H1 - 0.1}
+        gridX={3}
+        gridY={4}
+        frameColor={glassFrame}
+        glassColor={glassDark}
+        emissive={lit}
+        emissiveIntensity={litI}
+      />
+      <GlassWall
+        position={[W * 0.27, H1 / 2, D / 2 + 0.02]}
+        width={W * 0.42}
+        height={H1 - 0.1}
+        gridX={3}
+        gridY={4}
+        frameColor={glassFrame}
+        glassColor={glassDark}
+        emissive={lit}
+        emissiveIntensity={litI}
+      />
+
+      {/* Front entrance double doors (recessed) */}
+      <mesh position={[0, 1.1, D / 2 - 0.4]} castShadow>
+        <boxGeometry args={[1.6, 2.2, 0.08]} />
+        <meshStandardMaterial color={door} roughness={0.6} metalness={0.05} />
+      </mesh>
+      {/* Door split line */}
+      <mesh position={[0, 1.1, D / 2 - 0.36]}>
+        <boxGeometry args={[0.02, 2.1, 0.02]} />
+        <meshStandardMaterial color={trimBlack} />
+      </mesh>
+      {/* Door handles */}
+      {[-0.25, 0.25].map((x, i) => (
+        <mesh key={`dh${i}`} position={[x, 1.1, D / 2 - 0.34]}>
+          <boxGeometry args={[0.04, 0.4, 0.05]} />
+          <meshStandardMaterial color="#c9a85a" metalness={0.7} roughness={0.3} />
         </mesh>
       ))}
 
-      {/* Window on side */}
-      <mesh position={[-2.78, 1.8, 0]} rotation={[0, -Math.PI / 2, 0]}>
-        <boxGeometry args={[1.6, 0.9, 0.05]} />
-        <meshStandardMaterial
-          color={windowMat}
-          emissive={isNight ? '#f4c673' : '#000000'}
-          emissiveIntensity={isNight ? 0.55 : 0}
-          metalness={0.4}
-          roughness={0.3}
+      {/* Floor slab between ground and upper (with cantilever overhang) */}
+      <mesh
+        position={[0, H1 + 0.08, cantilever / 2]}
+        castShadow
+        receiveShadow
+      >
+        <boxGeometry args={[W + 0.2, 0.16, D + cantilever]} />
+        <meshStandardMaterial color={concreteDark} roughness={0.85} />
+      </mesh>
+
+      {/* === UPPER FLOOR === */}
+      {/* Upper floor back wall */}
+      <mesh position={[0, H1 + 0.16 + H2 / 2, -D / 2]} castShadow receiveShadow>
+        <boxGeometry args={[W, H2, 0.2]} />
+        <meshStandardMaterial color={concrete} roughness={0.85} />
+      </mesh>
+      {/* Upper left side */}
+      <mesh position={[-W / 2, H1 + 0.16 + H2 / 2, 0]} castShadow receiveShadow>
+        <boxGeometry args={[0.2, H2, D]} />
+        <meshStandardMaterial color={concrete} roughness={0.85} />
+      </mesh>
+      {/* Upper right side */}
+      <mesh position={[W / 2, H1 + 0.16 + H2 / 2, 0]} castShadow receiveShadow>
+        <boxGeometry args={[0.2, H2, D]} />
+        <meshStandardMaterial color={concrete} roughness={0.85} />
+      </mesh>
+      {/* Upper inner front wall (above entrance, where balcony begins) */}
+      <mesh position={[0, H1 + 0.16 + H2 / 2, -D / 4]} castShadow receiveShadow>
+        <boxGeometry args={[W, H2, 0.18]} />
+        <meshStandardMaterial color={concrete} roughness={0.85} />
+      </mesh>
+
+      {/* Upper floor front glass facade — single big panel */}
+      <GlassWall
+        position={[0, H1 + 0.16 + H2 / 2, D / 2 + cantilever - 0.05]}
+        width={W - 0.4}
+        height={H2 - 0.3}
+        gridX={5}
+        gridY={3}
+        frameColor={glassFrame}
+        glassColor={glassDark}
+        emissive={lit}
+        emissiveIntensity={litI}
+      />
+
+      {/* Roof slab — extends slightly beyond upper walls */}
+      <mesh position={[0, H1 + 0.16 + H2 + 0.12, cantilever / 2]} castShadow>
+        <boxGeometry args={[W + 0.4, 0.24, D + cantilever + 0.4]} />
+        <meshStandardMaterial color={concreteDark} roughness={0.85} />
+      </mesh>
+      {/* Parapet on top of roof */}
+      <mesh position={[0, H1 + 0.16 + H2 + 0.4, cantilever / 2]} castShadow>
+        <boxGeometry args={[W + 0.4, 0.32, 0.12]} />
+        <meshStandardMaterial color={concrete} roughness={0.85} />
+      </mesh>
+
+      {/* === UPPER BALCONY (over the entrance) === */}
+      {/* Glass balcony railing on the cantilever edge */}
+      <BalconyGlassRailing
+        width={W - 0.4}
+        baseY={H1 + 0.16 + 0.04}
+        frontZ={D / 2 + cantilever - 0.05}
+        frameColor={glassFrame}
+      />
+
+      {/* === SIDE WING (single story extending from -X side) === */}
+      <group position={[-W / 2 - wingW / 2, 0, -D / 4]}>
+        {/* Wing back/left/front walls */}
+        <mesh position={[0, wingH / 2, -wingD / 2]} castShadow receiveShadow>
+          <boxGeometry args={[wingW, wingH, 0.2]} />
+          <meshStandardMaterial color={concrete} roughness={0.85} />
+        </mesh>
+        <mesh position={[-wingW / 2, wingH / 2, 0]} castShadow receiveShadow>
+          <boxGeometry args={[0.2, wingH, wingD]} />
+          <meshStandardMaterial color={concrete} roughness={0.85} />
+        </mesh>
+        {/* Wing front: glass wall */}
+        <GlassWall
+          position={[0, wingH / 2, wingD / 2 - 0.05]}
+          width={wingW - 0.4}
+          height={wingH - 0.3}
+          gridX={4}
+          gridY={4}
+          frameColor={glassFrame}
+          glassColor={glassDark}
+          emissive={lit}
+          emissiveIntensity={litI}
         />
-      </mesh>
+        {/* Wing roof slab */}
+        <mesh position={[0, wingH + 0.12, 0]} castShadow>
+          <boxGeometry args={[wingW + 0.4, 0.24, wingD + 0.4]} />
+          <meshStandardMaterial color={concreteDark} roughness={0.85} />
+        </mesh>
+        {/* Wing parapet */}
+        <mesh position={[0, wingH + 0.4, 0]} castShadow>
+          <boxGeometry args={[wingW + 0.4, 0.32, 0.12]} />
+          <meshStandardMaterial color={concrete} roughness={0.85} />
+        </mesh>
+      </group>
 
-      {/* Trim above door */}
-      <mesh position={[0, 1.95, 2.13]}>
-        <boxGeometry args={[1.2, 0.12, 0.06]} />
-        <meshStandardMaterial color={trim} />
-      </mesh>
-
-      {/* Front porch step */}
-      <mesh position={[0, 0.05, 2.6]} receiveShadow>
-        <boxGeometry args={[2, 0.1, 0.8]} />
-        <meshStandardMaterial color="#cfd1d4" />
-      </mesh>
+      {/* === SIDE WINDOWS on main block === */}
+      <GlassWall
+        position={[W / 2 + 0.02, H1 / 2, -D / 4]}
+        width={D / 1.6}
+        height={H1 - 0.6}
+        gridX={3}
+        gridY={3}
+        rotationY={Math.PI / 2}
+        frameColor={glassFrame}
+        glassColor={glassDark}
+        emissive={lit}
+        emissiveIntensity={litI}
+      />
+      <GlassWall
+        position={[W / 2 + 0.02, H1 + 0.16 + H2 / 2, -D / 4]}
+        width={D / 1.6}
+        height={H2 - 0.6}
+        gridX={3}
+        gridY={3}
+        rotationY={Math.PI / 2}
+        frameColor={glassFrame}
+        glassColor={glassDark}
+        emissive={lit}
+        emissiveIntensity={litI}
+      />
 
       {/* Warm porch light at night */}
       {isNight && (
         <pointLight
-          position={[0, 2.2, 2.4]}
-          color="#ffd6a0"
-          intensity={1.2}
-          distance={6}
-          decay={1.8}
+          position={[0, H1, D / 2 + 0.5]}
+          color="#ffd49a"
+          intensity={1.6}
+          distance={9}
+          decay={1.7}
         />
       )}
     </group>
   );
 }
 
+function GlassWall({
+  position,
+  width,
+  height,
+  gridX,
+  gridY,
+  rotationY = 0,
+  frameColor,
+  glassColor,
+  emissive,
+  emissiveIntensity,
+}: {
+  position: [number, number, number];
+  width: number;
+  height: number;
+  gridX: number;
+  gridY: number;
+  rotationY?: number;
+  frameColor: string;
+  glassColor: string;
+  emissive: string;
+  emissiveIntensity: number;
+}) {
+  const frameT = 0.04;
+  return (
+    <group position={position} rotation={[0, rotationY, 0]}>
+      {/* Outer frame */}
+      <mesh>
+        <boxGeometry args={[width, height, 0.04]} />
+        <meshStandardMaterial color={frameColor} roughness={0.5} metalness={0.4} />
+      </mesh>
+      {/* Glass panel — highly reflective so sun glints land on it */}
+      <mesh position={[0, 0, 0.025]}>
+        <planeGeometry args={[width - frameT * 2, height - frameT * 2]} />
+        <meshStandardMaterial
+          color={glassColor}
+          metalness={0.9}
+          roughness={0.04}
+          envMapIntensity={1.4}
+          emissive={emissive}
+          emissiveIntensity={emissiveIntensity}
+          transparent
+          opacity={0.92}
+        />
+      </mesh>
+      {/* Vertical mullions */}
+      {Array.from({ length: gridX - 1 }, (_, i) => {
+        const x = -width / 2 + ((i + 1) / gridX) * width;
+        return (
+          <mesh key={`vm${i}`} position={[x, 0, 0.04]}>
+            <boxGeometry args={[frameT * 0.6, height - frameT, 0.025]} />
+            <meshStandardMaterial color={frameColor} roughness={0.5} metalness={0.4} />
+          </mesh>
+        );
+      })}
+      {/* Horizontal mullions */}
+      {Array.from({ length: gridY - 1 }, (_, i) => {
+        const y = -height / 2 + ((i + 1) / gridY) * height;
+        return (
+          <mesh key={`hm${i}`} position={[0, y, 0.04]}>
+            <boxGeometry args={[width - frameT, frameT * 0.6, 0.025]} />
+            <meshStandardMaterial color={frameColor} roughness={0.5} metalness={0.4} />
+          </mesh>
+        );
+      })}
+    </group>
+  );
+}
+
+function BalconyGlassRailing({
+  width,
+  baseY,
+  frontZ,
+  frameColor,
+}: {
+  width: number;
+  baseY: number;
+  frontZ: number;
+  frameColor: string;
+}) {
+  const railH = 1.0;
+  return (
+    <group position={[0, baseY, frontZ]}>
+      {/* Glass panel */}
+      <mesh position={[0, railH / 2, 0]}>
+        <boxGeometry args={[width, railH, 0.04]} />
+        <meshStandardMaterial
+          color="#7c8a99"
+          transparent
+          opacity={0.35}
+          metalness={0.2}
+          roughness={0.05}
+        />
+      </mesh>
+      {/* Top metal cap */}
+      <mesh position={[0, railH + 0.025, 0]}>
+        <boxGeometry args={[width + 0.04, 0.05, 0.08]} />
+        <meshStandardMaterial color={frameColor} metalness={0.5} roughness={0.4} />
+      </mesh>
+      {/* Bottom metal rail */}
+      <mesh position={[0, 0.02, 0]}>
+        <boxGeometry args={[width + 0.04, 0.04, 0.07]} />
+        <meshStandardMaterial color={frameColor} metalness={0.5} roughness={0.4} />
+      </mesh>
+    </group>
+  );
+}
+
 function Fence({ isNight }: { isNight: boolean }) {
-  const wood = isNight ? '#3a2818' : '#6b4628';
-  const fenceHalfX = 16;
-  const fenceHalfZ = 16;
+  const fenceHalfX = 25;
+  const fenceHalfZ = 25;
+  // Each side starts/ends at the EXACT corner; corner posts are shared.
   const segments: { from: [number, number]; to: [number, number] }[] = [
     { from: [-fenceHalfX, -fenceHalfZ], to: [fenceHalfX, -fenceHalfZ] },
     { from: [-fenceHalfX, fenceHalfZ], to: [fenceHalfX, fenceHalfZ] },
@@ -239,9 +606,24 @@ function Fence({ isNight }: { isNight: boolean }) {
           key={i}
           from={seg.from}
           to={seg.to}
-          color={wood}
           isNight={isNight}
         />
+      ))}
+      {/* Dedicated corner posts so they don't depend on segment endpoints */}
+      {[
+        [-fenceHalfX, -fenceHalfZ],
+        [fenceHalfX, -fenceHalfZ],
+        [-fenceHalfX, fenceHalfZ],
+        [fenceHalfX, fenceHalfZ],
+      ].map(([x, z], i) => (
+        <mesh key={`cp${i}`} position={[x, 2.0, z]} castShadow>
+          <boxGeometry args={[0.24, 4.0, 0.24]} />
+          <meshStandardMaterial
+            color={isNight ? '#161a20' : '#262c34'}
+            roughness={0.55}
+            metalness={0.25}
+          />
+        </mesh>
       ))}
     </group>
   );
@@ -250,12 +632,10 @@ function Fence({ isNight }: { isNight: boolean }) {
 function FenceSegment({
   from,
   to,
-  color,
   isNight,
 }: {
   from: [number, number];
   to: [number, number];
-  color: string;
   isNight: boolean;
 }) {
   const [x1, z1] = from;
@@ -267,31 +647,92 @@ function FenceSegment({
   const cx = (x1 + x2) / 2;
   const cz = (z1 + z2) / 2;
 
-  const postH = 1.05;
-  const postSize: [number, number, number] = [0.09, postH, 0.09];
-  const spacing = 1.6;
-  const numIntervals = Math.max(1, Math.round(length / spacing));
-  const posts: number[] = [];
+  // Two-story fence: brick base + lower panel + mid trim + upper panel + cap
+  const baseH = 0.6;
+  const lowerH = 1.65;
+  const midTrimH = 0.1;
+  const upperH = 1.65;
+  const totalH = baseH + lowerH + midTrimH + upperH;
+  const wallT = 0.09;
+  const postSize = 0.18;
+  const postSpacing = 2.4;
+  const numIntervals = Math.max(1, Math.round(length / postSpacing));
+
+  const brickColor = isNight ? '#3a2218' : '#7a3c28';
+  const panelLower = isNight ? '#3a2818' : '#6e482a';
+  const panelUpper = isNight ? '#352519' : '#62421e';
+  const trimColor = isNight ? '#1d1a18' : '#3a2818';
+  const postColor = isNight ? '#161a20' : '#262c34';
+  const capColor = isNight ? '#0f1217' : '#1a1f25';
+
+  // Posts skip the very corners (those are rendered separately by Fence)
+  const inset = postSize * 0.5;
+  const usableLen = length - inset * 2;
+  const postPositions: number[] = [];
   for (let i = 0; i <= numIntervals; i++) {
-    posts.push((i / numIntervals) * length - length / 2);
+    postPositions.push(-usableLen / 2 + (i / numIntervals) * usableLen);
   }
-  const railYs = [0.3, 0.7];
-  const railColor = isNight ? '#2a1d10' : '#7a5230';
+  const segLen = usableLen / numIntervals;
 
   return (
     <group position={[cx, 0, cz]} rotation={[0, -angle, 0]}>
-      {posts.map((u, i) => (
-        <mesh key={`p${i}`} position={[u, postH / 2, 0]} castShadow>
-          <boxGeometry args={postSize} />
-          <meshStandardMaterial color={color} />
+      {/* Brick base — continuous solid wall (full length to corner) */}
+      <mesh position={[0, baseH / 2, 0]} castShadow receiveShadow>
+        <boxGeometry args={[length, baseH, wallT * 1.1]} />
+        <meshStandardMaterial color={brickColor} roughness={0.95} />
+      </mesh>
+
+      {/* Lower row wood-look panels */}
+      {Array.from({ length: numIntervals }, (_, i) => {
+        const x = -usableLen / 2 + segLen * (i + 0.5);
+        return (
+          <mesh
+            key={`pl${i}`}
+            position={[x, baseH + lowerH / 2, 0]}
+            castShadow
+            receiveShadow
+          >
+            <boxGeometry args={[segLen - postSize, lowerH, wallT]} />
+            <meshStandardMaterial color={panelLower} roughness={0.85} />
+          </mesh>
+        );
+      })}
+
+      {/* Mid horizontal trim band running full length */}
+      <mesh position={[0, baseH + lowerH + midTrimH / 2, 0]} castShadow>
+        <boxGeometry args={[length, midTrimH, wallT * 1.15]} />
+        <meshStandardMaterial color={trimColor} roughness={0.7} metalness={0.2} />
+      </mesh>
+
+      {/* Upper row panels (slightly different tone) */}
+      {Array.from({ length: numIntervals }, (_, i) => {
+        const x = -usableLen / 2 + segLen * (i + 0.5);
+        return (
+          <mesh
+            key={`pu${i}`}
+            position={[x, baseH + lowerH + midTrimH + upperH / 2, 0]}
+            castShadow
+            receiveShadow
+          >
+            <boxGeometry args={[segLen - postSize, upperH, wallT]} />
+            <meshStandardMaterial color={panelUpper} roughness={0.85} />
+          </mesh>
+        );
+      })}
+
+      {/* Anthracite vertical posts (inner only — corner posts handled by Fence) */}
+      {postPositions.slice(1, -1).map((u, i) => (
+        <mesh key={`pst${i}`} position={[u, totalH / 2, 0]} castShadow>
+          <boxGeometry args={[postSize, totalH + 0.05, postSize]} />
+          <meshStandardMaterial color={postColor} roughness={0.55} metalness={0.25} />
         </mesh>
       ))}
-      {railYs.map((y, i) => (
-        <mesh key={`r${i}`} position={[0, y, 0]} castShadow>
-          <boxGeometry args={[length, 0.07, 0.04]} />
-          <meshStandardMaterial color={railColor} />
-        </mesh>
-      ))}
+
+      {/* Top cap */}
+      <mesh position={[0, totalH + 0.05, 0]} castShadow>
+        <boxGeometry args={[length, 0.1, wallT * 1.4]} />
+        <meshStandardMaterial color={capColor} />
+      </mesh>
     </group>
   );
 }
@@ -389,9 +830,7 @@ function Pool({ config }: { config: PoolConfig }) {
       )}
 
       {/* Stainless steel waterfall feature (optional) */}
-      {config.waterfall && (
-        <Waterfall halfL={halfL} top={top} waterY={waterY} />
-      )}
+      {config.waterfall && <Waterfall halfL={halfL} top={top} />}
 
       {/* In-pool ladder */}
       <PoolLadder
@@ -961,65 +1400,100 @@ function PoolLadder({
   waterY: number;
   platformDirection: PlatformDirection;
 }) {
-  // A real pool ladder: two parallel rails + 5 horizontal rungs.
-  const railSpacing = 0.46;     // distance between the two rails
-  const railR = 0.028;          // rail radius
-  const rungR = 0.022;          // rung radius
-  const inset = PANEL_T + 0.28; // distance inside the pool from the wall
-  const handrailTopY = top + 0.85;     // rails extend ~85 cm above coping
-  const railBottomY = waterY - 0.85;   // rails extend ~85 cm below water surface
-  const railLen = handrailTopY - railBottomY;
-  const railYMid = (handrailTopY + railBottomY) / 2;
+  // Pool ladder: two parallel rails + horizontal rungs.
+  // Rails curve OVER at the top in an oval and land on the platform deck.
+  const railSpacing = 0.46;
+  const railR = 0.028;
+  const rungR = 0.022;
+  const inset = PANEL_T + 0.28;
+  const railBottomY = waterY - 0.85;
   const numRungs = 5;
   const rungYBottom = waterY - 0.5;
   const rungYTop = top - 0.18;
 
-  // Determine ladder anchor and the axis along which rungs run.
   let baseX = 0;
   let baseZ = 0;
   let rungAxis: 'x' | 'z' = 'z';
+  // Direction the curl bends OUT toward (the platform side, away from pool wall)
+  let curlOutX = 0;
+  let curlOutZ = 0;
 
   if (platformDirection === 'east') {
     baseX = halfW - inset;
     rungAxis = 'z';
+    curlOutX = 1;
   } else if (platformDirection === 'west') {
     baseX = -halfW + inset;
     rungAxis = 'z';
+    curlOutX = -1;
   } else if (platformDirection === 'north') {
     baseZ = -halfL + inset;
     rungAxis = 'x';
+    curlOutZ = -1;
   } else {
     baseZ = halfL - inset;
     rungAxis = 'x';
+    curlOutZ = 1;
   }
 
   const offsets = [-railSpacing / 2, railSpacing / 2];
   const chrome = '#f5f5f5';
 
-  return (
-    <group>
-      {/* Two vertical rails */}
-      {offsets.map((off, i) => {
+  // Build a tube geometry per rail: vertical from underwater up, then curls
+  // outward and back down to land on the deck.
+  const railGeos = useMemo(
+    () =>
+      offsets.map((off) => {
         const x = baseX + (rungAxis === 'z' ? 0 : off);
         const z = baseZ + (rungAxis === 'z' ? off : 0);
-        return (
-          <group key={`rail-${i}`}>
-            <mesh position={[x, railYMid, z]} castShadow>
-              <cylinderGeometry args={[railR, railR, railLen, 12]} />
-              <meshStandardMaterial color={chrome} metalness={0.4} roughness={0.4} />
-            </mesh>
-            {/* Rounded top cap */}
-            <mesh position={[x, handrailTopY, z]} castShadow>
-              <sphereGeometry args={[railR * 1.15, 12, 8]} />
-              <meshStandardMaterial color={chrome} metalness={0.4} roughness={0.4} />
-            </mesh>
-          </group>
-        );
-      })}
+        const curlR = 0.22; // radius of the curl loop
+        const curlPeakY = top + curlR + 0.05;
 
-      {/* Horizontal rungs */}
+        const points = [
+          // Bottom — deep in water
+          new THREE.Vector3(x, railBottomY, z),
+          // Just below water
+          new THREE.Vector3(x, waterY - 0.2, z),
+          // At deck level — start of the curl
+          new THREE.Vector3(x, top + 0.05, z),
+          // Apex of the curl, slightly forward
+          new THREE.Vector3(
+            x + curlOutX * curlR * 0.7,
+            curlPeakY,
+            z + curlOutZ * curlR * 0.7
+          ),
+          // Coming down on the platform side
+          new THREE.Vector3(
+            x + curlOutX * curlR * 1.6,
+            top + curlR * 0.3,
+            z + curlOutZ * curlR * 1.6
+          ),
+          // Landing on the deck
+          new THREE.Vector3(
+            x + curlOutX * curlR * 1.9,
+            top + 0.04,
+            z + curlOutZ * curlR * 1.9
+          ),
+        ];
+
+        const curve = new THREE.CatmullRomCurve3(points, false, 'catmullrom', 0.4);
+        return new THREE.TubeGeometry(curve, 80, railR, 10, false);
+      }),
+    [baseX, baseZ, rungAxis, curlOutX, curlOutZ, railBottomY, top, waterY]
+  );
+
+  return (
+    <group>
+      {/* Two curved rails (with oval curl at top landing on deck) */}
+      {railGeos.map((geo, i) => (
+        <mesh key={`rail-${i}`} geometry={geo} castShadow>
+          <meshStandardMaterial color={chrome} metalness={0.4} roughness={0.4} />
+        </mesh>
+      ))}
+
+      {/* Horizontal rungs (straight, unchanged) */}
       {Array.from({ length: numRungs }, (_, i) => {
-        const t = numRungs === 1 ? 0.5 : i / (numRungs - 1);
+        const t = i / (numRungs - 1);
         const y = rungYBottom + t * (rungYTop - rungYBottom);
         return (
           <mesh
@@ -1081,6 +1555,15 @@ function Platform({
 
   return (
     <group position={[cx, 0, cz]}>
+      {/* Closed block under the deck — machine/equipment room */}
+      <PlatformBlock
+        pw={pw}
+        pd={pd}
+        top={top - deckThickness}
+        direction={direction}
+        frameColor={frameColor}
+      />
+
       {/* Deck floor */}
       <mesh position={[0, deckY, 0]} castShadow receiveShadow>
         <boxGeometry args={[pw, deckThickness, pd]} />
@@ -1107,6 +1590,98 @@ function Platform({
         direction={direction}
         frameColor={frameColor}
       />
+    </group>
+  );
+}
+
+function PlatformBlock({
+  pw,
+  pd,
+  top,
+  direction,
+  frameColor,
+}: {
+  pw: number;
+  pd: number;
+  top: number;
+  direction: PlatformDirection;
+  frameColor: string;
+}) {
+  // Partial closed cabinet (machine room) — covers only the half adjacent to
+  // the pool, and extends inward to merge with the pool wall (closes the gap
+  // between the coping and the platform).
+  const halfPw = pw / 2;
+  const halfPd = pd / 2;
+  const cabH = top - 0.04;
+  // Distance from the platform's inner edge to the actual pool wall (the gap
+  // hidden by the coping when looked at from above).
+  const innerExtension = COPING_W - FRAME_T;
+  // Cabinet covers ~60% of the platform's depth, on the pool-facing side.
+  const cabPartial = pw * 0.6;
+
+  let cabX1: number, cabX2: number, cabZ1: number, cabZ2: number;
+  if (direction === 'east') {
+    cabX1 = -halfPw - innerExtension;
+    cabX2 = -halfPw + cabPartial;
+    cabZ1 = -halfPd;
+    cabZ2 = halfPd;
+  } else if (direction === 'west') {
+    cabX1 = halfPw - cabPartial;
+    cabX2 = halfPw + innerExtension;
+    cabZ1 = -halfPd;
+    cabZ2 = halfPd;
+  } else if (direction === 'north') {
+    cabX1 = -halfPw;
+    cabX2 = halfPw;
+    cabZ1 = -halfPd - innerExtension;
+    cabZ2 = -halfPd + cabPartial;
+  } else {
+    cabX1 = -halfPw;
+    cabX2 = halfPw;
+    cabZ1 = halfPd - cabPartial;
+    cabZ2 = halfPd + innerExtension;
+  }
+
+  const cabW = cabX2 - cabX1;
+  const cabD = cabZ2 - cabZ1;
+  const cabCx = (cabX1 + cabX2) / 2;
+  const cabCz = (cabZ1 + cabZ2) / 2;
+
+  // Vent placement on the outer-facing wall of the cabinet
+  const ventW = 0.55;
+  const ventH = 0.2;
+  let ventPos: [number, number, number];
+  let ventRot: [number, number, number];
+  if (direction === 'east') {
+    ventPos = [cabX2 - 0.005, cabH * 0.55, cabCz];
+    ventRot = [0, Math.PI / 2, 0];
+  } else if (direction === 'west') {
+    ventPos = [cabX1 + 0.005, cabH * 0.55, cabCz];
+    ventRot = [0, Math.PI / 2, 0];
+  } else if (direction === 'north') {
+    ventPos = [cabCx, cabH * 0.55, cabZ2 - 0.005];
+    ventRot = [0, 0, 0];
+  } else {
+    ventPos = [cabCx, cabH * 0.55, cabZ1 + 0.005];
+    ventRot = [0, 0, 0];
+  }
+
+  return (
+    <group>
+      {/* Solid cabinet block */}
+      <mesh position={[cabCx, cabH / 2, cabCz]} castShadow receiveShadow>
+        <boxGeometry args={[cabW, cabH, cabD]} />
+        <meshStandardMaterial
+          color={frameColor}
+          roughness={0.6}
+          metalness={0.25}
+        />
+      </mesh>
+      {/* Ventilation grille on the outer face */}
+      <mesh position={ventPos} rotation={ventRot}>
+        <boxGeometry args={[ventW, ventH, 0.02]} />
+        <meshStandardMaterial color="#15191f" roughness={0.7} />
+      </mesh>
     </group>
   );
 }
@@ -1476,115 +2051,71 @@ function StairRail({
 function Waterfall({
   halfL,
   top,
-  waterY,
 }: {
   halfL: number;
   top: number;
-  waterY: number;
 }) {
-  // Stainless steel cascade: flat vertical plate post + half-torus arch
-  // curving over into the pool with a falling water sheet.
-  const archR = 0.32;
-  const tubeR = 0.07;
-  const postH = 0.7;
+  // Stainless steel cascade: rectangular post + half-annulus ("C") sheet
+  // bent over the top. The arch is a SHEET (rectangular cross-section), not a
+  // tube — extruded from a 2D C-shape so it matches the real product.
+  const archR = 0.32;       // outer radius of the C
+  const sheetT = 0.05;      // sheet metal thickness
+  const innerR = archR - sheetT;
+  const postH = 0.5;
+  const postW = 0.30;       // width along X (extrusion depth of the C)
+  const postT = 0.075;      // post depth in Z direction (slightly thicker than sheet)
 
-  // Flat plate-like post (wide, thin) sitting on the coping
-  const postW = 0.36;
-  const postT = 0.05;
-
-  const postZ = -halfL + 0.12;
+  const baseZ = -halfL + 0.1; // outer face of the waterfall, on the coping
   const postY = top + postH / 2;
   const postTopY = top + postH;
 
-  const arcCenterZ = postZ + archR;
-  const arcEndZ = postZ + 2 * archR;
+  // 2D side profile — half annulus opened at the bottom
+  const archGeometry = useMemo(() => {
+    const shape = new THREE.Shape();
+    shape.moveTo(-archR, 0);
+    // Outer arc: π → 0 through top (clockwise = decreasing angles)
+    shape.absarc(0, 0, archR, Math.PI, 0, true);
+    shape.lineTo(innerR, 0);
+    // Inner arc: 0 → π through top (counter-clockwise = increasing angles)
+    shape.absarc(0, 0, innerR, 0, Math.PI, false);
+    shape.lineTo(-archR, 0);
+    return new THREE.ExtrudeGeometry(shape, {
+      depth: postW,
+      bevelEnabled: true,
+      bevelSize: 0.004,
+      bevelThickness: 0.004,
+      bevelSegments: 1,
+      curveSegments: 56,
+    });
+  }, [archR, innerR, postW]);
 
-  const sheetWidth = 0.36;
-  const sheetTopY = postTopY - 0.08;
-  const sheetBotY = waterY + 0.02;
-  const sheetH = sheetTopY - sheetBotY;
-
-  // Brushed-steel look that doesn't depend on env map (metalness kept low)
   const steelMatProps = {
     color: '#d8dde4',
-    metalness: 0.25,
-    roughness: 0.45,
-    emissive: '#1a1f24',
-    emissiveIntensity: 0.05,
+    metalness: 0.6,
+    roughness: 0.3,
   };
 
   return (
     <group>
-      {/* Flat vertical plate post */}
-      <mesh position={[0, postY, postZ]} castShadow>
+      {/* Rectangular post */}
+      <mesh
+        position={[0, postY, baseZ + postT / 2]}
+        castShadow
+        receiveShadow
+      >
         <boxGeometry args={[postW, postH, postT]} />
         <meshStandardMaterial {...steelMatProps} />
       </mesh>
 
-      {/* Side rims giving the plate a slight U-channel look */}
+      {/* C-shaped sheet metal arch sitting on the post */}
       <mesh
-        position={[postW / 2 - 0.012, postY, postZ + 0.025]}
+        geometry={archGeometry}
+        position={[postW / 2, postTopY, baseZ + archR]}
+        rotation={[0, -Math.PI / 2, 0]}
         castShadow
+        receiveShadow
       >
-        <boxGeometry args={[0.025, postH, 0.06]} />
         <meshStandardMaterial {...steelMatProps} />
-      </mesh>
-      <mesh
-        position={[-postW / 2 + 0.012, postY, postZ + 0.025]}
-        castShadow
-      >
-        <boxGeometry args={[0.025, postH, 0.06]} />
-        <meshStandardMaterial {...steelMatProps} />
-      </mesh>
-
-      {/* Half-torus arch (in YZ plane) */}
-      <mesh
-        position={[0, postTopY, arcCenterZ]}
-        rotation={[0, Math.PI / 2, 0]}
-        castShadow
-      >
-        <torusGeometry args={[archR, tubeR, 16, 32, Math.PI]} />
-        <meshStandardMaterial {...steelMatProps} />
-      </mesh>
-
-      {/* Wider scoop opening at the arch end */}
-      <mesh
-        position={[0, postTopY, arcEndZ]}
-        rotation={[Math.PI / 2, 0, 0]}
-      >
-        <ringGeometry args={[tubeR * 0.35, tubeR * 1.1, 20]} />
-        <meshStandardMaterial
-          {...steelMatProps}
-          side={THREE.DoubleSide}
-        />
-      </mesh>
-
-      {/* Water sheet falling from the arch end */}
-      <mesh position={[0, (sheetTopY + sheetBotY) / 2, arcEndZ]}>
-        <planeGeometry args={[sheetWidth, sheetH]} />
-        <meshStandardMaterial
-          color="#a4daee"
-          transparent
-          opacity={0.55}
-          roughness={0.05}
-          metalness={0.2}
-          side={THREE.DoubleSide}
-        />
-      </mesh>
-
-      {/* Splash ring at the water surface */}
-      <mesh
-        position={[0, waterY + 0.012, arcEndZ]}
-        rotation={[-Math.PI / 2, 0, 0]}
-      >
-        <ringGeometry args={[0.08, 0.22, 24]} />
-        <meshStandardMaterial
-          color="#d4ecf6"
-          transparent
-          opacity={0.7}
-          roughness={0.2}
-          side={THREE.DoubleSide}
-        />
       </mesh>
     </group>
   );

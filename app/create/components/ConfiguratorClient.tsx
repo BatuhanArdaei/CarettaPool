@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import dynamic from 'next/dynamic';
 import { defaultPoolConfig, type PoolConfig } from '@/lib/types';
 import { calculateBasePrice, type PriceBreakdown } from '@/lib/pricing';
@@ -25,6 +25,7 @@ interface Props {
 
 export default function ConfiguratorClient({ userId, userEmail, role, fullName }: Props) {
   const [config, setConfig] = useState<PoolConfig>(defaultPoolConfig);
+  const controlsRef = useRef<{ reset: () => void } | null>(null);
   const [breakdown, setBreakdown] = useState<PriceBreakdown>(() =>
     calculateBasePrice(defaultPoolConfig)
   );
@@ -71,8 +72,15 @@ export default function ConfiguratorClient({ userId, userEmail, role, fullName }
     <div className="mx-auto max-w-[1400px] px-3 py-4">
       <div className="flex flex-col gap-4 lg:grid lg:grid-cols-[320px_1fr_340px]">
         {/* 3D scene — sticky on mobile (top), middle column on desktop */}
-        <div className="card overflow-hidden order-1 lg:order-2 sticky top-16 z-30 lg:static lg:z-auto h-[35vh] sm:h-[45vh] lg:h-[70vh] lg:min-h-[420px]">
-          <PoolScene config={config} />
+        <div className="card relative overflow-hidden order-1 lg:order-2 sticky top-16 z-30 lg:static lg:z-auto h-[35vh] sm:h-[45vh] lg:h-[70vh] lg:min-h-[420px]">
+          <PoolScene config={config} controlsRef={controlsRef} />
+          <button
+            type="button"
+            onClick={() => controlsRef.current?.reset()}
+            className="absolute top-3 left-3 z-10 rounded-md bg-white/90 px-3 py-1.5 text-xs font-medium text-slate-700 shadow-sm ring-1 ring-slate-200 hover:bg-white"
+          >
+            Bakış Açısını Sıfırla
+          </button>
         </div>
         <div className="order-2 lg:order-1">
           <ConfigPanel config={config} onChange={setConfig} />
