@@ -1,0 +1,178 @@
+'use client';
+
+import { useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { createClient } from '@/lib/supabase/client';
+import { formatTRY, type PriceBreakdown } from '@/lib/pricing';
+import { countPanels, type PoolConfig } from '@/lib/types';
+
+interface Props {
+  config: PoolConfig;
+  breakdown: PriceBreakdown;
+  isDealer: boolean;
+  discountRate: number;
+  loading: boolean;
+  error: string | null;
+  userId: string;
+  userEmail: string;
+  fullName: string;
+  role: 'customer' | 'dealer' | 'admin';
+}
+
+export default function PricePanel({
+  config,
+  breakdown,
+  isDealer,
+  discountRate,
+  loading,
+  error,
+  userId,
+  userEmail,
+  fullName,
+  role,
+}: Props) {
+  const router = useRouter();
+  const supabase = createClient();
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [saved, setSaved] = useState(false);
+
+  async function handleSubmit() {
+    setSaving(true);
+    setSaveError(null);
+    setSaved(false);
+    try {
+      const { error } = await supabase.from('pool_configs').insert({
+        user_id: userId,
+        config: config as unknown as Record<string, unknown>,
+        total_price: breakdown.total,
+      });
+      if (error) throw error;
+      setSaved(true);
+      router.refresh();
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : 'Kayıt başarısız.');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <aside className="card max-h-[80vh] space-y-5 overflow-y-auto p-5">
+      <div>
+        <h2 className="text-lg font-bold text-slate-900">Özet</h2>
+        <p className="text-xs text-slate-500">
+          {fullName ? `${fullName} • ` : ''}
+          {role === 'dealer' ? 'Bayi fiyatı' : role === 'admin' ? 'Admin görünümü' : 'Müşteri fiyatı'}
+        </p>
+      </div>
+
+      <ul className="space-y-1.5 text-sm">
+        <SummaryItem label="Boyut" value={`${config.width.toFixed(1)} × ${config.length.toFixed(1)} m`} />
+        <SummaryItem label="Çerçeve" value={frameLabel(config.frameColor)} />
+        <SummaryItem
+          label="Panel"
+          value={(() => {
+            const c = countPanels(config);
+            const segLabel = config.panelSegments === 1 ? 'tek parça' : `${config.panelSegments} bölme`;
+            return `${segLabel} • ${c.glass} cam, ${c.closed} kapalı`;
+          })()}
+        />
+        <SummaryItem
+          label="Işıklandırma"
+          value={
+            config.lighting.enabled
+              ? `Açık — ${lightLabel(config.lighting.color)}`
+              : 'Kapalı'
+          }
+        />
+        <SummaryItem label="Zemin Altı" value={groundLabel(config.ground)} />
+        <SummaryItem label="İç Kaplama" value={claddingLabel(config.cladding)} />
+      </ul>
+
+      <div className="border-t border-slate-200 pt-4">
+        <PriceLine label="Havuz (taban)" value={breakdown.base} />
+        {breakdown.frame > 0 && <PriceLine label="Çerçeve rengi" value={breakdown.frame} />}
+        {breakdown.panel > 0 && <PriceLine label="Cam paneller" value={breakdown.panel} />}
+        <PriceLine label="Yan platform" value={breakdown.platform} />
+        {breakdown.ground > 0 && <PriceLine label="Zemin altı" value={breakdown.ground} />}
+        {breakdown.cladding > 0 && <PriceLine label="İç kaplama" value={breakdown.cladding} />}
+        {breakdown.lighting > 0 && <PriceLine label="Işıklandırma" value={breakdown.lighting} />}
+      </div>
+
+      <div className="border-t border-slate-200 pt-4 text-sm">
+        <div className="flex justify-between text-slate-600">
+          <span>Ara toplam</span>
+          <span>{formatTRY(breakdown.subtotal)}</span>
+        </div>
+        {isDealer && breakdown.discount > 0 && (
+          <div className="mt-1 flex justify-between text-emerald-700">
+            <span>Bayi indirimi (%{discountRate})</span>
+            <span>-{formatTRY(breakdown.discount)}</span>
+          </div>
+        )}
+        <div className="mt-3 flex items-baseline justify-between">
+          <span className="text-sm text-slate-700">Toplam</span>
+          <span className="text-2xl font-bold text-brand-700">
+            {loading ? '…' : formatTRY(breakdown.total)}
+          </span>
+        </div>
+        {error && (
+          <p className="mt-2 rounded bg-red-50 p-2 text-xs text-red-700">{error}</p>
+        )}
+      </div>
+
+      <button
+        type="button"
+        onClick={handleSubmit}
+        className="btn-primary w-full"
+        disabled={saving || loading}
+      >
+        {saving ? 'Gönderiliyor…' : 'Teklif Al'}
+      </button>
+      {saved && (
+        <p className="text-center text-sm text-emerald-700">
+          Talebiniz alındı. Sizinle en kısa sürede iletişime geçeceğiz.
+        </p>
+      )}
+      {saveError && (
+        <p className="text-center text-sm text-red-700">{saveError}</p>
+      )}
+
+      <p className="text-center text-xs text-slate-400">{userEmail}</p>
+    </aside>
+  );
+}
+
+function SummaryItem({ label, value }: { label: string; value: string }) {
+  return (
+    <li className="flex justify-between">
+      <span className="text-slate-500">{label}</span>
+      <span className="font-medium text-slate-900">{value}</span>
+    </li>
+  );
+}
+
+function PriceLine({ label, value }: { label: string; value: number }) {
+  return (
+    <div className="flex justify-between text-sm text-slate-600">
+      <span>{label}</span>
+      <span>{formatTRY(value)}</span>
+    </div>
+  );
+}
+
+function frameLabel(c: string) {
+  return { anthracite: 'Antrasit', blue: 'Mavi', white: 'Beyaz' }[c] ?? c;
+}
+function lightLabel(c: string) {
+  return (
+    { blue: 'Mavi', white: 'Beyaz', green: 'Yeşil', purple: 'Mor', rgb: 'RGB' }[c] ?? c
+  );
+}
+function groundLabel(g: string) {
+  return { gravel: 'Çakıl', wood: 'Tahta Deck', grass: 'Çimen', concrete: 'Beton' }[g] ?? g;
+}
+function claddingLabel(c: string) {
+  return { white: 'Beyaz', blue_mosaic: 'Mavi Mozaik', gray_stone: 'Gri Taş', turquoise: 'Turkuaz' }[c] ?? c;
+}

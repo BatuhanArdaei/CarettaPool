@@ -1,0 +1,97 @@
+'use client';
+
+import { useEffect, useMemo, useState } from 'react';
+import dynamic from 'next/dynamic';
+import { defaultPoolConfig, type PoolConfig } from '@/lib/types';
+import { calculateBasePrice, type PriceBreakdown } from '@/lib/pricing';
+import ConfigPanel from './ConfigPanel';
+import PricePanel from './PricePanel';
+
+const PoolScene = dynamic(() => import('./PoolScene'), {
+  ssr: false,
+  loading: () => (
+    <div className="flex h-full items-center justify-center text-slate-500">
+      3D sahne yükleniyor…
+    </div>
+  ),
+});
+
+interface Props {
+  userId: string;
+  userEmail: string;
+  role: 'customer' | 'dealer' | 'admin';
+  fullName: string;
+}
+
+export default function ConfiguratorClient({ userId, userEmail, role, fullName }: Props) {
+  const [config, setConfig] = useState<PoolConfig>(defaultPoolConfig);
+  const [breakdown, setBreakdown] = useState<PriceBreakdown>(() =>
+    calculateBasePrice(defaultPoolConfig)
+  );
+  const [isDealer, setIsDealer] = useState(false);
+  const [discountRate, setDiscountRate] = useState(0);
+  const [priceLoading, setPriceLoading] = useState(false);
+  const [priceError, setPriceError] = useState<string | null>(null);
+
+  // Debounced fetch from /api/price whenever config changes.
+  const debounceKey = useMemo(() => JSON.stringify(config), [config]);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    const t = setTimeout(async () => {
+      setPriceLoading(true);
+      setPriceError(null);
+      try {
+        const res = await fetch('/api/price', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ config }),
+          signal: controller.signal,
+        });
+        if (!res.ok) throw new Error('Fiyat alınamadı');
+        const data = await res.json();
+        setBreakdown(data.breakdown);
+        setIsDealer(Boolean(data.isDealer));
+        setDiscountRate(Number(data.discountRate ?? 0));
+      } catch (err) {
+        if ((err as Error).name === 'AbortError') return;
+        setPriceError((err as Error).message);
+      } finally {
+        setPriceLoading(false);
+      }
+    }, 300);
+
+    return () => {
+      controller.abort();
+      clearTimeout(t);
+    };
+  }, [debounceKey, config]);
+
+  return (
+    <div className="mx-auto max-w-[1400px] px-3 py-4">
+      <div className="flex flex-col gap-4 lg:grid lg:grid-cols-[320px_1fr_340px]">
+        {/* 3D scene — sticky on mobile (top), middle column on desktop */}
+        <div className="card overflow-hidden order-1 lg:order-2 sticky top-16 z-30 lg:static lg:z-auto h-[35vh] sm:h-[45vh] lg:h-[70vh] lg:min-h-[420px]">
+          <PoolScene config={config} />
+        </div>
+        <div className="order-2 lg:order-1">
+          <ConfigPanel config={config} onChange={setConfig} />
+        </div>
+        <div className="order-3">
+          <PricePanel
+            config={config}
+            breakdown={breakdown}
+            isDealer={isDealer}
+            discountRate={discountRate}
+            loading={priceLoading}
+            error={priceError}
+            userId={userId}
+            userEmail={userEmail}
+            fullName={fullName}
+            role={role}
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
