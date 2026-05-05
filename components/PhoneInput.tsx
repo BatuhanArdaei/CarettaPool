@@ -122,7 +122,7 @@ export default function PhoneInput({ value, onChange, placeholder, className, re
                 onClick={() => handleCountrySelect(c)}
                 className={`flex w-full items-center gap-3 px-4 py-2 text-sm hover:bg-slate-50 ${c.code === country.code ? 'bg-brand-50 text-brand-700 font-medium' : 'text-slate-700'}`}
               >
-                <span className="text-xl">{c.flag}</span>
+                <Image src={flagUrl(c.country, 40)} alt={c.name} width={24} height={17} className="rounded-[2px] object-cover" unoptimized />
                 <span className="flex-1 text-left">{c.name}</span>
                 <span className="text-xs text-slate-400">{c.dial}</span>
               </button>
