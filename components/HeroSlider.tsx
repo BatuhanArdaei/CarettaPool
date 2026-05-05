@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import { useLanguage } from '@/contexts/LanguageContext';
 
 interface Slide {
   image: string;
@@ -20,6 +21,7 @@ const SLIDE_DURATION = 6500; // ms
 export default function HeroSlider() {
   const [idx, setIdx] = useState(0);
   const [progress, setProgress] = useState(0);
+  const { t } = useLanguage();
 
   // requestAnimationFrame loop for smooth progress; advances to next slide
   // when the bar fills up.
@@ -60,21 +62,19 @@ export default function HeroSlider() {
 
       {/* Hero content */}
       <div className="relative z-10 mx-auto flex h-full max-w-6xl flex-col items-center justify-center px-6 text-center text-white">
-        <h1 className="text-4xl font-bold leading-tight tracking-tight md:text-6xl">
-          Yenilikçi Caretta Pools
+        <h1 className="text-2xl font-bold leading-tight tracking-tight sm:text-4xl md:text-6xl">
+          {t('hero.title')}
           <br />
-          Lüksün İçine Dalın!
+          {t('hero.subtitle')}
         </h1>
-        <p className="mt-6 max-w-2xl text-base leading-relaxed text-white/90 md:text-lg">
-          Alanınızı son teknoloji bir Caretta Pools ile dönüştürmeye hazır
-          mısınız? Kendi Caretta Pool&apos;unu oluştur; lüks ve
-          sürdürülebilirliğin kusursuz dünyasına adım at.
+        <p className="mt-4 max-w-2xl text-sm leading-relaxed text-white/90 sm:mt-6 sm:text-base md:text-lg">
+          {t('hero.description')}
         </p>
         <Link
           href="/create"
-          className="mt-10 inline-flex items-center justify-center rounded-md bg-brand-500 px-8 py-3.5 text-sm font-medium text-white shadow-lg transition-colors hover:bg-brand-400"
+          className="mt-6 inline-flex items-center justify-center rounded-md bg-brand-500 px-5 py-3 text-sm font-medium text-white shadow-lg transition-colors hover:bg-brand-400 sm:mt-10 sm:px-8 sm:py-3.5"
         >
-          Kendiniz Havuzunu Yaratın
+          {t('hero.cta')}
         </Link>
       </div>
 

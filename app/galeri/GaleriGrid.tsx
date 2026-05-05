@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useLanguage } from '@/contexts/LanguageContext';
 import Image from 'next/image';
 import { createClient } from '@/lib/supabase/client';
 
@@ -13,16 +14,17 @@ interface Photo {
 
 type Filter = 'tumu' | 'havuz' | 'fuar' | 'fabrika';
 
-const FILTERS: { key: Filter; label: string }[] = [
-  { key: 'tumu',    label: 'Tümü' },
-  { key: 'havuz',   label: 'Havuz' },
-  { key: 'fuar',    label: 'Fuar' },
-  { key: 'fabrika', label: 'Fabrika' },
+const FILTER_KEYS: { key: Filter; tKey: string }[] = [
+  { key: 'tumu',    tKey: 'gallery.all' },
+  { key: 'havuz',   tKey: 'gallery.pool' },
+  { key: 'fuar',    tKey: 'gallery.fair' },
+  { key: 'fabrika', tKey: 'gallery.factory' },
 ];
 
 export default function GaleriGrid() {
   const [photos, setPhotos] = useState<Photo[]>([]);
   const [active, setActive] = useState<Filter>('tumu');
+  const { t } = useLanguage();
 
   useEffect(() => {
     const supabase = createClient();
@@ -41,7 +43,7 @@ export default function GaleriGrid() {
     <>
       {/* Filter buttons */}
       <div className="mt-10 flex flex-wrap gap-2">
-        {FILTERS.map(f => (
+        {FILTER_KEYS.map(f => (
           <button
             key={f.key}
             type="button"
@@ -50,7 +52,7 @@ export default function GaleriGrid() {
               active === f.key ? 'bg-brand-500 text-white shadow-md' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
             }`}
           >
-            {f.label}
+            {t(f.tKey)}
             <span className={`ml-2 text-xs ${active === f.key ? 'text-white/80' : 'text-slate-400'}`}>
               {count(f.key)}
             </span>
@@ -59,7 +61,7 @@ export default function GaleriGrid() {
       </div>
 
       {/* Photo grid */}
-      <div className="mt-8 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="mt-8 grid grid-cols-1 gap-2 sm:grid-cols-2 sm:gap-3 lg:grid-cols-3">
         {visible.map(p => (
           <div
             key={p.id}

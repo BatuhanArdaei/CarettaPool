@@ -1,8 +1,9 @@
 import { NextResponse, type NextRequest } from 'next/server';
-import { createClient as createServerClient } from '@supabase/supabase-js';
+import { createServerClient } from '@supabase/ssr';
+import { createClient as createServiceClient } from '@supabase/supabase-js';
 
 const adminClient = () =>
-  createServerClient(
+  createServiceClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.SUPABASE_SECRET_KEY!,
     { auth: { autoRefreshToken: false, persistSession: false } }
@@ -10,6 +11,17 @@ const adminClient = () =>
 
 export async function POST(req: NextRequest) {
   try {
+    // Verify the caller is a logged-in admin before using service role
+    const callerClient = createServerClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!,
+      { cookies: { getAll: () => req.cookies.getAll(), setAll: () => {} } }
+    );
+    const { data: { user: caller } } = await callerClient.auth.getUser();
+    if (!caller) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const { data: callerProfile } = await callerClient.from('profiles').select('role').eq('id', caller.id).single();
+    if (callerProfile?.role !== 'admin') return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+
     const { company_name, email, password, full_name, discount_rate, discount_type, custom_prices } = await req.json();
 
     if (!company_name || !email || !password)

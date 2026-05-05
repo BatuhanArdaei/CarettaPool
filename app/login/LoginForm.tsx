@@ -19,7 +19,9 @@ export default function LoginForm({ redirectTo }: { redirectTo: string }) {
     try {
       const { error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) throw error;
-      router.push(redirectTo);
+      // Prevent open redirect — only allow same-origin paths
+      const safePath = redirectTo.startsWith('/') && !redirectTo.startsWith('//') ? redirectTo : '/create';
+      router.push(safePath);
       router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Giriş başarısız. E-posta veya şifrenizi kontrol edin.');

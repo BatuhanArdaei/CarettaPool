@@ -51,7 +51,7 @@ function ProductRow({
   const specs = getProductSpecs(product);
   return (
     <article
-      className={`grid items-center gap-10 border-t border-slate-100 py-16 first:border-t-0 md:grid-cols-2 md:py-20 ${
+      className={`grid items-center gap-6 border-t border-slate-100 py-10 first:border-t-0 sm:gap-10 md:grid-cols-2 md:py-20 ${
         reverse ? 'md:[&>div:first-child]:order-2' : ''
       }`}
     >

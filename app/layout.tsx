@@ -17,7 +17,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body className="flex min-h-screen flex-col">
         <LanguageProvider>
           <Navbar />
-          <main className="flex-1">{children}</main>
+          <main className="flex-1 pt-20 md:pt-24">{children}</main>
           <Footer />
           <WhatsAppButton />
         </LanguageProvider>

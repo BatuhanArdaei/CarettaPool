@@ -6,11 +6,12 @@ export const metadata = { title: 'Admin — CarettaPool' };
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
   const supabase = createClient();
-  const { data: { session } } = await supabase.auth.getSession();
-  if (!session) redirect('/login?redirect=/admin');
+  // getUser() validates the token server-side (not just cookie read)
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) redirect('/login?redirect=/admin');
 
   const { data: profile } = await supabase
-    .from('profiles').select('role').eq('id', session.user.id).single();
+    .from('profiles').select('role').eq('id', user.id).single();
   if (profile?.role !== 'admin') redirect('/');
 
   return (

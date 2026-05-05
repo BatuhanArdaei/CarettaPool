@@ -33,10 +33,10 @@ export default async function KataloglarPage() {
             {catalogs.map((c) => (
               <div
                 key={c.id}
-                className="flex gap-6 overflow-hidden rounded-xl ring-1 ring-slate-200 transition-shadow hover:shadow-md"
+                className="flex flex-col gap-4 overflow-hidden rounded-xl ring-1 ring-slate-200 transition-shadow hover:shadow-md sm:flex-row sm:gap-6"
               >
                 {/* Flag */}
-                <div className="flex w-36 shrink-0 items-center justify-center bg-slate-50 py-6 text-5xl">
+                <div className="flex h-32 w-full items-center justify-center bg-slate-50 text-5xl sm:h-auto sm:w-32 sm:text-5xl">
                   {c.flag || '📄'}
                 </div>
 

@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server';
+import T from '@/components/T';
 
 export const metadata = { title: 'S.S.S — CarettaPool' };
 export const revalidate = 60;

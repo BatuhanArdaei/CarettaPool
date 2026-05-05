@@ -4,8 +4,9 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
 
-const ADMIN_EMAIL = 'admin@gmail.com';
-const ADMIN_PASS  = '13811381';
+// Credentials removed from source code — use env vars instead
+const ADMIN_EMAIL = process.env.NEXT_PUBLIC_ADMIN_EMAIL ?? '';
+const ADMIN_PASS  = process.env.NEXT_PUBLIC_ADMIN_PASS  ?? '';
 
 interface Stats {
   gallery: number;

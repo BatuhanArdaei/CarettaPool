@@ -34,7 +34,7 @@ export default async function Footer() {
   return (
     <footer className="bg-slate-950 text-slate-400">
       <div className="mx-auto max-w-6xl px-6 py-14">
-        <div className="grid gap-10 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 sm:gap-8 lg:grid-cols-4 lg:gap-10">
           {/* Brand + socials */}
           <div className="lg:col-span-1">
             <p className="text-lg font-bold text-white">CarettaPool</p>
