@@ -14,14 +14,29 @@ import {
   type PoolConfig,
   type PoolSide,
 } from '@/lib/types';
+import { useState as useStateR } from 'react';
+import { useRouter } from 'next/navigation';
+import { createClient } from '@/lib/supabase/client';
+import { formatTRY, type PriceBreakdown } from '@/lib/pricing';
+import { countPanels } from '@/lib/types';
 
 interface Props {
   config: PoolConfig;
   onChange: (next: PoolConfig) => void;
+  // Özet adımı için
+  breakdown: PriceBreakdown;
+  isDealer: boolean;
+  discountRate: number;
+  loading: boolean;
+  priceError: string | null;
+  userId: string;
+  userEmail: string;
+  fullName: string;
+  role: 'customer' | 'dealer' | 'admin';
 }
 
 interface StepDef {
-  key: 'size' | 'frame' | 'panels' | 'waterfall' | 'lighting' | 'finish';
+  key: 'size' | 'frame' | 'panels' | 'waterfall' | 'lighting' | 'finish' | 'summary';
   title: string;
   short: string;
   tip: string;
@@ -64,9 +79,19 @@ const STEPS: StepDef[] = [
     short: 'Kaplama',
     tip: 'Havuz çevresindeki zemin tipi ve havuz içindeki kaplama desenini seçin. Özel desenler için resimleri public/textures/ klasörüne (texture1.jpeg gibi) koyabilirsiniz.',
   },
+  {
+    key: 'summary',
+    title: 'Özet & Teklif',
+    short: 'Özet',
+    tip: 'Seçimlerinizi gözden geçirin. Her şey doğruysa "Teklif Al" butonuna basarak talebinizi iletebilirsiniz.',
+  },
 ];
 
-export default function ConfigPanel({ config, onChange }: Props) {
+export default function ConfigPanel({
+  config, onChange,
+  breakdown, isDealer, discountRate, loading, priceError,
+  userId, userEmail, fullName, role,
+}: Props) {
   const [stepIdx, setStepIdx] = useState(0);
   const [tipOpen, setTipOpen] = useState(true);
 
@@ -149,6 +174,20 @@ export default function ConfigPanel({ config, onChange }: Props) {
         )}
         {step.key === 'lighting' && <LightingStep config={config} set={set} />}
         {step.key === 'finish' && <FinishStep config={config} set={set} />}
+        {step.key === 'summary' && (
+          <SummaryStep
+            config={config}
+            breakdown={breakdown}
+            isDealer={isDealer}
+            discountRate={discountRate}
+            loading={loading}
+            priceError={priceError}
+            userId={userId}
+            userEmail={userEmail}
+            fullName={fullName}
+            role={role}
+          />
+        )}
       </div>
 
       {/* Footer nav */}
@@ -653,15 +692,166 @@ function SelectGrid<T extends string>({
 
 function lightCssColor(c: LightColor): string {
   switch (c) {
-    case 'blue':
-      return '#3b82f6';
-    case 'white':
-      return '#f8fafc';
-    case 'green':
-      return '#22c55e';
-    case 'purple':
-      return '#a855f7';
-    case 'rgb':
-      return 'conic-gradient(from 0deg, #ef4444, #f59e0b, #84cc16, #06b6d4, #6366f1, #ec4899, #ef4444)';
+    case 'blue':   return '#3b82f6';
+    case 'white':  return '#f8fafc';
+    case 'green':  return '#22c55e';
+    case 'purple': return '#a855f7';
+    case 'rgb':    return 'conic-gradient(from 0deg, #ef4444, #f59e0b, #84cc16, #06b6d4, #6366f1, #ec4899, #ef4444)';
   }
 }
+
+/* ─── Step 7: Özet & Teklif ─────────────────────────────────────── */
+function SummaryStep({
+  config, breakdown, isDealer, discountRate, loading, priceError,
+  userId, userEmail, fullName, role,
+}: {
+  config: PoolConfig; breakdown: PriceBreakdown; isDealer: boolean; discountRate: number;
+  loading: boolean; priceError: string | null; userId: string; userEmail: string;
+  fullName: string; role: 'customer' | 'dealer' | 'admin';
+}) {
+  const router = useRouter();
+  const supabase = createClient();
+  const [saving, setSaving] = useStateR(false);
+  const [saved, setSaved] = useStateR(false);
+  const [saveError, setSaveError] = useStateR<string | null>(null);
+  const [showPopup, setShowPopup] = useStateR(false);
+  const [contact, setContact] = useStateR({ name: '', email: '', phone: '' });
+
+  const isGuest = !userId;
+
+  async function submitRequest(contactInfo?: { name: string; email: string; phone: string }) {
+    setSaving(true); setSaveError(null); setSaved(false);
+    try {
+      await supabase.from('pool_configs').insert({
+        user_id: userId || null,
+        config: config as unknown as Record<string, unknown>,
+        total_price: breakdown.total,
+      });
+      if (isGuest && contactInfo) {
+        await supabase.from('contact_requests').insert({
+          name: contactInfo.name, email: contactInfo.email, phone: contactInfo.phone || null,
+          message: `Havuz Teklif Talebi — ${config.width.toFixed(1)}×${config.length.toFixed(1)} m, ${formatTRY(breakdown.total)}`,
+        });
+      }
+      setSaved(true); setShowPopup(false); router.refresh();
+    } catch (err) { setSaveError(err instanceof Error ? err.message : 'Hata'); }
+    setSaving(false);
+  }
+
+  const panels = countPanels(config);
+
+  const rows: [string, string][] = [
+    ['Boyut', `${config.width.toFixed(1)} × ${config.length.toFixed(1)} m`],
+    ['Çerçeve', { anthracite: 'Antrasit', blue: 'Mavi', white: 'Beyaz' }[config.frameColor] ?? config.frameColor],
+    ['Panel', `${config.panelSegments} bölme • ${panels.glass} cam, ${panels.closed} kapalı`],
+    ['Işıklandırma', config.lighting.enabled ? `Açık — ${config.lighting.color.toUpperCase()}` : 'Kapalı'],
+    ['Şelale', config.waterfall ? 'Var' : 'Yok'],
+    ['Zemin', { gravel:'Çakıl', wood:'Tahta Deck', grass:'Çimen', concrete:'Beton' }[config.ground] ?? config.ground],
+    ['Kaplama', { white:'Beyaz', blue_mosaic:'Mavi Mozaik', gray_stone:'Gri Taş', turquoise:'Turkuaz' }[config.cladding] ?? 'Özel Desen'],
+  ];
+
+  return (
+    <div className="space-y-4">
+      {/* Seçimler */}
+      <div className="rounded-xl bg-slate-50 p-4">
+        <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-500">Seçimleriniz</p>
+        <ul className="space-y-1.5">
+          {rows.map(([k, v]) => (
+            <li key={k} className="flex justify-between text-sm">
+              <span className="text-slate-500">{k}</span>
+              <span className="font-medium text-slate-900">{v}</span>
+            </li>
+          ))}
+        </ul>
+      </div>
+
+      {/* Fiyat */}
+      <div className="rounded-xl bg-white p-4 ring-1 ring-slate-200 space-y-1.5">
+        <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-2">Fiyat Detayı</p>
+        {[
+          ['Havuz (taban)', breakdown.base],
+          breakdown.frame > 0 ? ['Çerçeve', breakdown.frame] : null,
+          breakdown.panel > 0 ? ['Cam paneller', breakdown.panel] : null,
+          ['Yan platform', breakdown.platform],
+          breakdown.ground > 0 ? ['Zemin altı', breakdown.ground] : null,
+          breakdown.cladding > 0 ? ['İç kaplama', breakdown.cladding] : null,
+          breakdown.lighting > 0 ? ['Işıklandırma', breakdown.lighting] : null,
+          breakdown.waterfall > 0 ? ['Şelale', breakdown.waterfall] : null,
+        ].filter(Boolean).map(([label, val]) => (
+          <div key={label as string} className="flex justify-between text-sm text-slate-600">
+            <span>{label as string}</span>
+            <span>{formatTRY(val as number)}</span>
+          </div>
+        ))}
+        {isDealer && breakdown.discount > 0 && (
+          <div className="flex justify-between text-sm text-emerald-700 pt-1">
+            <span>Bayi indirimi (%{discountRate})</span>
+            <span>-{formatTRY(breakdown.discount)}</span>
+          </div>
+        )}
+        <div className="flex items-baseline justify-between border-t border-slate-200 pt-3 mt-2">
+          <span className="text-sm font-semibold text-slate-700">Toplam</span>
+          <span className="text-2xl font-bold text-brand-700">
+            {loading ? '…' : formatTRY(breakdown.total)}
+          </span>
+        </div>
+        {priceError && <p className="text-xs text-red-600">{priceError}</p>}
+      </div>
+
+      <button
+        type="button"
+        onClick={() => isGuest ? setShowPopup(true) : submitRequest()}
+        disabled={saving || loading}
+        className="btn-primary w-full py-3 text-base"
+      >
+        {saving ? 'Gönderiliyor…' : 'Teklif Al'}
+      </button>
+      {saved && <p className="text-center text-sm text-emerald-700">Talebiniz alındı!</p>}
+      {saveError && <p className="text-center text-sm text-red-700">{saveError}</p>}
+      {userEmail && <p className="text-center text-xs text-slate-400">{userEmail}</p>}
+
+      {/* Guest popup */}
+      {showPopup && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setShowPopup(false)} />
+          <div className="relative z-10 w-full max-w-md rounded-2xl bg-white p-8 shadow-2xl">
+            <button onClick={() => setShowPopup(false)} className="absolute right-4 top-4 rounded-full p-1 text-slate-400 hover:bg-slate-100">
+              <svg viewBox="0 0 20 20" className="h-5 w-5" fill="currentColor"><path d="M6.28 5.22a.75.75 0 0 0-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 1 0 1.06 1.06L10 11.06l3.72 3.72a.75.75 0 1 0 1.06-1.06L11.06 10l3.72-3.72a.75.75 0 0 0-1.06-1.06L10 8.94 6.28 5.22Z"/></svg>
+            </button>
+            <h3 className="text-xl font-bold text-slate-900">Teklif Almak İçin</h3>
+            <p className="mt-1 text-sm text-slate-500">Ekibimiz en kısa sürede size ulaşacak.</p>
+            <div className="mt-5 flex items-center justify-between rounded-xl bg-brand-50 px-4 py-3">
+              <span className="text-sm text-slate-600">{config.width.toFixed(1)} × {config.length.toFixed(1)} m</span>
+              <span className="text-lg font-bold text-brand-700">{formatTRY(breakdown.total)}</span>
+            </div>
+            <div className="mt-4 space-y-3">
+              <div>
+                <label className="label">Ad Soyad *</label>
+                <input type="text" className="input" value={contact.name} onChange={e => setContact(p => ({...p, name: e.target.value}))} placeholder="Ad Soyad" />
+              </div>
+              <div>
+                <label className="label">E-posta *</label>
+                <input type="email" className="input" value={contact.email} onChange={e => setContact(p => ({...p, email: e.target.value}))} placeholder="ornek@mail.com" />
+              </div>
+              <div>
+                <label className="label">Telefon</label>
+                <input type="tel" className="input" value={contact.phone} onChange={e => setContact(p => ({...p, phone: e.target.value}))} placeholder="+90 5__ ___ __ __" />
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => { if (!contact.name || !contact.email) return; submitRequest(contact); }}
+              disabled={saving || !contact.name || !contact.email}
+              className="btn-primary mt-6 w-full py-3 text-base disabled:opacity-50"
+            >
+              {saving ? 'Gönderiliyor…' : 'Teklif Gönder'}
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ─── Step 7: Özet & Teklif ──────────────────────────────────────── */
+

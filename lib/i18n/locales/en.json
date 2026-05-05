@@ -1,0 +1,99 @@
+{
+  "nav": {
+    "home": "Home",
+    "products": "Products",
+    "create": "Design Your Pool",
+    "faq": "FAQ",
+    "contact": "Contact",
+    "gallery": "Gallery",
+    "catalogs": "Catalogs",
+    "adminLogin": "Admin Login",
+    "startDesign": "Start Designing",
+    "logout": "Logout",
+    "adminPanel": "Admin Panel",
+    "menu": "Menu"
+  },
+  "hero": {
+    "title": "Innovative Caretta Pools",
+    "subtitle": "Dive Into Luxury!",
+    "description": "Ready to transform your space with a state-of-the-art Caretta Pool? Create your own Caretta Pool and step into the world of luxury and sustainability.",
+    "cta": "Create Your Own Pool"
+  },
+  "quote": {
+    "title": "Get a Quote",
+    "subtitle": "Our team will reach you as soon as possible.",
+    "name": "Full Name",
+    "email": "Email",
+    "phone": "Phone",
+    "send": "Send Quote Request",
+    "sending": "Sending…",
+    "success": "Your request has been received!",
+    "getQuote": "Get Quote",
+    "required": "* required field"
+  },
+  "contact": {
+    "title": "Contact",
+    "subtitle": "Get in Touch",
+    "description": "Contact us to get information about your design or to request a quote.",
+    "phone": "Call Us",
+    "email": "Email",
+    "address": "Head Office",
+    "social": "Social Media",
+    "send": "Send",
+    "messagePlaceholder": "Your message",
+    "namePlaceholder": "Your name",
+    "phonePlaceholder": "+49 5__ ___ __ __",
+    "emailPlaceholder": "example@mail.com"
+  },
+  "catalog": {
+    "title": "Catalogs",
+    "subtitle": "Documents",
+    "description": "You can view our Caretta pool models and technical specifications as PDF.",
+    "preview": "PREVIEW"
+  },
+  "gallery": {
+    "title": "Gallery",
+    "subtitle": "Completed Projects",
+    "description": "Photos from projects we have touched in gardens and living spaces.",
+    "all": "All",
+    "pool": "Pool",
+    "fair": "Fair",
+    "factory": "Factory",
+    "photos": "photos"
+  },
+  "faq": {
+    "title": "FAQ",
+    "subtitle": "Frequently Asked Questions",
+    "description": "Quick answers to questions you may have."
+  },
+  "configurator": {
+    "resetView": "Reset View",
+    "summary": "Summary",
+    "customerPrice": "Customer price",
+    "dealerPrice": "Dealer price",
+    "subtotal": "Subtotal",
+    "total": "Total",
+    "discount": "Dealer discount",
+    "size": "Size",
+    "frame": "Frame",
+    "panel": "Panel",
+    "lighting": "Lighting",
+    "waterfall": "Waterfall",
+    "ground": "Ground Type",
+    "cladding": "Inner Cladding",
+    "open": "On",
+    "closed": "Off",
+    "none": "None",
+    "yes": "Yes",
+    "next": "Next →",
+    "prev": "← Previous",
+    "hideHelp": "Hide help",
+    "help": "Help"
+  },
+  "footer": {
+    "description": "Luxury and sustainable modular pool solutions.",
+    "pages": "Pages",
+    "contact": "Contact",
+    "rights": "All rights reserved."
+  }
+}

@@ -1,0 +1,99 @@
+{
+  "nav": {
+    "home": "Anasayfa",
+    "products": "Ürünler",
+    "create": "Havuzunu Oluştur",
+    "faq": "S.S.S",
+    "contact": "İletişim",
+    "gallery": "Galeri",
+    "catalogs": "Kataloglar",
+    "adminLogin": "Yönetici Girişi",
+    "startDesign": "Tasarımına Başla",
+    "logout": "Çıkış",
+    "adminPanel": "Admin Panel",
+    "menu": "Menü"
+  },
+  "hero": {
+    "title": "Yenilikçi Caretta Pools",
+    "subtitle": "Lüksün İçine Dalın!",
+    "description": "Alanınızı son teknoloji bir Caretta Pools ile dönüştürmeye hazır mısınız? Kendi Caretta Pool'unu oluştur; lüks ve sürdürülebilirliğin kusursuz dünyasına adım at.",
+    "cta": "Kendiniz Havuzunu Yaratın"
+  },
+  "quote": {
+    "title": "Teklif Almak İçin",
+    "subtitle": "Ekibimiz en kısa sürede size ulaşacak.",
+    "name": "Adınız Soyadınız",
+    "email": "E-posta",
+    "phone": "Telefon",
+    "send": "Teklif Gönder",
+    "sending": "Gönderiliyor…",
+    "success": "Talebiniz alındı!",
+    "getQuote": "Teklif Al",
+    "required": "* zorunlu alan"
+  },
+  "contact": {
+    "title": "İletişim",
+    "subtitle": "Bize Ulaşın",
+    "description": "Tasarımınız hakkında bilgi almak veya teklif istemek için bize ulaşın.",
+    "phone": "Bizi Arayın",
+    "email": "E-Posta",
+    "address": "Merkez Ofis",
+    "social": "Sosyal Medya",
+    "send": "Gönder",
+    "messagePlaceholder": "Mesajınız",
+    "namePlaceholder": "Adınız",
+    "phonePlaceholder": "+49 5__ ___ __ __",
+    "emailPlaceholder": "ornek@mail.com"
+  },
+  "catalog": {
+    "title": "Kataloglar",
+    "subtitle": "Dokümanlar",
+    "description": "Caretta havuz modellerimiz ve teknik şartnameleri PDF olarak görüntüleyebilirsiniz.",
+    "preview": "ÖNİZLEME"
+  },
+  "gallery": {
+    "title": "Galeri",
+    "subtitle": "Tamamlanmış Projeler",
+    "description": "Bahçelerine ve yaşam alanlarına Caretta dokunduğumuz projelerden kareler.",
+    "all": "Tümü",
+    "pool": "Havuz",
+    "fair": "Fuar",
+    "factory": "Fabrika",
+    "photos": "fotoğraf"
+  },
+  "faq": {
+    "title": "S.S.S",
+    "subtitle": "Sıkça Sorulan Sorular",
+    "description": "Aklınıza takılan sorulara hızlı cevaplar."
+  },
+  "configurator": {
+    "resetView": "Bakış Açısını Sıfırla",
+    "summary": "Özet",
+    "customerPrice": "Müşteri fiyatı",
+    "dealerPrice": "Bayi fiyatı",
+    "subtotal": "Ara toplam",
+    "total": "Toplam",
+    "discount": "Bayi indirimi",
+    "size": "Boyut",
+    "frame": "Çerçeve",
+    "panel": "Panel",
+    "lighting": "Işıklandırma",
+    "waterfall": "Şelale",
+    "ground": "Zemin Altı",
+    "cladding": "İç Kaplama",
+    "open": "Açık",
+    "closed": "Kapalı",
+    "none": "Yok",
+    "yes": "Var",
+    "next": "Sonraki →",
+    "prev": "← Önceki",
+    "hideHelp": "Yardımı gizle",
+    "help": "Yardım"
+  },
+  "footer": {
+    "description": "Lüks ve sürdürülebilir modüler havuz çözümleri.",
+    "pages": "Sayfalar",
+    "contact": "İletişim",
+    "rights": "Tüm hakları saklıdır."
+  }
+}

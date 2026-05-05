@@ -10,10 +10,11 @@ import {
   Sky,
   Stars,
 } from '@react-three/drei';
+import { EffectComposer, Bloom, SMAA, Vignette } from '@react-three/postprocessing';
+import { BlendFunction, KernelSize } from 'postprocessing';
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import {
-  POOL_SIDES,
   getPanelType,
   type CladdingType,
   type FrameColor,
@@ -130,6 +131,23 @@ export default function PoolScene({
             faces={['Sağ', 'Sol', 'Üst', 'Alt', 'Ön', 'Arka']}
           />
         </GizmoHelper>
+        {/* Cinematic post-processing: bloom on emissives (LEDs, sun, RGB),
+            SMAA anti-aliasing, subtle vignette darkens the corners. */}
+        <EffectComposer multisampling={0}>
+          <Bloom
+            intensity={isNight ? 1.2 : 0.55}
+            luminanceThreshold={isNight ? 0.18 : 0.85}
+            luminanceSmoothing={0.2}
+            mipmapBlur
+            kernelSize={KernelSize.LARGE}
+          />
+          <SMAA />
+          <Vignette
+            offset={0.3}
+            darkness={isNight ? 0.55 : 0.35}
+            blendFunction={BlendFunction.NORMAL}
+          />
+        </EffectComposer>
       </Suspense>
     </Canvas>
   );
@@ -771,6 +789,15 @@ function Pool({ config }: { config: PoolConfig }) {
         />
       </mesh>
 
+      {/* Animated caustics overlay on the pool floor */}
+      <PoolCaustics
+        w={w}
+        l={l}
+        floorY={BASIN_FLOOR + 0.012}
+        lightEnabled={config.lighting.enabled}
+        lightColor={config.lighting.color}
+      />
+
       {/* Inner cladding rim — visible above water line */}
       <InnerRim w={w} l={l} waterY={waterY} top={top - COPING_T} color={inner} />
 
@@ -805,8 +832,9 @@ function Pool({ config }: { config: PoolConfig }) {
       {/* Wood coping */}
       <Coping w={w} l={l} y={top} />
 
-      {/* Water top surface — slight reflective plane above the volume */}
-      <WaterTopSurface
+      {/* Water top surface — custom GLSL shader: animated waves + sun glints +
+          shimmer + fresnel rim. Lights up at night when pool lighting is on. */}
+      <CinematicWater
         w={w}
         l={l}
         waterY={waterY}
@@ -1106,7 +1134,107 @@ function WaterVolume({
   );
 }
 
-function WaterTopSurface({
+// Realistic gentle water shader. Sums four traveling waves at different
+// directions/frequencies/speeds plus high-frequency micro-ripples for
+// organic-looking pool water. The fragment shader uses the wave height
+// to brighten peaks slightly (foam-ish) and applies sun glint + fresnel.
+const WATER_VERT = /* glsl */ `
+  varying vec2 vUv;
+  varying vec3 vWorldPos;
+  varying vec3 vWorldNormal;
+  varying float vWaveHeight;
+
+  uniform float uTime;
+  uniform float uAmp;
+
+  // Returns vec3(height, d/dx, d/dy) for a single traveling sine wave.
+  vec3 traveling(vec2 dir, float freq, float speed, float amp, vec2 p, float t) {
+    float phase = dot(dir, p) * freq + t * speed;
+    float h = sin(phase) * amp;
+    float dh = cos(phase) * amp * freq;
+    return vec3(h, dh * dir.x, dh * dir.y);
+  }
+
+  void main() {
+    vUv = uv;
+    vec3 pos = position;
+
+    // Four big waves traveling in different directions
+    vec3 w1 = traveling(normalize(vec2( 1.0,  0.3)),  6.0, 0.9, uAmp,        pos.xy, uTime);
+    vec3 w2 = traveling(normalize(vec2(-0.5,  1.0)),  5.0, 1.1, uAmp * 0.85, pos.xy, uTime);
+    vec3 w3 = traveling(normalize(vec2( 0.7, -0.8)),  9.0, 1.4, uAmp * 0.55, pos.xy, uTime);
+    vec3 w4 = traveling(normalize(vec2(-0.9, -0.4)), 14.0, 1.7, uAmp * 0.3,  pos.xy, uTime);
+    // High-frequency micro-ripples on top (very small amplitude)
+    vec3 r1 = traveling(normalize(vec2( 0.6,  0.8)), 28.0, 2.4, uAmp * 0.18, pos.xy, uTime);
+    vec3 r2 = traveling(normalize(vec2(-0.7,  0.7)), 34.0, 2.8, uAmp * 0.14, pos.xy, uTime);
+
+    float h  = w1.x + w2.x + w3.x + w4.x + r1.x + r2.x;
+    float dx = w1.y + w2.y + w3.y + w4.y + r1.y + r2.y;
+    float dy = w1.z + w2.z + w3.z + w4.z + r1.z + r2.z;
+
+    pos.z += h;
+    vWaveHeight = h;
+
+    vec3 localN = normalize(vec3(-dx, -dy, 1.0));
+    vWorldNormal = normalize((modelMatrix * vec4(localN, 0.0)).xyz);
+
+    vec4 worldPos = modelMatrix * vec4(pos, 1.0);
+    vWorldPos = worldPos.xyz;
+    gl_Position = projectionMatrix * viewMatrix * worldPos;
+  }
+`;
+
+const WATER_FRAG = /* glsl */ `
+  varying vec2 vUv;
+  varying vec3 vWorldPos;
+  varying vec3 vWorldNormal;
+  varying float vWaveHeight;
+
+  uniform float uTime;
+  uniform float uAmp;
+  uniform vec3 uDeepColor;
+  uniform vec3 uShallowColor;
+  uniform vec3 uSunDirection;
+  uniform vec3 uSunColor;
+  uniform vec3 uEmissive;
+  uniform float uEmissiveStrength;
+  uniform float uOpacity;
+
+  void main() {
+    // Edge-to-center color depth (shallow at edges, deeper toward middle)
+    vec2 toEdge = abs(vUv - 0.5);
+    float edgeFactor = max(toEdge.x, toEdge.y);
+    vec3 base = mix(uDeepColor, uShallowColor, smoothstep(0.0, 0.5, edgeFactor));
+
+    // Subtle sparkle from animated noise
+    vec2 nUv = vUv * 80.0;
+    float n1 = sin(nUv.x + uTime * 0.6) * sin(nUv.y * 0.9 - uTime * 0.5);
+    float sparkle = pow(max(n1, 0.0), 10.0) * 0.35;
+
+    // Sun glint (sharp Blinn-Phong specular)
+    vec3 viewDir = normalize(cameraPosition - vWorldPos);
+    vec3 halfway = normalize(uSunDirection + viewDir);
+    float spec = pow(max(dot(vWorldNormal, halfway), 0.0), 120.0) * 1.6;
+
+    // Fresnel rim — brighter at grazing angles
+    float fresnel = pow(1.0 - max(dot(vWorldNormal, viewDir), 0.0), 4.0);
+
+    // Tiny foam tint at the very top of wave peaks
+    float peakNorm = clamp(vWaveHeight / max(uAmp, 0.0001), 0.0, 3.0);
+    float foam = pow(peakNorm, 3.0) * 0.06;
+
+    vec3 col = base
+      + uSunColor * spec
+      + uSunColor * sparkle
+      + vec3(0.55, 0.78, 1.0) * fresnel * 0.32
+      + vec3(0.95, 0.98, 1.0) * foam
+      + uEmissive * uEmissiveStrength;
+
+    gl_FragColor = vec4(col, uOpacity);
+  }
+`;
+
+function CinematicWater({
   w,
   l,
   waterY,
@@ -1119,39 +1247,155 @@ function WaterTopSurface({
   lightEnabled: boolean;
   lightColor: LightColor;
 }) {
-  const meshRef = useRef<THREE.Mesh>(null);
+  const uniforms = useMemo(
+    () => ({
+      uTime: { value: 0 },
+      uAmp: { value: 0.009 }, // gentle waves (was 0.018)
+      uDeepColor: { value: new THREE.Color('#0a4d6e') },
+      uShallowColor: { value: new THREE.Color('#5fb6dc') },
+      uSunDirection: {
+        value: new THREE.Vector3(0.5, 0.6, 0.6).normalize(),
+      },
+      uSunColor: { value: new THREE.Color('#fff5dc') },
+      uEmissive: { value: new THREE.Color('#000000') },
+      uEmissiveStrength: { value: 0 },
+      uOpacity: { value: 0.9 },
+    }),
+    []
+  );
 
   useFrame((state) => {
-    if (!lightEnabled || lightColor !== 'rgb') return;
-    const mat = meshRef.current?.material as THREE.MeshStandardMaterial | undefined;
-    if (!mat) return;
-    const t = state.clock.elapsedTime;
-    const hue = (t * 0.08) % 1;
-    mat.emissive.setHSL(hue, 0.9, 0.45);
+    uniforms.uTime.value = state.clock.elapsedTime;
+    if (lightEnabled) {
+      uniforms.uEmissiveStrength.value = 0.4;
+      if (lightColor === 'rgb') {
+        const hue = (state.clock.elapsedTime * 0.08) % 1;
+        uniforms.uEmissive.value.setHSL(hue, 0.9, 0.45);
+      } else {
+        uniforms.uEmissive.value.set(lightColorHex(lightColor));
+      }
+    } else {
+      uniforms.uEmissiveStrength.value = 0;
+      uniforms.uEmissive.value.set(0, 0, 0);
+    }
   });
-
-  const initialEmissive = lightEnabled
-    ? lightColor === 'rgb'
-      ? '#ff3b3b'
-      : lightColorHex(lightColor)
-    : '#000000';
 
   return (
     <mesh
-      ref={meshRef}
-      position={[0, waterY + 0.003, 0]}
+      position={[0, waterY + 0.005, 0]}
       rotation={[-Math.PI / 2, 0, 0]}
       receiveShadow
     >
-      <planeGeometry args={[w - PANEL_T * 2 - 0.05, l - PANEL_T * 2 - 0.05]} />
-      <meshStandardMaterial
-        color="#4cb5dc"
+      {/* High subdivision so wave displacement is smooth */}
+      <planeGeometry
+        args={[w - PANEL_T * 2 - 0.05, l - PANEL_T * 2 - 0.05, 64, 96]}
+      />
+      <shaderMaterial
+        uniforms={uniforms}
+        vertexShader={WATER_VERT}
+        fragmentShader={WATER_FRAG}
         transparent
-        opacity={0.85}
-        roughness={0.08}
-        metalness={0.4}
-        emissive={initialEmissive}
-        emissiveIntensity={lightEnabled ? 0.35 : 0}
+        depthWrite={false}
+      />
+    </mesh>
+  );
+}
+
+// Animated caustics on the pool floor — sums sine waves at four different
+// angles to make rippling bright bands. Cheap and fully procedural.
+const CAUSTICS_VERT = /* glsl */ `
+  varying vec2 vUv;
+  void main() {
+    vUv = uv;
+    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+  }
+`;
+
+const CAUSTICS_FRAG = /* glsl */ `
+  varying vec2 vUv;
+  uniform float uTime;
+  uniform vec3 uColor;
+  uniform float uIntensity;
+
+  void main() {
+    float c = 0.0;
+    for (int i = 0; i < 4; i++) {
+      float angle = float(i) * 0.785;
+      vec2 dir = vec2(cos(angle), sin(angle));
+      c += sin(dot(vUv * 9.0, dir) + uTime * (1.0 + float(i) * 0.15) + float(i) * 1.7);
+    }
+    c /= 4.0;
+    c = 1.0 - abs(c);
+    c = pow(c, 6.0);
+
+    // Second layer offset and slower for variation
+    float c2 = 0.0;
+    for (int i = 0; i < 4; i++) {
+      float angle = float(i) * 0.785 + 0.3;
+      vec2 dir = vec2(cos(angle), sin(angle));
+      c2 += sin(dot((vUv + 0.4) * 7.0, dir) + uTime * (0.7 + float(i) * 0.1));
+    }
+    c2 /= 4.0;
+    c2 = pow(1.0 - abs(c2), 7.0);
+
+    float pattern = max(c, c2 * 0.7);
+    vec3 col = uColor * pattern * uIntensity;
+    gl_FragColor = vec4(col, pattern * 0.6);
+  }
+`;
+
+function PoolCaustics({
+  w,
+  l,
+  floorY,
+  lightEnabled,
+  lightColor,
+}: {
+  w: number;
+  l: number;
+  floorY: number;
+  lightEnabled: boolean;
+  lightColor: LightColor;
+}) {
+  const uniforms = useMemo(
+    () => ({
+      uTime: { value: 0 },
+      uColor: { value: new THREE.Color('#cfeefc') },
+      uIntensity: { value: 0.7 },
+    }),
+    []
+  );
+
+  useFrame((state) => {
+    uniforms.uTime.value = state.clock.elapsedTime;
+    if (lightEnabled) {
+      // Caustics tint follows the pool light color at night
+      if (lightColor === 'rgb') {
+        const hue = (state.clock.elapsedTime * 0.08) % 1;
+        uniforms.uColor.value.setHSL(hue, 0.85, 0.65);
+      } else {
+        uniforms.uColor.value.set(lightColorHex(lightColor));
+      }
+      uniforms.uIntensity.value = 1.1;
+    } else {
+      uniforms.uColor.value.set('#cfeefc');
+      uniforms.uIntensity.value = 0.7;
+    }
+  });
+
+  return (
+    <mesh
+      position={[0, floorY, 0]}
+      rotation={[-Math.PI / 2, 0, 0]}
+    >
+      <planeGeometry args={[w - PANEL_T * 2 - 0.04, l - PANEL_T * 2 - 0.04]} />
+      <shaderMaterial
+        uniforms={uniforms}
+        vertexShader={CAUSTICS_VERT}
+        fragmentShader={CAUSTICS_FRAG}
+        transparent
+        depthWrite={false}
+        blending={THREE.AdditiveBlending}
       />
     </mesh>
   );
@@ -1357,13 +1601,16 @@ function FrameBeams({
 function Coping({ w, l, y }: { w: number; l: number; y: number }) {
   const halfW = w / 2;
   const halfL = l / 2;
-  const out = COPING_W - FRAME_T; // how far coping extends outward
+  const out = COPING_W - FRAME_T;
   const totalW = w + out * 2;
-  const totalL = l + out * 2;
+  // Long beams (+Z/-Z) cover the corners. Short beams (+X/-X) are trimmed to
+  // fit between them so corners don't overlap and z-fight.
+  const insetPerSide = (COPING_W - out) / 2;
+  const xBeamLength = l - 2 * insetPerSide;
   const woodColor = '#a4753a';
   return (
     <group position={[0, y - COPING_T / 2, 0]}>
-      {/* +Z (south) beam */}
+      {/* +Z (south) beam — full width including corner overhang */}
       <mesh position={[0, 0, halfL + out / 2]} castShadow receiveShadow>
         <boxGeometry args={[totalW, COPING_T, COPING_W]} />
         <meshStandardMaterial color={woodColor} roughness={0.85} />
@@ -1373,14 +1620,14 @@ function Coping({ w, l, y }: { w: number; l: number; y: number }) {
         <boxGeometry args={[totalW, COPING_T, COPING_W]} />
         <meshStandardMaterial color={woodColor} roughness={0.85} />
       </mesh>
-      {/* +X (east) beam */}
+      {/* +X (east) beam — trimmed to fit between +Z and -Z beams */}
       <mesh position={[halfW + out / 2, 0, 0]} castShadow receiveShadow>
-        <boxGeometry args={[COPING_W, COPING_T, l]} />
+        <boxGeometry args={[COPING_W, COPING_T, xBeamLength]} />
         <meshStandardMaterial color={woodColor} roughness={0.85} />
       </mesh>
       {/* -X (west) beam */}
       <mesh position={[-halfW - out / 2, 0, 0]} castShadow receiveShadow>
-        <boxGeometry args={[COPING_W, COPING_T, l]} />
+        <boxGeometry args={[COPING_W, COPING_T, xBeamLength]} />
         <meshStandardMaterial color={woodColor} roughness={0.85} />
       </mesh>
     </group>

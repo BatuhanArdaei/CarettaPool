@@ -5,7 +5,6 @@ import dynamic from 'next/dynamic';
 import { defaultPoolConfig, type PoolConfig } from '@/lib/types';
 import { calculateBasePrice, type PriceBreakdown } from '@/lib/pricing';
 import ConfigPanel from './ConfigPanel';
-import PricePanel from './PricePanel';
 
 const PoolScene = dynamic(() => import('./PoolScene'), {
   ssr: false,
@@ -34,7 +33,6 @@ export default function ConfiguratorClient({ userId, userEmail, role, fullName }
   const [priceLoading, setPriceLoading] = useState(false);
   const [priceError, setPriceError] = useState<string | null>(null);
 
-  // Debounced fetch from /api/price whenever config changes.
   const debounceKey = useMemo(() => JSON.stringify(config), [config]);
 
   useEffect(() => {
@@ -61,18 +59,14 @@ export default function ConfiguratorClient({ userId, userEmail, role, fullName }
         setPriceLoading(false);
       }
     }, 300);
-
-    return () => {
-      controller.abort();
-      clearTimeout(t);
-    };
+    return () => { controller.abort(); clearTimeout(t); };
   }, [debounceKey, config]);
 
   return (
-    <div className="mx-auto max-w-[1400px] px-3 py-4">
-      <div className="flex flex-col gap-4 lg:grid lg:grid-cols-[320px_1fr_340px]">
-        {/* 3D scene — sticky on mobile (top), middle column on desktop */}
-        <div className="card relative overflow-hidden order-1 lg:order-2 sticky top-16 z-30 lg:static lg:z-auto h-[35vh] sm:h-[45vh] lg:h-[70vh] lg:min-h-[420px]">
+    <div className="mx-auto max-w-[1100px] px-3 py-4">
+      <div className="flex flex-col gap-4 lg:grid lg:grid-cols-[340px_1fr]">
+        {/* 3D scene — sticky on mobile (top), right column on desktop */}
+        <div className="card relative overflow-hidden order-1 lg:order-2 sticky top-16 z-30 lg:static lg:z-auto h-[38vh] sm:h-[48vh] lg:h-[75vh] lg:min-h-[480px]">
           <PoolScene config={config} controlsRef={controlsRef} />
           <button
             type="button"
@@ -82,17 +76,17 @@ export default function ConfiguratorClient({ userId, userEmail, role, fullName }
             Bakış Açısını Sıfırla
           </button>
         </div>
+
+        {/* Config panel (steps 1-6) + step 7 Özet */}
         <div className="order-2 lg:order-1">
-          <ConfigPanel config={config} onChange={setConfig} />
-        </div>
-        <div className="order-3">
-          <PricePanel
+          <ConfigPanel
             config={config}
+            onChange={setConfig}
             breakdown={breakdown}
             isDealer={isDealer}
             discountRate={discountRate}
             loading={priceLoading}
-            error={priceError}
+            priceError={priceError}
             userId={userId}
             userEmail={userEmail}
             fullName={fullName}

@@ -12,7 +12,7 @@ export default function LoginPage({
       <div className="card w-full p-8">
         <h1 className="text-2xl font-bold text-slate-900">Giriş Yap</h1>
         <p className="mt-1 text-sm text-slate-600">
-          Hesabınıza giriş yaparak havuz tasarımınıza devam edebilirsiniz.
+          Bayi veya admin hesabınızla giriş yapın.
         </p>
         {searchParams.error && (
           <div className="mt-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">
