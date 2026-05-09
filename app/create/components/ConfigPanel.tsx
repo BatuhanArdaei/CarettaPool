@@ -19,10 +19,12 @@ import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { formatTRY, type PriceBreakdown } from '@/lib/pricing';
 import { countPanels } from '@/lib/types';
+import type { Region } from '@/lib/regions';
 
 interface Props {
   config: PoolConfig;
   onChange: (next: PoolConfig) => void;
+  region: Region;
   // Özet adımı için
   breakdown: PriceBreakdown;
   isDealer: boolean;
@@ -89,6 +91,7 @@ const STEPS: StepDef[] = [
 
 export default function ConfigPanel({
   config, onChange,
+  region,
   breakdown, isDealer, discountRate, loading, priceError,
   userId, userEmail, fullName, role,
 }: Props) {
@@ -164,7 +167,7 @@ export default function ConfigPanel({
 
       {/* Step content */}
       <div className="flex-1 space-y-5 overflow-y-auto p-4">
-        {step.key === 'size' && <SizeStep config={config} set={set} />}
+        {step.key === 'size' && <SizeStep config={config} set={set} region={region} />}
         {step.key === 'frame' && <FrameStep config={config} set={set} />}
         {step.key === 'panels' && (
           <PanelsStep config={config} set={set} onChange={onChange} />
@@ -225,30 +228,48 @@ export default function ConfigPanel({
 function SizeStep({
   config,
   set,
+  region,
 }: {
   config: PoolConfig;
   set: <K extends keyof PoolConfig>(key: K, value: PoolConfig[K]) => void;
+  region: Region;
 }) {
+  // From the camera angle, config.length (Z axis) appears as visual WIDTH
+  // and config.width (X axis) appears as visual DEPTH/LENGTH.
+  // Sliders are mapped accordingly so labels match visual behaviour.
   return (
     <div className="space-y-4">
+      {/* Region badge */}
+      <div className="flex items-center gap-2 rounded-lg bg-brand-50 px-3 py-2 text-xs text-brand-700 ring-1 ring-brand-200">
+        <svg viewBox="0 0 16 16" className="h-3.5 w-3.5 shrink-0" fill="currentColor">
+          <path d="M8 0a8 8 0 1 0 0 16A8 8 0 0 0 8 0zm0 2a6 6 0 1 1 0 12A6 6 0 0 1 8 2z" opacity=".3"/>
+          <path d="M8 2C4.686 2 2 4.686 2 8s2.686 6 6 6 6-2.686 6-6-2.686-6-6-6zm.5 9h-1V7h1v4zm0-5h-1V5h1v1z"/>
+        </svg>
+        <span><strong>{region.name}</strong> — azami {region.maxWidth} m genişlik · {region.maxLength} m uzunluk</span>
+      </div>
+
+      {/* Genişlik → config.width */}
       <RangeRow
         label="Genişlik"
         value={config.width}
-        min={2}
-        max={10}
+        min={region.minWidth}
+        max={region.maxWidth}
         step={0.1}
         unit="m"
-        onChange={(v) => set('width', v)}
+        onChange={(v) => set('width', Math.min(v, region.maxWidth))}
       />
+
+      {/* Uzunluk → config.length */}
       <RangeRow
         label="Uzunluk"
         value={config.length}
-        min={2}
-        max={10}
+        min={region.minLength}
+        max={region.maxLength}
         step={0.1}
         unit="m"
-        onChange={(v) => set('length', v)}
+        onChange={(v) => set('length', Math.min(v, region.maxLength))}
       />
+
       <div className="rounded-md bg-slate-50 p-3 text-xs text-slate-600">
         Toplam alan:{' '}
         <span className="font-semibold text-slate-900">

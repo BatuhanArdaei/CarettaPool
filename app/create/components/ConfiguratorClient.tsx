@@ -4,7 +4,9 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import dynamic from 'next/dynamic';
 import { defaultPoolConfig, type PoolConfig } from '@/lib/types';
 import { calculateBasePrice, type PriceBreakdown } from '@/lib/pricing';
+import { getRegion, REGIONS, type Region } from '@/lib/regions';
 import ConfigPanel from './ConfigPanel';
+import RegionSelector from './RegionSelector';
 
 const PoolScene = dynamic(() => import('./PoolScene'), {
   ssr: false,
@@ -23,6 +25,7 @@ interface Props {
 }
 
 export default function ConfiguratorClient({ userId, userEmail, role, fullName }: Props) {
+  const [region, setRegion] = useState<Region | null>(null);
   const [config, setConfig] = useState<PoolConfig>(defaultPoolConfig);
   const controlsRef = useRef<{ reset: () => void } | null>(null);
   const [breakdown, setBreakdown] = useState<PriceBreakdown>(() =>
@@ -62,6 +65,11 @@ export default function ConfiguratorClient({ userId, userEmail, role, fullName }
     return () => { controller.abort(); clearTimeout(t); };
   }, [debounceKey, config]);
 
+  /* Show region selector until a region is chosen */
+  if (!region) {
+    return <RegionSelector onSelect={setRegion} />;
+  }
+
   return (
     <div className="mx-auto max-w-[1100px] px-3 py-4">
       <div className="flex flex-col gap-4 lg:grid lg:grid-cols-[340px_1fr]">
@@ -82,6 +90,7 @@ export default function ConfiguratorClient({ userId, userEmail, role, fullName }
           <ConfigPanel
             config={config}
             onChange={setConfig}
+            region={region}
             breakdown={breakdown}
             isDealer={isDealer}
             discountRate={discountRate}
