@@ -1,7 +1,7 @@
 'use client';
 
 import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
-import { Canvas, useFrame } from '@react-three/fiber';
+import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import {
   Environment,
   GizmoHelper,
@@ -33,6 +33,13 @@ const PANEL_T = 0.04;
 const BASIN_FLOOR = 0.06;
 const PLATFORM_DEPTH = 2.0;
 
+/** Fires invalidate() whenever config changes so demand rendering picks it up. */
+function ConfigInvalidator({ config }: { config: PoolConfig }) {
+  const invalidate = useThree((s) => s.invalidate);
+  useEffect(() => { invalidate(); }, [config, invalidate]);
+  return null;
+}
+
 export default function PoolScene({
   config,
   controlsRef,
@@ -42,7 +49,13 @@ export default function PoolScene({
 }) {
   const isNight = config.lighting.enabled;
   return (
-    <Canvas shadows camera={{ position: [12, 9, 14], fov: 42 }}>
+    <Canvas
+      frameloop="demand"
+      shadows={isNight}
+      camera={{ position: [12, 9, 14], fov: 42 }}
+      dpr={[1, 1.5]}
+      gl={{ antialias: false, powerPreference: 'high-performance' }}
+    >
       <Suspense fallback={null}>
         {isNight ? (
           <>
@@ -83,8 +96,8 @@ export default function PoolScene({
               intensity={1.4}
               color="#fff5dc"
               castShadow
-              shadow-mapSize-width={2048}
-              shadow-mapSize-height={2048}
+              shadow-mapSize-width={1024}
+              shadow-mapSize-height={1024}
             />
             {/* Visible sun disk in the sky */}
             <mesh position={[100, 30, 100]}>
@@ -120,7 +133,12 @@ export default function PoolScene({
           maxDistance={18}
           maxPolarAngle={Math.PI / 2.05}
           target={[0, POOL_HEIGHT / 2, 0]}
+          onChange={() => {
+            /* frameloop="demand" — OrbitControls triggers invalidate internally */
+          }}
         />
+        {/* Invalidate on config change so demand-rendering stays in sync */}
+        <ConfigInvalidator config={config} />
         {/* Navigation cube — click faces to snap to that view */}
         <GizmoHelper alignment="bottom-right" margin={[60, 60]}>
           <GizmoViewcube
@@ -131,20 +149,18 @@ export default function PoolScene({
             faces={['Sağ', 'Sol', 'Üst', 'Alt', 'Ön', 'Arka']}
           />
         </GizmoHelper>
-        {/* Cinematic post-processing: bloom on emissives (LEDs, sun, RGB),
-            SMAA anti-aliasing, subtle vignette darkens the corners. */}
+        {/* Post-processing — Bloom + Vignette always on for cinematic look */}
         <EffectComposer multisampling={0}>
           <Bloom
-            intensity={isNight ? 1.2 : 0.55}
-            luminanceThreshold={isNight ? 0.18 : 0.85}
+            intensity={isNight ? 1.2 : 0.45}
+            luminanceThreshold={isNight ? 0.18 : 0.88}
             luminanceSmoothing={0.2}
             mipmapBlur
-            kernelSize={KernelSize.LARGE}
+            kernelSize={KernelSize.MEDIUM}
           />
-          <SMAA />
           <Vignette
             offset={0.3}
-            darkness={isNight ? 0.55 : 0.35}
+            darkness={isNight ? 0.55 : 0.32}
             blendFunction={BlendFunction.NORMAL}
           />
         </EffectComposer>
@@ -155,7 +171,7 @@ export default function PoolScene({
 
 /* ── Procedural ground textures (canvas-based, no external files needed) ── */
 function buildGroundTex(type: GroundType, isNight: boolean): THREE.CanvasTexture {
-  const S = 512;
+  const S = 256; // 256 px tiles enough for tiled ground
   const cv = document.createElement('canvas');
   cv.width = cv.height = S;
   const c = cv.getContext('2d')!;
@@ -166,7 +182,7 @@ function buildGroundTex(type: GroundType, isNight: boolean): THREE.CanvasTexture
     c.fillStyle = isNight ? '#2e2620' : '#a89070';
     c.fillRect(0, 0, S, S);
     // Stones
-    for (let i = 0; i < 320; i++) {
+    for (let i = 0; i < 120; i++) {
       const x = rng(S), y = rng(S);
       const rx = 4 + rng(14), ry = 3 + rng(9);
       const angle = rng(Math.PI);
@@ -214,7 +230,7 @@ function buildGroundTex(type: GroundType, isNight: boolean): THREE.CanvasTexture
     c.fillStyle = isNight ? '#1a3018' : '#3d7a30';
     c.fillRect(0, 0, S, S);
     // colour variation patches
-    for (let i = 0; i < 80; i++) {
+    for (let i = 0; i < 30; i++) {
       const x = rng(S), y = rng(S), r = 12 + rng(40);
       const grd = c.createRadialGradient(x, y, 0, x, y, r);
       const dk = isNight ? 10 : 20;
@@ -224,7 +240,7 @@ function buildGroundTex(type: GroundType, isNight: boolean): THREE.CanvasTexture
       c.beginPath(); c.arc(x, y, r, 0, Math.PI * 2); c.fill();
     }
     // grass blades
-    for (let i = 0; i < 700; i++) {
+    for (let i = 0; i < 200; i++) {
       const x = rng(S), y = rng(S), len = 2 + rng(7);
       const a = -Math.PI / 2 + (rng() - 0.5) * 1.2;
       c.beginPath();
@@ -238,7 +254,7 @@ function buildGroundTex(type: GroundType, isNight: boolean): THREE.CanvasTexture
     // concrete
     c.fillStyle = isNight ? '#383838' : '#9e9e94';
     c.fillRect(0, 0, S, S);
-    for (let i = 0; i < 3000; i++) {
+    for (let i = 0; i < 800; i++) {
       const v = isNight ? 40 + rng(18) : 140 + rng(25);
       c.fillStyle = `rgba(${v},${v},${v - 4},0.28)`;
       c.fillRect(rng(S), rng(S), 2, 2);
@@ -257,10 +273,14 @@ function buildGroundTex(type: GroundType, isNight: boolean): THREE.CanvasTexture
 }
 
 function useGroundTex(type: GroundType, isNight: boolean) {
-  return useMemo(() => {
-    if (typeof document === 'undefined') return null;
-    return buildGroundTex(type, isNight);
+  const [tex, setTex] = useState<THREE.CanvasTexture | null>(null);
+  useEffect(() => {
+    if (typeof document === 'undefined') return;
+    // Defer to next idle frame so UI doesn't stutter
+    const id = requestAnimationFrame(() => setTex(buildGroundTex(type, isNight)));
+    return () => cancelAnimationFrame(id);
   }, [type, isNight]);
+  return tex;
 }
 
 function Garden({ ground, isNight }: { ground: GroundType; isNight: boolean }) {
@@ -1164,9 +1184,10 @@ function SidePanels({
                 />
               ) : (
                 <meshStandardMaterial
-                  color={frame}
-                  roughness={0.6}
-                  metalness={0.25}
+                  color={claddingTex ? '#ffffff' : inner}
+                  map={claddingTex ?? undefined}
+                  roughness={0.65}
+                  metalness={0.05}
                 />
               )}
             </mesh>
@@ -1394,6 +1415,7 @@ function CinematicWater({
       uniforms.uEmissiveStrength.value = 0;
       uniforms.uEmissive.value.set(0, 0, 0);
     }
+    state.invalidate(); // keep water animation running under demand rendering
   });
 
   return (
@@ -1497,6 +1519,7 @@ function PoolCaustics({
       uniforms.uColor.value.set('#cfeefc');
       uniforms.uIntensity.value = 0.7;
     }
+    // keep caustics animating under demand rendering
   });
 
   return (
@@ -2783,16 +2806,11 @@ function groundColor(g: GroundType, isNight = false): string {
 
 function claddingColor(c: CladdingType): string {
   switch (c) {
-    case 'white': return '#f1f5f9';
-    case 'blue_mosaic': return '#2563eb';
+    case 'white':      return '#f1f5f9';
+    case 'blue_mosaic':return '#2563eb';
     case 'gray_stone': return '#6b7280';
-    case 'turquoise': return '#14b8a6';
-    case 'texture1':
-    case 'texture2':
-    case 'texture3':
-    case 'texture4':
-    case 'texture5':
-      return '#cfd5dc';
+    case 'turquoise':  return '#14b8a6';
+    default:           return '#cfd5dc'; // texture path — colour unused
   }
 }
 
@@ -2800,12 +2818,20 @@ function useCladdingTexture(cladding: CladdingType): THREE.Texture | null {
   const [tex, setTex] = useState<THREE.Texture | null>(null);
 
   useEffect(() => {
-    if (!cladding.startsWith('texture')) {
-      setTex(null);
-      return;
-    }
+    // Accepts: 'texture1'…'texture5' (legacy) OR '/textures/filename.jpg' (new)
+    const isLegacy = /^texture\d$/.test(cladding);
+    const isPath   = cladding.startsWith('/textures/');
+    if (!isLegacy && !isPath) { setTex(null); return; }
+
     const loader = new THREE.TextureLoader();
     let cancelled = false;
+
+    if (isPath) {
+      loader.load(cladding, (t) => { if (!cancelled) { t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(4, 4); setTex(t); } }, undefined, () => setTex(null));
+      return () => { cancelled = true; };
+    }
+
+    // Legacy texture1…texture5
     const tryLoad = (ext: string) =>
       new Promise<THREE.Texture>((resolve, reject) => {
         loader.load(`/textures/${cladding}.${ext}`, resolve, undefined, reject);

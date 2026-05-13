@@ -38,7 +38,7 @@ interface Props {
 }
 
 interface StepDef {
-  key: 'size' | 'frame' | 'panels' | 'waterfall' | 'lighting' | 'finish' | 'summary';
+  key: 'size' | 'frame' | 'panels' | 'waterfall' | 'lighting' | 'ground' | 'finish' | 'summary';
   title: string;
   short: string;
   tip: string;
@@ -76,10 +76,16 @@ const STEPS: StepDef[] = [
     tip: 'Sualtı LED + havuz çevresi LED şerit. Açıkken ortam gece moduna geçer ve ışık çevreyi aydınlatır. RGB seçeneği renkler arası canlı animasyon yapar.',
   },
   {
+    key: 'ground',
+    title: 'Zemin Önizleme',
+    short: 'Zemin',
+    tip: 'Havuz çevresindeki zemin tipini seçin. 3D sahnede anlık önizleyebilirsiniz.',
+  },
+  {
     key: 'finish',
-    title: 'Zemin & Kaplama',
+    title: 'Kaplama',
     short: 'Kaplama',
-    tip: 'Havuz çevresindeki zemin tipi ve havuz içindeki kaplama desenini seçin. Özel desenler için resimleri public/textures/ klasörüne (texture1.jpeg gibi) koyabilirsiniz.',
+    tip: 'Havuzun iç ve dış yüzeylerinde kullanılacak kaplama desenini seçin.',
   },
   {
     key: 'summary',
@@ -176,7 +182,8 @@ export default function ConfigPanel({
           <WaterfallStep config={config} set={set} />
         )}
         {step.key === 'lighting' && <LightingStep config={config} set={set} />}
-        {step.key === 'finish' && <FinishStep config={config} set={set} />}
+        {step.key === 'ground'   && <GroundStep  config={config} set={set} />}
+        {step.key === 'finish'   && <FinishStep  config={config} set={set} />}
         {step.key === 'summary' && (
           <SummaryStep
             config={config}
@@ -521,7 +528,40 @@ function LightingStep({
   );
 }
 
-function FinishStep({
+const CLADDING_TEXTURES: { file: string; name: string }[] = [
+  { file: 'BELIZE MIX 60x120.jpg',           name: 'Belize Mix' },
+  { file: 'BEST CEPPO BONE 60x120.jpg',       name: 'Best Ceppo Bone' },
+  { file: 'BEST CEPPO CREAM.jpg',             name: 'Best Ceppo Cream' },
+  { file: 'BEST CEPPO PEARL 60x120.jpg',      name: 'Best Ceppo Pearl' },
+  { file: 'BEST CEPPO TARMAC 60x120_.jpg',    name: 'Best Ceppo Tarmac' },
+  { file: 'BEST MIX CREAM 60x120.jpg',        name: 'Best Mix Cream' },
+  { file: 'BEST SILENCE Pearl 60x120.jpg',    name: 'Best Silence Pearl' },
+  { file: 'Best Silence Whale 60x120.jpg',    name: 'Best Silence Whale' },
+  { file: 'BEST STONE TARMAC 60x120.jpg',     name: 'Best Stone Tarmac' },
+  { file: 'FLORIDA TURKUAZ 60X120.jpg',       name: 'Florida Turkuaz' },
+  { file: 'KARYA MAVi 60x120.jpg',            name: 'Karya Mavi' },
+  { file: 'MERİDYEN YEŞİL 60x120.jpg',        name: 'Meridyen Yeşil' },
+  { file: 'Meridyen Yeşil Bookmatch 60x120.jpg', name: 'Meridyen Yeşil Bookmatch' },
+  { file: 'Oceon Mavi 30x60.jpg',             name: 'Oceon Mavi' },
+  { file: 'Oceon Turkuaz 30x60.jpg',          name: 'Oceon Turkuaz' },
+  { file: 'Onice Moon 60x120.jpg',            name: 'Onice Moon' },
+  { file: 'Oxide Antrasit 60x120.jpg',        name: 'Oxide Antrasit' },
+  { file: 'Oxide Cobalt 60X120.jpg',          name: 'Oxide Cobalt' },
+  { file: 'oxide sky 60x120.jpg',             name: 'Oxide Sky' },
+  { file: 'OXSiDE TURKUAZ  60x120.jpg',       name: 'Oxide Turkuaz' },
+  { file: 'PARADISE QARYY MAVI_F1.jpg',       name: 'Paradise Qaryy Mavi' },
+  { file: 'Paradise Amazon 60x120.jpg',       name: 'Paradise Amazon' },
+  { file: 'Paradise Ametist 60x120.jpg',      name: 'Paradise Ametist' },
+  { file: 'Paradise Rain Forest 60x120.jpg',  name: 'Paradise Rain Forest' },
+  { file: 'Paradise Turkuaz 60x120.jpg',      name: 'Paradise Turkuaz' },
+  { file: 'Sardes Açık Gri 60x120.jpg',       name: 'Sardes Açık Gri' },
+  { file: 'SALDA MAVİ render.jpg',            name: 'Salda Mavi' },
+  { file: 'KARYA MAVİ Render 60X120.jpg',     name: 'Karya Mavi Render' },
+];
+
+const PAGE = 5;
+
+function GroundStep({
   config,
   set,
 }: {
@@ -529,80 +569,103 @@ function FinishStep({
   set: <K extends keyof PoolConfig>(key: K, value: PoolConfig[K]) => void;
 }) {
   return (
-    <div className="space-y-5">
+    <div className="space-y-4">
       <div>
-        <p className="label">Zemin Altı (havuz çevresi)</p>
+        <p className="label">Zemin Tipi</p>
         <SelectGrid
           options={[
-            { value: 'gravel', label: 'Çakıl' },
-            { value: 'wood', label: 'Tahta Deck' },
-            { value: 'grass', label: 'Çimen' },
+            { value: 'gravel',   label: 'Çakıl' },
+            { value: 'wood',     label: 'Tahta Deck' },
+            { value: 'grass',    label: 'Çimen' },
             { value: 'concrete', label: 'Beton' },
           ]}
           value={config.ground}
           onChange={(v) => set('ground', v as GroundType)}
         />
       </div>
+      <p className="text-xs text-slate-500">
+        Seçtiğiniz zemin tipi 3D sahnede anlık olarak güncellenir.
+      </p>
+    </div>
+  );
+}
 
-      <div>
-        <p className="label">İç Kaplama</p>
-        <SelectGrid
-          options={[
-            { value: 'white', label: 'Beyaz' },
-            { value: 'blue_mosaic', label: 'Mavi Mozaik' },
-            { value: 'gray_stone', label: 'Gri Taş' },
-            { value: 'turquoise', label: 'Turkuaz' },
-          ]}
-          value={config.cladding}
-          onChange={(v) => set('cladding', v as CladdingType)}
-        />
-      </div>
+function FinishStep({
+  config,
+  set,
+}: {
+  config: PoolConfig;
+  set: <K extends keyof PoolConfig>(key: K, value: PoolConfig[K]) => void;
+}) {
+  const [visible, setVisible] = useStateR(PAGE);
 
+  return (
+    <div className="space-y-5">
+      {/* İç/Dış Kaplama */}
       <div>
-        <p className="label">Özel desen</p>
-        <div className="grid grid-cols-5 gap-2">
-          {(
-            [
-              'texture1',
-              'texture2',
-              'texture3',
-              'texture4',
-              'texture5',
-            ] as CladdingType[]
-          ).map((t, i) => {
-            const isSelected = config.cladding === t;
+        <p className="label">İç / Dış Kaplama</p>
+
+        {/* Standart renkler */}
+        <div className="mb-2">
+          <SelectGrid
+            options={[
+              { value: 'white',      label: 'Beyaz' },
+              { value: 'blue_mosaic',label: 'Mavi Mozaik' },
+              { value: 'gray_stone', label: 'Gri Taş' },
+              { value: 'turquoise',  label: 'Turkuaz' },
+            ]}
+            value={['white','blue_mosaic','gray_stone','turquoise'].includes(config.cladding) ? config.cladding : ''}
+            onChange={(v) => set('cladding', v as CladdingType)}
+          />
+        </div>
+
+        {/* Doku galerisi */}
+        <div className="grid grid-cols-5 gap-1.5">
+          {CLADDING_TEXTURES.slice(0, visible).map((tex) => {
+            const val = `/textures/${tex.file}`;
+            const selected = config.cladding === val;
             return (
               <button
-                key={t}
+                key={tex.file}
                 type="button"
-                onClick={() => set('cladding', t)}
-                className={`relative h-14 overflow-hidden rounded-lg border-2 transition ${
-                  isSelected
-                    ? 'border-brand-600 ring-2 ring-brand-200'
+                onClick={() => set('cladding', val as CladdingType)}
+                title={tex.name}
+                className={`relative h-16 overflow-hidden rounded-lg border-2 transition-all ${
+                  selected
+                    ? 'border-cyan-400 ring-2 ring-cyan-200'
                     : 'border-slate-200 hover:border-slate-400'
                 }`}
-                title={`Desen ${i + 1}`}
               >
-                <span
-                  className="absolute inset-0 bg-cover bg-center"
-                  style={{
-                    backgroundImage: `url(/textures/${t}.jpeg), url(/textures/${t}.jpg)`,
-                  }}
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={val}
+                  alt={tex.name}
+                  className="absolute inset-0 h-full w-full object-cover"
+                  loading="lazy"
+                  decoding="async"
                 />
-                <span className="absolute bottom-0 left-0 right-0 bg-black/55 py-0.5 text-center text-[10px] font-medium text-white">
-                  {i + 1}
+                {selected && (
+                  <span className="absolute inset-0 flex items-center justify-center bg-cyan-500/25">
+                    <span className="text-xl text-white drop-shadow">✓</span>
+                  </span>
+                )}
+                <span className="absolute bottom-0 left-0 right-0 truncate bg-black/60 px-0.5 py-0.5 text-center text-[9px] font-medium text-white">
+                  {tex.name}
                 </span>
               </button>
             );
           })}
         </div>
-        <p className="mt-1 text-xs text-slate-500">
-          Resimleri{' '}
-          <code className="rounded bg-slate-100 px-1">
-            public/textures/texture1.jpeg
-          </code>{' '}
-          gibi yerleştirin.
-        </p>
+
+        {visible < CLADDING_TEXTURES.length && (
+          <button
+            type="button"
+            onClick={() => setVisible((v) => v + PAGE)}
+            className="mt-2 w-full rounded-lg border border-slate-200 py-1.5 text-xs font-medium text-slate-600 hover:border-slate-400 hover:text-slate-800 transition"
+          >
+            Daha fazla ({CLADDING_TEXTURES.length - visible} kaplama daha)
+          </button>
+        )}
       </div>
     </div>
   );

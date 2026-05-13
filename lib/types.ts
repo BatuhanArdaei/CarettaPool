@@ -8,11 +8,7 @@ export type CladdingType =
   | 'blue_mosaic'
   | 'gray_stone'
   | 'turquoise'
-  | 'texture1'
-  | 'texture2'
-  | 'texture3'
-  | 'texture4'
-  | 'texture5';
+  | (string & {});  // texture file paths like '/textures/BEST CEPPO BONE 60x120.jpg'
 export type PlatformDirection = 'north' | 'south' | 'east' | 'west';
 export type PoolSide = 'north' | 'south' | 'east' | 'west';
 
@@ -48,9 +44,9 @@ export const defaultPoolConfig: PoolConfig = {
   ground: 'grass',
   cladding: 'white',
   platformDirection: 'east',
-  platformExtension: true,
+  platformExtension: false,
   waterfall: false,
-  stairs: true,
+  stairs: false,
 };
 
 export function panelKey(side: PoolSide, index: number): string {
