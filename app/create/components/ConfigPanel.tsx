@@ -65,9 +65,9 @@ const STEPS: StepDef[] = [
   },
   {
     key: 'waterfall',
-    title: 'Şelale',
-    short: 'Şelale',
-    tip: 'Havuzun kısa kenarına paslanmaz çelik kavisli şelale eklemek isterseniz "Var" seçin.',
+    title: 'Opsiyonlar',
+    short: 'Opsiyonlar',
+    tip: 'Şelale, yan platform, dış uzatma ve merdiven gibi opsiyonel ekipmanları bu adımdan açıp kapatabilirsiniz.',
   },
   {
     key: 'lighting',
@@ -414,18 +414,58 @@ function WaterfallStep({
   set: <K extends keyof PoolConfig>(key: K, value: PoolConfig[K]) => void;
 }) {
   return (
-    <div className="space-y-3">
-      <Toggle
-        options={[
-          { value: 'on', label: 'Var' },
-          { value: 'off', label: 'Yok' },
-        ]}
-        value={config.waterfall ? 'on' : 'off'}
-        onChange={(v) => set('waterfall', v === 'on')}
-      />
-      <p className="text-xs text-slate-500">
-        Paslanmaz çelik kavisli su perdesi havuzun kısa kenarına yerleşir.
-      </p>
+    <div className="space-y-5">
+      {/* Şelale */}
+      <div className="space-y-2">
+        <p className="label">Şelale</p>
+        <Toggle
+          options={[
+            { value: 'on', label: 'Var' },
+            { value: 'off', label: 'Yok' },
+          ]}
+          value={config.waterfall ? 'on' : 'off'}
+          onChange={(v) => set('waterfall', v === 'on')}
+        />
+        <p className="text-xs text-slate-500">
+          Paslanmaz çelik kavisli su perdesi havuzun kısa kenarına yerleşir.
+        </p>
+      </div>
+
+      {/* Platform dış uzatma */}
+      {(
+        <div className="space-y-2">
+          <p className="label">Dış Uzatma</p>
+          <Toggle
+            options={[
+              { value: 'on', label: 'Var' },
+              { value: 'off', label: 'Yok' },
+            ]}
+            value={config.platformExtension ? 'on' : 'off'}
+            onChange={(v) => set('platformExtension', v === 'on')}
+          />
+          <p className="text-xs text-slate-500">
+            Makine odası ötesindeki açık platform şeridi (ayak + korkuluk). Kapalıyken platform yalnızca makine odası genişliğine iner.
+          </p>
+        </div>
+      )}
+
+      {/* Merdiven */}
+      {(
+        <div className="space-y-2">
+          <p className="label">Dış Merdiven</p>
+          <Toggle
+            options={[
+              { value: 'on', label: 'Var' },
+              { value: 'off', label: 'Yok' },
+            ]}
+            value={config.stairs ? 'on' : 'off'}
+            onChange={(v) => set('stairs', v === 'on')}
+          />
+          <p className="text-xs text-slate-500">
+            Platform köşesindeki çıkış merdiveni. Kapalıyken korkuluk tamamen kapanır.
+          </p>
+        </div>
+      )}
     </div>
   );
 }

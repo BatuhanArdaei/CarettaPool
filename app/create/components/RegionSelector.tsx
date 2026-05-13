@@ -9,89 +9,6 @@ const flagUrl = (c: string) =>
   : c === 'un' ? 'https://flagcdn.com/w80/un.png'
   : `https://flagcdn.com/w80/${c}.png`;
 
-/* ─── Landmark SVG per region ─────────────────────────── */
-function LandmarkIcon({ id, active }: { id: string; active: boolean }) {
-  const col = active ? '#22d3ee' : '#64748b';
-  const col2 = active ? '#0891b2' : '#475569';
-
-  if (id === 'turkey') return (
-    <svg viewBox="0 0 80 60" className="w-full" fill="none">
-      {/* Hagia Sophia silhouette */}
-      <rect x="10" y="42" width="60" height="10" rx="1" fill={col}/>
-      <rect x="18" y="30" width="44" height="14" rx="1" fill={col}/>
-      <rect x="24" y="20" width="32" height="12" rx="1" fill={col}/>
-      <ellipse cx="40" cy="20" rx="12" ry="6" fill={col2}/>
-      <ellipse cx="40" cy="14" rx="7" ry="4" fill={col}/>
-      <ellipse cx="40" cy="10" rx="4" ry="3" fill={col2}/>
-      <rect x="16" y="18" width="5" height="16" rx="1" fill={col2}/>
-      <rect x="59" y="18" width="5" height="16" rx="1" fill={col2}/>
-      {/* Minaret */}
-      <rect x="5" y="10" width="7" height="32" rx="1" fill={col}/>
-      <ellipse cx="8.5" cy="10" rx="3.5" ry="2" fill={col2}/>
-      <rect x="6" y="7" width="5" height="4" rx="0.5" fill={col2}/>
-      <rect x="68" y="10" width="7" height="32" rx="1" fill={col}/>
-      <ellipse cx="71.5" cy="10" rx="3.5" ry="2" fill={col2}/>
-      <rect x="69" y="7" width="5" height="4" rx="0.5" fill={col2}/>
-    </svg>
-  );
-
-  if (id === 'europe') return (
-    <svg viewBox="0 0 80 60" className="w-full" fill="none">
-      {/* Eiffel Tower silhouette */}
-      <polygon points="40,4 52,52 48,52 40,16 32,52 28,52" fill={col}/>
-      <polygon points="40,4 46,28 34,28" fill={col2}/>
-      <rect x="26" y="26" width="28" height="5" rx="1" fill={col}/>
-      <rect x="29" y="40" width="22" height="4" rx="1" fill={col}/>
-      <rect x="28" y="52" width="24" height="4" rx="1" fill={col}/>
-      <rect x="39" y="0" width="2" height="6" rx="1" fill={col2}/>
-    </svg>
-  );
-
-  if (id === 'usa') return (
-    <svg viewBox="0 0 80 65" className="w-full" fill="none">
-      {/* Statue of Liberty silhouette */}
-      <rect x="33" y="50" width="14" height="10" rx="1" fill={col}/>
-      <rect x="30" y="40" width="20" height="12" rx="2" fill={col}/>
-      <rect x="35" y="25" width="10" height="17" rx="1" fill={col}/>
-      <ellipse cx="40" cy="23" rx="7" ry="8" fill={col}/>
-      <ellipse cx="40" cy="17" rx="5" ry="6" fill={col2}/>
-      {/* Crown */}
-      <path d="M34 18 L36 10 L40 16 L44 10 L46 18" stroke={col} strokeWidth="1.5" fill={col2}/>
-      {/* Torch arm */}
-      <rect x="46" y="28" width="9" height="2.5" rx="1" fill={col}/>
-      <rect x="53" y="20" width="2.5" height="10" rx="1" fill={col}/>
-      <ellipse cx="54" cy="19" rx="2.5" ry="3" fill="#fbbf24"/>
-      {/* Base */}
-      <rect x="28" y="55" width="24" height="6" rx="1" fill={col2}/>
-    </svg>
-  );
-
-  if (id === 'middle_east') return (
-    <svg viewBox="0 0 80 65" className="w-full" fill="none">
-      {/* Burj Khalifa silhouette */}
-      <rect x="37" y="2" width="6" height="20" rx="1" fill={col2}/>
-      <rect x="34" y="20" width="12" height="12" rx="1" fill={col}/>
-      <rect x="31" y="30" width="18" height="10" rx="1" fill={col}/>
-      <rect x="28" y="38" width="24" height="8" rx="1" fill={col2}/>
-      <rect x="25" y="44" width="30" height="7" rx="1" fill={col}/>
-      <rect x="22" y="49" width="36" height="6" rx="1" fill={col2}/>
-      <rect x="18" y="53" width="44" height="8" rx="1" fill={col}/>
-    </svg>
-  );
-
-  // Other — globe
-  return (
-    <svg viewBox="0 0 80 60" className="w-full" fill="none">
-      <circle cx="40" cy="30" r="24" fill={col2} opacity="0.3"/>
-      <circle cx="40" cy="30" r="24" stroke={col} strokeWidth="2" fill="none"/>
-      <ellipse cx="40" cy="30" rx="12" ry="24" stroke={col} strokeWidth="1.5" fill="none"/>
-      <line x1="16" y1="30" x2="64" y2="30" stroke={col} strokeWidth="1.5"/>
-      <line x1="20" y1="18" x2="60" y2="18" stroke={col} strokeWidth="1" opacity="0.6"/>
-      <line x1="20" y1="42" x2="60" y2="42" stroke={col} strokeWidth="1" opacity="0.6"/>
-    </svg>
-  );
-}
-
 /* ─── Main ─────────────────────────────────────────────── */
 export default function RegionSelector({ onSelect }: { onSelect: (r: Region) => void }) {
   const [selected, setSelected] = useState<Region>(REGIONS[0]);
@@ -139,11 +56,6 @@ export default function RegionSelector({ onSelect }: { onSelect: (r: Region) => 
                     {r.name}
                   </p>
                   <p className="text-[10px] text-slate-400">{r.countryCode.toUpperCase()}</p>
-                </div>
-
-                {/* Landmark */}
-                <div className="h-14 w-full px-1">
-                  <LandmarkIcon id={r.id} active={active} />
                 </div>
 
                 {/* Select label */}

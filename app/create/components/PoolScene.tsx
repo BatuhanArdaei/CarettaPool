@@ -153,17 +153,131 @@ export default function PoolScene({
   );
 }
 
+/* ── Procedural ground textures (canvas-based, no external files needed) ── */
+function buildGroundTex(type: GroundType, isNight: boolean): THREE.CanvasTexture {
+  const S = 512;
+  const cv = document.createElement('canvas');
+  cv.width = cv.height = S;
+  const c = cv.getContext('2d')!;
+  const rng = (n = 1) => Math.random() * n;
+
+  if (type === 'gravel') {
+    // Base sand/dirt
+    c.fillStyle = isNight ? '#2e2620' : '#a89070';
+    c.fillRect(0, 0, S, S);
+    // Stones
+    for (let i = 0; i < 320; i++) {
+      const x = rng(S), y = rng(S);
+      const rx = 4 + rng(14), ry = 3 + rng(9);
+      const angle = rng(Math.PI);
+      const v = isNight ? 30 + rng(30) : 110 + rng(80);
+      c.beginPath();
+      c.ellipse(x, y, rx, ry, angle, 0, Math.PI * 2);
+      c.fillStyle = `rgb(${v},${v - 4},${v - 8})`;
+      c.fill();
+      // highlight
+      c.beginPath();
+      c.ellipse(x - rx * 0.25, y - ry * 0.25, rx * 0.4, ry * 0.35, angle, 0, Math.PI * 2);
+      c.fillStyle = 'rgba(255,255,255,0.18)';
+      c.fill();
+      // shadow
+      c.beginPath();
+      c.ellipse(x + rx * 0.2, y + ry * 0.2, rx * 0.5, ry * 0.4, angle, 0, Math.PI * 2);
+      c.fillStyle = 'rgba(0,0,0,0.22)';
+      c.fill();
+    }
+  } else if (type === 'wood') {
+    const plH = 48;
+    for (let row = 0; row * plH < S; row++) {
+      const y0 = row * plH;
+      const bv = isNight ? [55, 38, 18] : [160, 100, 45];
+      const dv = (rng() - 0.5) * 22;
+      c.fillStyle = `rgb(${bv[0]+dv},${bv[1]+dv},${bv[2]+dv})`;
+      c.fillRect(0, y0, S, plH - 3);
+      // grain lines
+      for (let g = 0; g < 10; g++) {
+        const gy = y0 + (plH / 10) * g;
+        c.beginPath();
+        c.moveTo(0, gy);
+        for (let x = 0; x <= S; x += 8) {
+          c.lineTo(x, gy + Math.sin((x + row * 77) / 25) * 1.8 + (rng() - 0.5));
+        }
+        c.strokeStyle = 'rgba(0,0,0,0.07)';
+        c.lineWidth = 0.8;
+        c.stroke();
+      }
+      // plank gap
+      c.fillStyle = isNight ? '#1a0e04' : '#4a2a0a';
+      c.fillRect(0, y0 + plH - 3, S, 3);
+    }
+  } else if (type === 'grass') {
+    c.fillStyle = isNight ? '#1a3018' : '#3d7a30';
+    c.fillRect(0, 0, S, S);
+    // colour variation patches
+    for (let i = 0; i < 80; i++) {
+      const x = rng(S), y = rng(S), r = 12 + rng(40);
+      const grd = c.createRadialGradient(x, y, 0, x, y, r);
+      const dk = isNight ? 10 : 20;
+      grd.addColorStop(0, `rgba(${dk},${dk + 55},${dk},0.35)`);
+      grd.addColorStop(1, 'rgba(0,0,0,0)');
+      c.fillStyle = grd;
+      c.beginPath(); c.arc(x, y, r, 0, Math.PI * 2); c.fill();
+    }
+    // grass blades
+    for (let i = 0; i < 700; i++) {
+      const x = rng(S), y = rng(S), len = 2 + rng(7);
+      const a = -Math.PI / 2 + (rng() - 0.5) * 1.2;
+      c.beginPath();
+      c.moveTo(x, y);
+      c.lineTo(x + Math.cos(a) * len, y + Math.sin(a) * len);
+      c.strokeStyle = isNight ? `rgba(30,65,22,0.55)` : `rgba(50,115,35,0.55)`;
+      c.lineWidth = 1;
+      c.stroke();
+    }
+  } else {
+    // concrete
+    c.fillStyle = isNight ? '#383838' : '#9e9e94';
+    c.fillRect(0, 0, S, S);
+    for (let i = 0; i < 3000; i++) {
+      const v = isNight ? 40 + rng(18) : 140 + rng(25);
+      c.fillStyle = `rgba(${v},${v},${v - 4},0.28)`;
+      c.fillRect(rng(S), rng(S), 2, 2);
+    }
+    const jS = 128;
+    c.strokeStyle = isNight ? '#282828' : '#8a8a80';
+    c.lineWidth = 2;
+    for (let x = jS; x < S; x += jS) { c.beginPath(); c.moveTo(x, 0); c.lineTo(x, S); c.stroke(); }
+    for (let y = jS; y < S; y += jS) { c.beginPath(); c.moveTo(0, y); c.lineTo(S, y); c.stroke(); }
+  }
+
+  const tex = new THREE.CanvasTexture(cv);
+  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+  tex.repeat.set(8, 8);
+  return tex;
+}
+
+function useGroundTex(type: GroundType, isNight: boolean) {
+  return useMemo(() => {
+    if (typeof document === 'undefined') return null;
+    return buildGroundTex(type, isNight);
+  }, [type, isNight]);
+}
+
 function Garden({ ground, isNight }: { ground: GroundType; isNight: boolean }) {
-  const lawn = isNight ? '#1f3a2a' : '#3a7a3a';
+  const lawn = isNight ? '#1a2e18' : '#357030';
+  const tex  = useGroundTex(ground, isNight);
+
   return (
     <>
+      {/* Geniş arka çim */}
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.001, 0]} receiveShadow>
         <planeGeometry args={[80, 80]} />
-        <meshStandardMaterial color={lawn} />
+        <meshStandardMaterial color={lawn} roughness={0.9} />
       </mesh>
+      {/* Yakın zemin — doku ile */}
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.001, 0]} receiveShadow>
         <planeGeometry args={[24, 24]} />
-        <meshStandardMaterial color={groundColor(ground, isNight)} />
+        <meshStandardMaterial map={tex ?? undefined} color={tex ? undefined : groundColor(ground, isNight)} roughness={0.88} />
       </mesh>
     </>
   );
@@ -876,6 +990,8 @@ function Pool({ config }: { config: PoolConfig }) {
         top={top}
         direction={config.platformDirection}
         frameColor={frame}
+        showStairs={config.stairs}
+        extended={config.platformExtension}
       />
     </group>
   );
@@ -1758,46 +1874,322 @@ function PoolLadder({
   );
 }
 
+/* ─── Platform Furniture ──────────────────────────────── */
+
+/**
+ * Loads a PNG texture silently — returns null if the file is missing (no crash).
+ * Place /public/person-male.png and /public/person-female.png (top-down view,
+ * transparent background) to replace the geometric fallback with a photo-real sprite.
+ *
+ * Recommended prompt for AI generators:
+ *   "top-down aerial overhead view of realistic person lying on white wooden lounge
+ *    chair, photorealistic, 4K, PNG transparent background, studio lighting,
+ *    ultra detailed skin texture"
+ */
+function useSafeTexture(url: string): THREE.Texture | null {
+  const [tex, setTex] = useState<THREE.Texture | null>(null);
+  useEffect(() => {
+    const loader = new THREE.TextureLoader();
+    loader.load(url, t => { t.needsUpdate = true; setTex(t); }, undefined, () => {/* 404 — silent */});
+    return () => setTex(null);
+  }, [url]);
+  return tex;
+}
+
+function WineGlass({ position }: { position: [number, number, number] }) {
+  return (
+    <group position={position}>
+      <mesh>
+        <cylinderGeometry args={[0.028, 0.028, 0.007, 8]} />
+        <meshStandardMaterial color="#cce8f4" transparent opacity={0.75} roughness={0.05} />
+      </mesh>
+      <mesh position={[0, 0.038, 0]}>
+        <cylinderGeometry args={[0.006, 0.006, 0.06, 6]} />
+        <meshStandardMaterial color="#cce8f4" transparent opacity={0.75} roughness={0.05} />
+      </mesh>
+      <mesh position={[0, 0.09, 0]}>
+        <cylinderGeometry args={[0.032, 0.016, 0.09, 8]} />
+        <meshStandardMaterial color="#cce8f4" transparent opacity={0.45} roughness={0.05} />
+      </mesh>
+      <mesh position={[0, 0.11, 0]}>
+        <cylinderGeometry args={[0.025, 0.012, 0.05, 8]} />
+        <meshStandardMaterial color="#7a0020" transparent opacity={0.82} roughness={0.3} />
+      </mesh>
+    </group>
+  );
+}
+
+function SideTable({ position }: { position: [number, number, number] }) {
+  return (
+    <group position={position}>
+      <mesh position={[0, 0.02, 0]}>
+        <cylinderGeometry args={[0.11, 0.11, 0.025, 12]} />
+        <meshStandardMaterial color="#7a7a7a" metalness={0.4} roughness={0.45} />
+      </mesh>
+      <mesh position={[0, 0.26, 0]}>
+        <cylinderGeometry args={[0.022, 0.022, 0.45, 8]} />
+        <meshStandardMaterial color="#7a7a7a" metalness={0.4} roughness={0.45} />
+      </mesh>
+      <mesh position={[0, 0.5, 0]}>
+        <cylinderGeometry args={[0.19, 0.19, 0.035, 16]} />
+        <meshStandardMaterial color="#9a9a9a" metalness={0.4} roughness={0.4} />
+      </mesh>
+      <WineGlass position={[-0.09, 0.535, 0]} />
+      <WineGlass position={[ 0.09, 0.535, 0]} />
+    </group>
+  );
+}
+
+/* Person lying on a lounge chair.
+   If /public/person-{gender}.png exists → photo-real sprite on horizontal plane.
+   Otherwise → high-poly ellipsoid geometric fallback.
+   Person lies along Z: head at -Z (~-0.50), feet at +Z (~+0.95). */
+function PersonOnChair({ gender }: { gender: 'male' | 'female' }) {
+  const tex = useSafeTexture(`/person-${gender}.png`);
+  if (tex) {
+    return (
+      <mesh position={[0, 0.415, 0.05]} rotation={[-Math.PI / 2, 0, 0]}>
+        <planeGeometry args={[0.72, 1.68]} />
+        <meshBasicMaterial map={tex} transparent alphaTest={0.08} side={THREE.DoubleSide} />
+      </mesh>
+    );
+  }
+  // ── Geometric fallback ────────────────────────────────────────
+  const f   = gender === 'female';
+  const skin = f ? '#f3b590' : '#c8844e';
+  const suit = f ? '#e8348c' : '#1a3f90';
+  const hair = f ? '#180804' : '#2c1808';
+
+  type Part = { s: [number,number,number]; p: [number,number,number]; c: string; r?: number };
+
+  const shared: Part[] = [
+    // neck
+    { s: [0.038, 0.038, 0.092], p: [0, 0.447, -0.375], c: skin },
+    // upper legs
+    { s: [0.085, 0.080, 0.300], p: [-0.063, 0.393, 0.522], c: skin },
+    { s: [0.085, 0.080, 0.300], p: [ 0.063, 0.393, 0.522], c: skin },
+    // lower legs
+    { s: [0.068, 0.064, 0.255], p: [-0.060, 0.383, 0.818], c: skin },
+    { s: [0.068, 0.064, 0.255], p: [ 0.060, 0.383, 0.818], c: skin },
+    // feet
+    { s: [0.060, 0.042, 0.092], p: [-0.060, 0.380, 0.944], c: skin, r: 0.7 },
+    { s: [0.060, 0.042, 0.092], p: [ 0.060, 0.380, 0.944], c: skin, r: 0.7 },
+    // arms
+    { s: [0.058, 0.054, 0.290], p: [-(f ? 0.240 : 0.295), 0.412, 0.058], c: skin },
+    { s: [0.058, 0.054, 0.290], p: [ (f ? 0.240 : 0.295), 0.412, 0.058], c: skin },
+  ];
+
+  const female: Part[] = [
+    // head
+    { s: [0.088, 0.092, 0.088], p: [0, 0.538, -0.502], c: skin, r: 0.50 },
+    // hair cap
+    { s: [0.107, 0.112, 0.107], p: [0, 0.593, -0.525], c: hair, r: 0.85 },
+    // long hair draping
+    { s: [0.162, 0.245, 0.118], p: [0, 0.474, -0.678], c: hair, r: 0.90 },
+    // hair side wisps
+    { s: [0.065, 0.180, 0.085], p: [-0.095, 0.468, -0.655], c: hair, r: 0.90 },
+    { s: [0.065, 0.180, 0.085], p: [ 0.095, 0.468, -0.655], c: hair, r: 0.90 },
+    // shoulders
+    { s: [0.318, 0.042, 0.046], p: [0, 0.446, -0.258], c: skin },
+    // torso (bikini)
+    { s: [0.192, 0.124, 0.490], p: [0, 0.418, -0.038], c: suit, r: 0.72 },
+    // hips (bikini bottom)
+    { s: [0.228, 0.114, 0.292], p: [0, 0.408, 0.278], c: suit, r: 0.72 },
+    // visible midriff skin strip
+    { s: [0.170, 0.090, 0.100], p: [0, 0.418, 0.100], c: skin },
+  ];
+
+  const male: Part[] = [
+    // head
+    { s: [0.092, 0.096, 0.092], p: [0, 0.540, -0.504], c: skin, r: 0.50 },
+    // hair
+    { s: [0.102, 0.106, 0.102], p: [0, 0.578, -0.526], c: hair, r: 0.85 },
+    // shoulders (wide)
+    { s: [0.380, 0.046, 0.050], p: [0, 0.448, -0.255], c: skin },
+    // torso (swim trunks top = skin)
+    { s: [0.248, 0.132, 0.310], p: [0, 0.420, -0.120], c: skin },
+    // swim trunks
+    { s: [0.228, 0.118, 0.310], p: [0, 0.410, 0.218], c: suit, r: 0.72 },
+    // lower torso connection
+    { s: [0.215, 0.118, 0.180], p: [0, 0.413, 0.048], c: skin },
+  ];
+
+  const parts = [...shared, ...(f ? female : male)];
+
+  return (
+    <group>
+      {parts.map((p, i) => (
+        <mesh key={i} scale={p.s} position={p.p} castShadow>
+          <sphereGeometry args={[1, 32, 22]} />
+          <meshStandardMaterial color={p.c} roughness={p.r ?? 0.62} />
+        </mesh>
+      ))}
+    </group>
+  );
+}
+
+function LoungeChair({
+  position, rotY = 0,
+}: {
+  position: [number, number, number];
+  rotY?: number;
+}) {
+  const wood    = '#b8742a';
+  const cushion = '#f4efe6';
+  /* Chair runs along Z: foot at +Z, backrest at -Z end.
+     Seat is completely FLAT. Backrest is a separate raised section.  */
+  const seatZ = [-0.18, 0.00, 0.18, 0.36, 0.54, 0.72, 0.88] as number[];
+
+  return (
+    <group position={position} rotation={[0, rotY, 0]}>
+      {/* Side rails */}
+      {([-0.30, 0.30] as number[]).map((x, i) => (
+        <mesh key={i} position={[x, 0.22, 0.35]} castShadow>
+          <boxGeometry args={[0.04, 0.06, 1.20]} />
+          <meshStandardMaterial color={wood} roughness={0.65} />
+        </mesh>
+      ))}
+
+      {/* Flat seat slats */}
+      {seatZ.map((z, i) => (
+        <mesh key={i} position={[0, 0.26, z]} castShadow>
+          <boxGeometry args={[0.66, 0.04, 0.14]} />
+          <meshStandardMaterial color={cushion} roughness={0.85} />
+        </mesh>
+      ))}
+
+      {/* Backrest — anchored at seat's -Z end, tilts AWAY from pool (toward -Z).
+          Slats arranged vertically in group local, then group rotated [-angle].
+          rotX(-angle): local +Y tilts toward -Z = away from pool ✓  */}
+      <group position={[0, 0.26, -0.18]} rotation={[-0.58, 0, 0]}>
+        {/* Side rails (vertical) */}
+        {([-0.30, 0.30] as number[]).map((x, i) => (
+          <mesh key={i} position={[x, 0.24, 0]} castShadow>
+            <boxGeometry args={[0.04, 0.52, 0.04]} />
+            <meshStandardMaterial color={wood} roughness={0.65} />
+          </mesh>
+        ))}
+        {/* Slats: evenly spaced up the backrest */}
+        {([0.06, 0.20, 0.34, 0.46] as number[]).map((y, i) => (
+          <mesh key={i} position={[0, y, 0]} castShadow>
+            <boxGeometry args={[0.66, 0.04, 0.13]} />
+            <meshStandardMaterial color={cushion} roughness={0.85} />
+          </mesh>
+        ))}
+      </group>
+
+      {/* 4 Legs */}
+      {([[-0.28, -0.14], [0.28, -0.14], [-0.28, 0.82], [0.28, 0.82]] as [number, number][]).map(([x, z], i) => (
+        <mesh key={i} position={[x, 0.10, z]} castShadow>
+          <boxGeometry args={[0.05, 0.22, 0.05]} />
+          <meshStandardMaterial color={wood} roughness={0.65} />
+        </mesh>
+      ))}
+    </group>
+  );
+}
+
+function PlatformFurniture({
+  pw, pd, top, direction,
+}: {
+  pw: number; pd: number; top: number; direction: PlatformDirection;
+}) {
+  // Chair spacing along lengthwise axis
+  const lengthHalf = (direction === 'east' || direction === 'west') ? pd / 2 : pw / 2;
+  const cs = Math.min(lengthHalf * 0.42, 1.25);
+  const y = top;
+  // Diagonal angle toward pool (≈17°), making chairs face inward to each other
+  /* Chairs face the pool perpendicularly (__/ shape).
+     Foot end (+Z of chair) → pool side.
+     Backrest (-Z, elevated) → away from pool.
+     d = slight inward diagonal so chairs angle toward each other. */
+  const d = 0.14;
+  const H = Math.PI / 2;
+
+  if (direction === 'east') {
+    // pool at -X → feet (+Z after rotY=-π/2) point toward -X ✓
+    return (
+      <group position={[0, 0, 0]}>
+        <LoungeChair position={[0, y, -cs]} rotY={-H + d} />
+        <SideTable   position={[0, y,   0]} />
+        <LoungeChair position={[0, y,  cs]} rotY={-H - d} />
+      </group>
+    );
+  }
+  if (direction === 'west') {
+    // pool at +X → rotY=+π/2
+    return (
+      <group position={[0, 0, 0]}>
+        <LoungeChair position={[0, y, -cs]} rotY={H - d} />
+        <SideTable   position={[0, y,   0]} />
+        <LoungeChair position={[0, y,  cs]} rotY={H + d} />
+      </group>
+    );
+  }
+  if (direction === 'north') {
+    // pool at +Z → rotY≈0
+    return (
+      <group position={[0, 0, 0]}>
+        <LoungeChair position={[-cs, y, 0]} rotY={ d} />
+        <SideTable   position={[  0, y, 0]} />
+        <LoungeChair position={[ cs, y, 0]} rotY={-d} />
+      </group>
+    );
+  }
+  // south: pool at -Z → rotY≈π
+  return (
+    <group position={[0, 0, 0]}>
+      <LoungeChair position={[-cs, y, 0]} rotY={Math.PI - d} />
+      <SideTable   position={[  0, y, 0]} />
+      <LoungeChair position={[ cs, y, 0]} rotY={Math.PI + d} />
+    </group>
+  );
+}
+
 function Platform({
   halfW,
   halfL,
   top,
   direction,
   frameColor,
+  showStairs = true,
+  extended = true,
 }: {
   halfW: number;
   halfL: number;
   top: number;
   direction: PlatformDirection;
   frameColor: string;
+  showStairs?: boolean;
+  extended?: boolean;
 }) {
-  // Determine platform footprint.
-  // The platform sits flush against the chosen pool side.
   const wood = '#b8853f';
   const deckThickness = 0.1;
   const deckY = top - deckThickness / 2;
 
-  let cx = 0, cz = 0; // platform center
-  let pw = 0, pd = 0; // platform width, depth (depth = outward extent)
-  const sideLen = direction === 'east' || direction === 'west'
-    ? halfL * 2
-    : halfW * 2;
+  // pw/pd: pool-length axis vs outward axis.
+  // "extension" = the outer strip beyond the machine room.
+  // When off, outward depth shrinks from PLATFORM_DEPTH to 60% (machine room only).
+  const sideLen = direction === 'east' || direction === 'west' ? halfL * 2 : halfW * 2;
+  const depthFull    = PLATFORM_DEPTH;           // 2.0 m
+  const depthCompact = PLATFORM_DEPTH * 0.6;     // 1.2 m — machine room only
+  const depth = extended ? depthFull : depthCompact;
+  const innerGap = COPING_W - FRAME_T;           // gap between pool wall and platform inner edge
 
-  pw = direction === 'east' || direction === 'west' ? PLATFORM_DEPTH : sideLen;
-  pd = direction === 'east' || direction === 'west' ? sideLen : PLATFORM_DEPTH;
+  let pw = 0, pd = 0, cx = 0, cz = 0;
 
   if (direction === 'east') {
-    cx = halfW + COPING_W - FRAME_T + PLATFORM_DEPTH / 2;
-    cz = 0;
+    pw = depth; pd = sideLen;
+    cx = halfW + innerGap + depth / 2; cz = 0;
   } else if (direction === 'west') {
-    cx = -halfW - (COPING_W - FRAME_T) - PLATFORM_DEPTH / 2;
-    cz = 0;
+    pw = depth; pd = sideLen;
+    cx = -halfW - innerGap - depth / 2; cz = 0;
   } else if (direction === 'north') {
-    cx = 0;
-    cz = -halfL - (COPING_W - FRAME_T) - PLATFORM_DEPTH / 2;
+    pw = sideLen; pd = depth;
+    cx = 0; cz = -halfL - innerGap - depth / 2;
   } else {
-    cx = 0;
-    cz = halfL + (COPING_W - FRAME_T) + PLATFORM_DEPTH / 2;
+    pw = sideLen; pd = depth;
+    cx = 0; cz = halfL + innerGap + depth / 2;
   }
 
   return (
@@ -1809,6 +2201,7 @@ function Platform({
         top={top - deckThickness}
         direction={direction}
         frameColor={frameColor}
+        fillFull={!extended}
       />
 
       {/* Deck floor */}
@@ -1827,16 +2220,24 @@ function Platform({
         deckTop={top}
         direction={direction}
         color={frameColor}
+        showStairs={showStairs}
       />
 
-      {/* Stairs descending from one corner */}
-      <Stairs
-        pw={pw}
-        pd={pd}
-        deckTop={top}
-        direction={direction}
-        frameColor={frameColor}
-      />
+      {/* Stairs descending from one corner (optional) */}
+      {showStairs && (
+        <Stairs
+          pw={pw}
+          pd={pd}
+          deckTop={top}
+          direction={direction}
+          frameColor={frameColor}
+        />
+      )}
+
+      {/* Furniture on outer strip (only when extension is enabled) */}
+      {extended && (
+        <PlatformFurniture pw={pw} pd={pd} top={top} direction={direction} />
+      )}
     </group>
   );
 }
@@ -1847,24 +2248,23 @@ function PlatformBlock({
   top,
   direction,
   frameColor,
+  fillFull = false,
 }: {
   pw: number;
   pd: number;
   top: number;
   direction: PlatformDirection;
   frameColor: string;
+  fillFull?: boolean;
 }) {
-  // Partial closed cabinet (machine room) — covers only the half adjacent to
-  // the pool, and extends inward to merge with the pool wall (closes the gap
-  // between the coping and the platform).
   const halfPw = pw / 2;
   const halfPd = pd / 2;
   const cabH = top - 0.04;
-  // Distance from the platform's inner edge to the actual pool wall (the gap
-  // hidden by the coping when looked at from above).
   const innerExtension = COPING_W - FRAME_T;
-  // Cabinet covers ~60% of the platform's depth, on the pool-facing side.
-  const cabPartial = pw * 0.6;
+  // outwardDepth: how far the platform extends away from the pool wall.
+  // fillFull: compact mode — machine room covers 100% (no open outer strip).
+  const outwardDepth = direction === 'east' || direction === 'west' ? pw : pd;
+  const cabPartial = fillFull ? outwardDepth : outwardDepth * 0.6;
 
   let cabX1: number, cabX2: number, cabZ1: number, cabZ2: number;
   if (direction === 'east') {
@@ -1970,12 +2370,14 @@ function PlatformRailings({
   deckTop,
   direction,
   color,
+  showStairs = true,
 }: {
   pw: number;
   pd: number;
   deckTop: number;
   direction: PlatformDirection;
   color: string;
+  showStairs?: boolean;
 }) {
   // Inner side (touching pool) gets no railing.
   // The "stair side" gets no railing either — stairs descend there.
@@ -2005,30 +2407,25 @@ function PlatformRailings({
   // For north/south: stairs at +X corner.
   if (direction === 'east' || direction === 'west') {
     const outerX = direction === 'east' ? halfPw : -halfPw;
-    // Outer side (parallel to pool) — full length
     railings.push({ from: [outerX, -halfPd], to: [outerX, halfPd] });
-    // -Z end (far from stairs)
     railings.push({ from: [-halfPw, -halfPd], to: [halfPw, -halfPd] });
-    // +Z end (front) — railing covers the OUTER half; stairs occupy the inner half.
-    // East: stairs at -halfPw → -halfPw+stairWidth (inner). Railing fills the rest.
-    // West: stairs at halfPw-stairWidth → halfPw (inner). Railing fills the rest.
-    if (direction === 'east') {
+    if (!showStairs) {
+      // No gap — full railing on stair side too
+      railings.push({ from: [-halfPw, halfPd], to: [halfPw, halfPd] });
+    } else if (direction === 'east') {
       railings.push({ from: [-halfPw + stairWidth, halfPd], to: [halfPw, halfPd] });
     } else {
       railings.push({ from: [-halfPw, halfPd], to: [halfPw - stairWidth, halfPd] });
     }
   } else {
     const outerZ = direction === 'south' ? halfPd : -halfPd;
-    // Outer side — full length
     railings.push({ from: [-halfPw, outerZ], to: [halfPw, outerZ] });
-    // -X end (far from stairs)
     railings.push({ from: [-halfPw, -halfPd], to: [-halfPw, halfPd] });
-    // +X end (front) — covers the side opposite the stair landing
-    if (direction === 'north') {
-      // Stairs at halfPd-stairWidth → halfPd (inner). Railing on the rest.
+    if (!showStairs) {
+      railings.push({ from: [halfPw, -halfPd], to: [halfPw, halfPd] });
+    } else if (direction === 'north') {
       railings.push({ from: [halfPw, -halfPd], to: [halfPw, halfPd - stairWidth] });
     } else {
-      // South: stairs at -halfPd → -halfPd+stairWidth (inner)
       railings.push({ from: [halfPw, -halfPd + stairWidth], to: [halfPw, halfPd] });
     }
   }

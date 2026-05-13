@@ -32,7 +32,9 @@ export interface PoolConfig {
   ground: GroundType;
   cladding: CladdingType;
   platformDirection: PlatformDirection;
+  platformExtension: boolean;
   waterfall: boolean;
+  stairs: boolean;
 }
 
 export const defaultPoolConfig: PoolConfig = {
@@ -46,7 +48,9 @@ export const defaultPoolConfig: PoolConfig = {
   ground: 'grass',
   cladding: 'white',
   platformDirection: 'east',
+  platformExtension: true,
   waterfall: false,
+  stairs: true,
 };
 
 export function panelKey(side: PoolSide, index: number): string {

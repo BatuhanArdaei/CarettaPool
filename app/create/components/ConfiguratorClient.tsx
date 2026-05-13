@@ -7,6 +7,7 @@ import { calculateBasePrice, type PriceBreakdown } from '@/lib/pricing';
 import { getRegion, REGIONS, type Region } from '@/lib/regions';
 import ConfigPanel from './ConfigPanel';
 import RegionSelector from './RegionSelector';
+import LoadingScreen from './LoadingScreen';
 
 const PoolScene = dynamic(() => import('./PoolScene'), {
   ssr: false,
@@ -25,7 +26,8 @@ interface Props {
 }
 
 export default function ConfiguratorClient({ userId, userEmail, role, fullName }: Props) {
-  const [region, setRegion] = useState<Region | null>(null);
+  const [modelLoading, setModelLoading] = useState(false);
+  const [region,       setRegion]       = useState<Region | null>(null);
   const [config, setConfig] = useState<PoolConfig>(defaultPoolConfig);
   const controlsRef = useRef<{ reset: () => void } | null>(null);
   const [breakdown, setBreakdown] = useState<PriceBreakdown>(() =>
@@ -67,7 +69,14 @@ export default function ConfiguratorClient({ userId, userEmail, role, fullName }
 
   /* Show region selector until a region is chosen */
   if (!region) {
-    return <RegionSelector onSelect={setRegion} />;
+    return (
+      <RegionSelector
+        onSelect={(r) => {
+          setRegion(r);
+          setModelLoading(true); // trigger loading overlay after region pick
+        }}
+      />
+    );
   }
 
   return (
@@ -76,6 +85,10 @@ export default function ConfiguratorClient({ userId, userEmail, role, fullName }
         {/* 3D scene — sticky on mobile (top), right column on desktop */}
         <div className="card relative overflow-hidden order-1 lg:order-2 sticky top-16 z-30 lg:static lg:z-auto h-[38vh] sm:h-[48vh] lg:h-[75vh] lg:min-h-[480px]">
           <PoolScene config={config} controlsRef={controlsRef} />
+          {/* Loading overlay — covers only this panel, shown for 3 s after region pick */}
+          {modelLoading && (
+            <LoadingScreen onDone={() => setModelLoading(false)} />
+          )}
           <button
             type="button"
             onClick={() => controlsRef.current?.reset()}
