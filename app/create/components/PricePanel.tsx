@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { formatTRY, type PriceBreakdown } from '@/lib/pricing';
-import { countPanels, type PoolConfig } from '@/lib/types';
+import { countPanels, segmentsForSide, POOL_SIDES, type PoolConfig } from '@/lib/types';
 
 interface Props {
   config: PoolConfig;
@@ -99,8 +99,8 @@ export default function PricePanel({
             label="Panel"
             value={(() => {
               const c = countPanels(config);
-              const segLabel = config.panelSegments === 1 ? 'tek parça' : `${config.panelSegments} bölme`;
-              return `${segLabel} • ${c.glass} cam, ${c.closed} kapalı`;
+              const totalSegs = POOL_SIDES.reduce((sum, s) => sum + segmentsForSide(s, config), 0);
+              return `${totalSegs} bölme • ${c.glass} cam, ${c.closed} kapalı`;
             })()}
           />
           <SummaryItem label="Işıklandırma" value={config.lighting.enabled ? `Açık — ${lightLabel(config.lighting.color)}` : 'Kapalı'} />

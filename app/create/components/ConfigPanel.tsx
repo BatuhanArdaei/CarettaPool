@@ -5,11 +5,11 @@ import {
   POOL_SIDES,
   getPanelType,
   panelKey,
+  segmentsForSide,
   type CladdingType,
   type FrameColor,
   type GroundType,
   type LightColor,
-  type PanelSegments,
   type PanelType,
   type PoolConfig,
   type PoolSide,
@@ -252,7 +252,9 @@ function SizeStep({
           <path d="M8 0a8 8 0 1 0 0 16A8 8 0 0 0 8 0zm0 2a6 6 0 1 1 0 12A6 6 0 0 1 8 2z" opacity=".3"/>
           <path d="M8 2C4.686 2 2 4.686 2 8s2.686 6 6 6 6-2.686 6-6-2.686-6-6-6zm.5 9h-1V7h1v4zm0-5h-1V5h1v1z"/>
         </svg>
-        <span><strong>{region.name}</strong> — azami {region.maxWidth} m genişlik · {region.maxLength} m uzunluk</span>
+        <span>
+          <strong>{region.name}</strong> — {region.note}
+        </span>
       </div>
 
       {/* Genişlik → config.width */}
@@ -354,26 +356,6 @@ function PanelsStep({
       </div>
 
       <div>
-        <p className="label">Bölme sayısı</p>
-        <div className="grid grid-cols-4 gap-2">
-          {([1, 2, 3, 4] as PanelSegments[]).map((n) => (
-            <button
-              key={n}
-              type="button"
-              onClick={() => set('panelSegments', n)}
-              className={`rounded-lg border px-3 py-2 text-sm transition ${
-                config.panelSegments === n
-                  ? 'border-brand-600 bg-brand-50 font-medium text-brand-700'
-                  : 'border-slate-200 text-slate-600 hover:bg-slate-50'
-              }`}
-            >
-              {n === 1 ? 'Tek' : `${n} bölme`}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      <div>
         <div className="mb-2 flex items-center justify-between">
           <p className="label mb-0">Bölmeleri tek tek seç</p>
           {Object.keys(config.panelOverrides).length > 0 && (
@@ -456,23 +438,38 @@ function WaterfallStep({
         </div>
       )}
 
-      {/* Merdiven */}
-      {(
-        <div className="space-y-2">
-          <p className="label">Dış Merdiven</p>
-          <Toggle
-            options={[
-              { value: 'on', label: 'Var' },
-              { value: 'off', label: 'Yok' },
-            ]}
-            value={config.stairs ? 'on' : 'off'}
-            onChange={(v) => set('stairs', v === 'on')}
-          />
-          <p className="text-xs text-slate-500">
-            Platform köşesindeki çıkış merdiveni. Kapalıyken korkuluk tamamen kapanır.
-          </p>
-        </div>
-      )}
+      {/* İç Merdiven */}
+      <div className="space-y-2">
+        <p className="label">İç Merdiven</p>
+        <Toggle
+          options={[
+            { value: 'on', label: 'Var' },
+            { value: 'off', label: 'Yok' },
+          ]}
+          value={config.innerLadder ? 'on' : 'off'}
+          onChange={(v) => set('innerLadder', v === 'on')}
+        />
+        <p className="text-xs text-slate-500">
+          Havuz içindeki paslanmaz çelik giriş merdiveni.
+        </p>
+      </div>
+
+      {/* Korkuluklar */}
+      <div className="space-y-2">
+        <p className="label">Korkuluklar</p>
+        <Toggle
+          options={[
+            { value: 'on', label: 'Var' },
+            { value: 'off', label: 'Yok' },
+          ]}
+          value={config.railings ? 'on' : 'off'}
+          onChange={(v) => set('railings', v === 'on')}
+        />
+        <p className="text-xs text-slate-500">
+          Platform üzerindeki güvenlik korkulukları.
+        </p>
+      </div>
+
     </div>
   );
 }
@@ -696,7 +693,7 @@ function PanelRow({
         {labels[side]}
       </span>
       <div className="flex flex-1 gap-1">
-        {Array.from({ length: config.panelSegments }, (_, i) => {
+        {Array.from({ length: segmentsForSide(side, config) }, (_, i) => {
           const type = getPanelType(config, side, i);
           const isGlass = type === 'glass';
           return (
@@ -867,7 +864,7 @@ function SummaryStep({
   const rows: [string, string][] = [
     ['Boyut', `${config.width.toFixed(1)} × ${config.length.toFixed(1)} m`],
     ['Çerçeve', { anthracite: 'Antrasit', blue: 'Mavi', white: 'Beyaz' }[config.frameColor] ?? config.frameColor],
-    ['Panel', `${config.panelSegments} bölme • ${panels.glass} cam, ${panels.closed} kapalı`],
+    ['Panel', `${panels.glass} cam, ${panels.closed} kapalı`],
     ['Işıklandırma', config.lighting.enabled ? `Açık — ${config.lighting.color.toUpperCase()}` : 'Kapalı'],
     ['Şelale', config.waterfall ? 'Var' : 'Yok'],
     ['Zemin', { gravel:'Çakıl', wood:'Tahta Deck', grass:'Çimen', concrete:'Beton' }[config.ground] ?? config.ground],

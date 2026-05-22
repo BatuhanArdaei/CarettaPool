@@ -1,9 +1,9 @@
 export interface Region {
   id: string;
   name: string;
-  countryCode: string;    // for flagcdn
-  maxLength: number;      // metres
-  maxWidth: number;       // metres
+  countryCode: string;
+  maxLength: number;
+  maxWidth: number;
   minLength: number;
   minWidth: number;
   description: string;
@@ -15,56 +15,45 @@ export const REGIONS: Region[] = [
     id: 'turkey',
     name: 'Türkiye',
     countryCode: 'tr',
-    maxLength: 14,
-    maxWidth: 5,
-    minLength: 2,
-    minWidth: 2,
+    minLength: 4,
+    maxLength: 13,
+    minWidth: 2.30,
+    maxWidth: 4,
     description: 'Yurt içi teslimat',
-    note: 'Karayolu taşımacılığı — azami 14 × 5 m',
+    note: 'Uzunluk 4–13 m · Genişlik 2.30–4 m',
   },
   {
     id: 'europe',
     name: 'Avrupa',
     countryCode: 'eu',
-    maxLength: 13,
-    maxWidth: 5,
-    minLength: 2,
-    minWidth: 2,
+    minLength: 4,
+    maxLength: 14,
+    minWidth: 2.30,
+    maxWidth: 2.90,
     description: 'Avrupa\'ya deniz yolu',
-    note: '40ft konteyner — azami 13 × 5 m',
+    note: 'Uzunluk 4–14 m · Genişlik 2.30–2.90 m',
   },
   {
     id: 'usa',
     name: 'Amerika',
     countryCode: 'us',
-    maxLength: 11.5,
-    maxWidth: 5,
-    minLength: 2,
-    minWidth: 2,
+    minLength: 4,
+    maxLength: 11,
+    minWidth: 2.10,
+    maxWidth: 2.10,
     description: 'Kuzey Amerika\'ya deniz yolu',
-    note: '40ft konteyner — azami 11.5 × 5 m',
+    note: 'Uzunluk 4–11 m · Genişlik 2.10 m (sabit)',
   },
   {
     id: 'middle_east',
     name: 'Orta Doğu',
     countryCode: 'ae',
-    maxLength: 12,
-    maxWidth: 5,
-    minLength: 2,
-    minWidth: 2,
+    minLength: 4,
+    maxLength: 13,
+    minWidth: 2.30,
+    maxWidth: 2.90,
     description: 'Körfez ülkelerine deniz yolu',
-    note: '40ft konteyner — azami 12 × 5 m',
-  },
-  {
-    id: 'other',
-    name: 'Diğer Ülkeler',
-    countryCode: 'un',
-    maxLength: 11,
-    maxWidth: 4.5,
-    minLength: 2,
-    minWidth: 2,
-    description: 'Diğer uluslararası teslimat',
-    note: 'Standart konteyner — azami 11 × 4.5 m',
+    note: 'Uzunluk 4–13 m · Genişlik 2.30–2.90 m',
   },
 ];
 

@@ -27,6 +27,8 @@ import {
 
 const POOL_HEIGHT = 1.5;
 const COPING_T = 0.10;
+const PANEL_W  = 2.40;  // fixed panel width in metres
+const PANEL_H  = 1.20;  // fixed panel height in metres
 const COPING_W = 0.32;
 const FRAME_T = 0.10;
 const PANEL_T = 0.04;
@@ -171,135 +173,171 @@ export default function PoolScene({
 
 /* ── Procedural ground textures (canvas-based, no external files needed) ── */
 function buildGroundTex(type: GroundType, isNight: boolean): THREE.CanvasTexture {
-  const S = 256; // 256 px tiles enough for tiled ground
+  const S = 512;
   const cv = document.createElement('canvas');
   cv.width = cv.height = S;
   const c = cv.getContext('2d')!;
   const rng = (n = 1) => Math.random() * n;
 
   if (type === 'gravel') {
-    // Base sand/dirt
-    c.fillStyle = isNight ? '#2e2620' : '#a89070';
+    // Dense small pebbles — base sandy colour
+    c.fillStyle = isNight ? '#3a3028' : '#c8b898';
     c.fillRect(0, 0, S, S);
-    // Stones
-    for (let i = 0; i < 120; i++) {
+    // 700 small stones (2-7 px radius)
+    for (let i = 0; i < 700; i++) {
       const x = rng(S), y = rng(S);
-      const rx = 4 + rng(14), ry = 3 + rng(9);
+      const rx = 2 + rng(5), ry = 1.5 + rng(4);
       const angle = rng(Math.PI);
-      const v = isNight ? 30 + rng(30) : 110 + rng(80);
+      const base = isNight ? 50 + rng(40) : 130 + rng(80);
       c.beginPath();
       c.ellipse(x, y, rx, ry, angle, 0, Math.PI * 2);
-      c.fillStyle = `rgb(${v},${v - 4},${v - 8})`;
+      c.fillStyle = `rgb(${base},${base - 5},${base - 10})`;
       c.fill();
-      // highlight
+      // top-left highlight
       c.beginPath();
-      c.ellipse(x - rx * 0.25, y - ry * 0.25, rx * 0.4, ry * 0.35, angle, 0, Math.PI * 2);
-      c.fillStyle = 'rgba(255,255,255,0.18)';
+      c.ellipse(x - rx * 0.3, y - ry * 0.3, rx * 0.45, ry * 0.4, angle, 0, Math.PI * 2);
+      c.fillStyle = 'rgba(255,255,255,0.22)';
       c.fill();
-      // shadow
+      // bottom-right shadow
       c.beginPath();
-      c.ellipse(x + rx * 0.2, y + ry * 0.2, rx * 0.5, ry * 0.4, angle, 0, Math.PI * 2);
-      c.fillStyle = 'rgba(0,0,0,0.22)';
+      c.ellipse(x + rx * 0.25, y + ry * 0.25, rx * 0.5, ry * 0.45, angle, 0, Math.PI * 2);
+      c.fillStyle = 'rgba(0,0,0,0.28)';
       c.fill();
     }
+
   } else if (type === 'wood') {
-    const plH = 48;
-    for (let row = 0; row * plH < S; row++) {
-      const y0 = row * plH;
-      const bv = isNight ? [55, 38, 18] : [160, 100, 45];
-      const dv = (rng() - 0.5) * 22;
-      c.fillStyle = `rgb(${bv[0]+dv},${bv[1]+dv},${bv[2]+dv})`;
-      c.fillRect(0, y0, S, plH - 3);
-      // grain lines
-      for (let g = 0; g < 10; g++) {
-        const gy = y0 + (plH / 10) * g;
+    const plankH = 38;
+    const baseColors = isNight
+      ? [[48, 32, 14], [42, 28, 10], [54, 36, 16]]
+      : [[185, 118, 52], [170, 108, 44], [195, 128, 58]];
+    let row = 0;
+    for (let y0 = 0; y0 < S; y0 += plankH, row++) {
+      const [r, g, b] = baseColors[row % baseColors.length];
+      const dv = (rng() - 0.5) * 18;
+      c.fillStyle = `rgb(${r + dv},${g + dv / 2},${b + dv / 3})`;
+      c.fillRect(0, y0, S, plankH - 2);
+      // wood grain lines (wavy, subtle)
+      for (let gi = 0; gi < 12; gi++) {
+        const gy = y0 + (plankH / 12) * gi;
         c.beginPath();
         c.moveTo(0, gy);
-        for (let x = 0; x <= S; x += 8) {
-          c.lineTo(x, gy + Math.sin((x + row * 77) / 25) * 1.8 + (rng() - 0.5));
+        for (let x = 0; x <= S; x += 6) {
+          c.lineTo(x, gy + Math.sin((x + row * 53) / 22) * 1.5 + (rng() - 0.5) * 0.5);
         }
-        c.strokeStyle = 'rgba(0,0,0,0.07)';
-        c.lineWidth = 0.8;
+        c.strokeStyle = `rgba(0,0,0,${0.04 + rng() * 0.04})`;
+        c.lineWidth = 0.7;
         c.stroke();
       }
       // plank gap
-      c.fillStyle = isNight ? '#1a0e04' : '#4a2a0a';
-      c.fillRect(0, y0 + plH - 3, S, 3);
+      c.fillStyle = isNight ? '#12080200' : '#3a1e0a';
+      c.fillStyle = isNight ? '#1a0c04' : '#3a1e0a';
+      c.fillRect(0, y0 + plankH - 2, S, 2);
     }
+
   } else if (type === 'grass') {
-    c.fillStyle = isNight ? '#1a3018' : '#3d7a30';
+    // Rich green base with colour variation
+    c.fillStyle = isNight ? '#1c3818' : '#4a8838';
     c.fillRect(0, 0, S, S);
-    // colour variation patches
-    for (let i = 0; i < 30; i++) {
-      const x = rng(S), y = rng(S), r = 12 + rng(40);
-      const grd = c.createRadialGradient(x, y, 0, x, y, r);
-      const dk = isNight ? 10 : 20;
-      grd.addColorStop(0, `rgba(${dk},${dk + 55},${dk},0.35)`);
-      grd.addColorStop(1, 'rgba(0,0,0,0)');
-      c.fillStyle = grd;
-      c.beginPath(); c.arc(x, y, r, 0, Math.PI * 2); c.fill();
+    // Darker/lighter patches
+    for (let i = 0; i < 60; i++) {
+      const x = rng(S), y = rng(S), r = 8 + rng(28);
+      const bright = rng() > 0.5;
+      c.beginPath();
+      c.arc(x, y, r, 0, Math.PI * 2);
+      c.fillStyle = bright
+        ? `rgba(80,160,50,0.22)`
+        : `rgba(20,50,15,0.22)`;
+      c.fill();
     }
-    // grass blades
-    for (let i = 0; i < 200; i++) {
-      const x = rng(S), y = rng(S), len = 2 + rng(7);
-      const a = -Math.PI / 2 + (rng() - 0.5) * 1.2;
+    // Dense short grass blades
+    for (let i = 0; i < 900; i++) {
+      const x = rng(S), y = rng(S);
+      const len = 3 + rng(8);
+      const a = -Math.PI * 0.5 + (rng() - 0.5) * 1.4;
+      const g = isNight ? 40 + rng(30) : 80 + rng(60);
       c.beginPath();
       c.moveTo(x, y);
       c.lineTo(x + Math.cos(a) * len, y + Math.sin(a) * len);
-      c.strokeStyle = isNight ? `rgba(30,65,22,0.55)` : `rgba(50,115,35,0.55)`;
+      c.strokeStyle = `rgba(${isNight ? 20 : 40},${g},${isNight ? 15 : 25},0.65)`;
       c.lineWidth = 1;
       c.stroke();
     }
+
   } else {
-    // concrete
-    c.fillStyle = isNight ? '#383838' : '#9e9e94';
+    // Concrete — smooth with fine surface and clear expansion joints
+    const base = isNight ? 60 : 185;
+    c.fillStyle = `rgb(${base},${base},${base - 4})`;
     c.fillRect(0, 0, S, S);
-    for (let i = 0; i < 800; i++) {
-      const v = isNight ? 40 + rng(18) : 140 + rng(25);
-      c.fillStyle = `rgba(${v},${v},${v - 4},0.28)`;
-      c.fillRect(rng(S), rng(S), 2, 2);
+    // Fine surface texture (subtle)
+    for (let i = 0; i < 2500; i++) {
+      const v = isNight ? base - 12 + rng(24) : base - 20 + rng(40);
+      c.fillStyle = `rgba(${v},${v},${v},0.35)`;
+      c.fillRect(rng(S), rng(S), 1 + rng(2), 1 + rng(2));
     }
+    // Expansion joints every 128 px — clear, dark lines
     const jS = 128;
-    c.strokeStyle = isNight ? '#282828' : '#8a8a80';
+    c.strokeStyle = isNight ? '#282828' : '#909088';
     c.lineWidth = 2;
     for (let x = jS; x < S; x += jS) { c.beginPath(); c.moveTo(x, 0); c.lineTo(x, S); c.stroke(); }
     for (let y = jS; y < S; y += jS) { c.beginPath(); c.moveTo(0, y); c.lineTo(S, y); c.stroke(); }
+    // Inner highlight (very subtle slab differentiation)
+    c.strokeStyle = isNight ? '#484848' : '#d0d0cc';
+    c.lineWidth = 0.5;
+    for (let x = jS; x < S; x += jS) { c.beginPath(); c.moveTo(x + 2, 0); c.lineTo(x + 2, S); c.stroke(); }
+    for (let y = jS; y < S; y += jS) { c.beginPath(); c.moveTo(0, y + 2); c.lineTo(S, y + 2); c.stroke(); }
   }
 
   const tex = new THREE.CanvasTexture(cv);
   tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
-  tex.repeat.set(8, 8);
   return tex;
 }
 
-function useGroundTex(type: GroundType, isNight: boolean) {
-  const [tex, setTex] = useState<THREE.CanvasTexture | null>(null);
-  useEffect(() => {
-    if (typeof document === 'undefined') return;
-    // Defer to next idle frame so UI doesn't stutter
-    const id = requestAnimationFrame(() => setTex(buildGroundTex(type, isNight)));
-    return () => cancelAnimationFrame(id);
+/** Maps ground type → real photo texture in /public/ground/ */
+const GROUND_IMG: Record<GroundType, string> = {
+  gravel:   '/ground/gravel.jpg',
+  wood:     '/ground/wood.jpg',
+  grass:    '/ground/grass.jpg',
+  concrete: '/ground/concrete.jpg',
+};
+
+function useGroundTex(type: GroundType, isNight: boolean): THREE.Texture {
+  // useMemo → synchronous, always correct type, never stale from previous selection
+  const canvasTex = useMemo(() => {
+    if (typeof document === 'undefined') return new THREE.Texture();
+    const ct = buildGroundTex(type, isNight);
+    ct.wrapS = ct.wrapT = THREE.RepeatWrapping;
+    ct.repeat.set(36, 36); // ~3.3 m per tile across 120 m ground
+    return ct;
   }, [type, isNight]);
-  return tex;
+
+  // Optionally replace with a real photo from /public/ground/*.jpg
+  const [photoTex, setPhotoTex] = useState<THREE.Texture | null>(null);
+  useEffect(() => {
+    setPhotoTex(null);
+    let active = true;
+    new THREE.TextureLoader().load(GROUND_IMG[type], (t) => {
+      if (!active) return;
+      t.wrapS = t.wrapT = THREE.RepeatWrapping;
+      t.repeat.set(36, 36);
+      setPhotoTex(t);
+    });
+    return () => { active = false; };
+  }, [type]);
+
+  return photoTex ?? canvasTex;
 }
 
 function Garden({ ground, isNight }: { ground: GroundType; isNight: boolean }) {
-  const lawn = isNight ? '#1a2e18' : '#357030';
-  const tex  = useGroundTex(ground, isNight);
-
+  const tex = useGroundTex(ground, isNight);
   return (
-    <>
-      {/* Geniş arka çim */}
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.001, 0]} receiveShadow>
-        <planeGeometry args={[80, 80]} />
-        <meshStandardMaterial color={lawn} roughness={0.9} />
-      </mesh>
-      {/* Yakın zemin — doku ile */}
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.001, 0]} receiveShadow>
-        <planeGeometry args={[24, 24]} />
-        <meshStandardMaterial map={tex ?? undefined} color={tex ? undefined : groundColor(ground, isNight)} roughness={0.88} />
-      </mesh>
-    </>
+    <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, 0]} receiveShadow>
+      <planeGeometry args={[120, 120]} />
+      <meshStandardMaterial
+        key={tex.uuid}
+        map={tex}
+        roughness={0.9}
+      />
+    </mesh>
   );
 }
 
@@ -943,7 +981,6 @@ function Pool({ config }: { config: PoolConfig }) {
         halfW={halfW}
         halfL={halfL}
         top={top}
-        segments={config.panelSegments}
         config={config}
         frame={frame}
       />
@@ -953,14 +990,13 @@ function Pool({ config }: { config: PoolConfig }) {
         halfW={halfW}
         halfL={halfL}
         top={top}
-        segments={config.panelSegments}
         color={frame}
       />
 
       {/* 4 corner posts */}
       <CornerPosts halfW={halfW} halfL={halfL} top={top} color={frame} />
 
-      {/* Bottom + top frame beams (decorative trim) */}
+      {/* Bottom + top frame beams */}
       <FrameBeams w={w} l={l} halfW={halfW} halfL={halfL} top={top} color={frame} />
 
       {/* Wood coping */}
@@ -994,14 +1030,16 @@ function Pool({ config }: { config: PoolConfig }) {
       {/* Stainless steel waterfall feature (optional) */}
       {config.waterfall && <Waterfall halfL={halfL} top={top} />}
 
-      {/* In-pool ladder */}
-      <PoolLadder
-        halfW={halfW}
-        halfL={halfL}
-        top={top}
-        waterY={waterY}
-        platformDirection={config.platformDirection}
-      />
+      {/* In-pool ladder (optional) */}
+      {config.innerLadder && (
+        <PoolLadder
+          halfW={halfW}
+          halfL={halfL}
+          top={top}
+          waterY={waterY}
+          platformDirection={config.platformDirection}
+        />
+      )}
 
       {/* Side platform + stairs + railings */}
       <Platform
@@ -1010,7 +1048,8 @@ function Pool({ config }: { config: PoolConfig }) {
         top={top}
         direction={config.platformDirection}
         frameColor={frame}
-        showStairs={config.stairs}
+        showStairs
+        showRailings={config.railings}
         extended={config.platformExtension}
       />
     </group>
@@ -1050,29 +1089,30 @@ function Mullions({
   halfW,
   halfL,
   top,
-  segments,
   color,
 }: {
   halfW: number;
   halfL: number;
   top: number;
-  segments: number;
   color: string;
 }) {
-  if (segments <= 1) return null;
-  const panelHeight = top - COPING_T - BASIN_FLOOR;
-  const yMid = BASIN_FLOOR + panelHeight / 2;
+  const panelHeight = PANEL_H;
+  const yMid = BASIN_FLOOR + PANEL_H / 2;
   const mullionT = 0.07;
   const mullionD = 0.09; // depth into the wall (slightly more than panel)
-  const w = halfW * 2;
-  const l = halfL * 2;
+  const innerW = halfW * 2 - FRAME_T * 2;
+  const innerL = halfL * 2 - FRAME_T * 2;
+  const segsX = Math.max(1, Math.round(innerW / PANEL_W)); // north/south walls
+  const segsZ = Math.max(1, Math.round(innerL / PANEL_W)); // east/west walls
 
-  // Distribute (segments - 1) mullions evenly along each side.
+  // Distribute (segs - 1) mullions evenly along each side.
   const offsetsX: number[] = [];
   const offsetsZ: number[] = [];
-  for (let i = 1; i < segments; i++) {
-    offsetsX.push(-halfW + (i / segments) * w);
-    offsetsZ.push(-halfL + (i / segments) * l);
+  for (let i = 1; i < segsX; i++) {
+    offsetsX.push(-halfW + FRAME_T + (i / segsX) * innerW);
+  }
+  for (let i = 1; i < segsZ; i++) {
+    offsetsZ.push(-halfL + FRAME_T + (i / segsZ) * innerL);
   }
 
   return (
@@ -1110,23 +1150,23 @@ function Mullions({
 function SidePanels({
   halfW,
   halfL,
-  top,
-  segments,
+  top: _top,
   config,
   frame,
 }: {
   halfW: number;
   halfL: number;
   top: number;
-  segments: number;
   config: PoolConfig;
   frame: string;
 }) {
-  const panelHeight = top - COPING_T - BASIN_FLOOR;
-  const yMid = BASIN_FLOOR + panelHeight / 2;
+  const claddingTex = useCladdingTexture(config.cladding);
+  const inner = claddingColor(config.cladding);
+  const panelHeight = PANEL_H;
+  const yMid = BASIN_FLOOR + PANEL_H / 2;
   const innerW = halfW * 2 - FRAME_T * 2;
   const innerL = halfL * 2 - FRAME_T * 2;
-  const segGap = 0.02; // tiny visual gap between segments
+  const segGap = 0.02;
 
   // Map of side → wall geometry parameters
   // axis === 'x' means the wall extends along X axis (north/south walls)
@@ -1147,6 +1187,8 @@ function SidePanels({
   return (
     <group>
       {sides.flatMap((side) => {
+        // Number of panels per side: fixed 2.40 m panel width
+        const segments = Math.max(1, Math.round(side.spanInner / PANEL_W));
         const segLen = side.spanInner / segments;
         return Array.from({ length: segments }, (_, i) => {
           const type = getPanelType(config, side.name, i);
@@ -2176,6 +2218,7 @@ function Platform({
   direction,
   frameColor,
   showStairs = true,
+  showRailings = true,
   extended = true,
 }: {
   halfW: number;
@@ -2184,6 +2227,7 @@ function Platform({
   direction: PlatformDirection;
   frameColor: string;
   showStairs?: boolean;
+  showRailings?: boolean;
   extended?: boolean;
 }) {
   const wood = '#b8853f';
@@ -2236,15 +2280,17 @@ function Platform({
       {/* Support legs at outer corners */}
       <PlatformLegs pw={pw} pd={pd} top={top - deckThickness} color={frameColor} />
 
-      {/* Railings: outer + 1 short side opposite the stairs */}
-      <PlatformRailings
-        pw={pw}
-        pd={pd}
-        deckTop={top}
-        direction={direction}
-        color={frameColor}
-        showStairs={showStairs}
-      />
+      {/* Railings: outer + 1 short side opposite the stairs (optional) */}
+      {showRailings && (
+        <PlatformRailings
+          pw={pw}
+          pd={pd}
+          deckTop={top}
+          direction={direction}
+          color={frameColor}
+          showStairs={showStairs}
+        />
+      )}
 
       {/* Stairs descending from one corner (optional) */}
       {showStairs && (
@@ -2789,18 +2835,18 @@ function Waterfall({
 }
 
 function groundColor(g: GroundType, isNight = false): string {
-  const day = {
-    gravel: '#b0b0a8',
-    wood: '#8a5a2d',
-    grass: '#4ea24e',
-    concrete: '#cfd1d4',
-  } as const;
-  const night = {
-    gravel: '#5a5a52',
-    wood: '#4a3018',
-    grass: '#1f4a1f',
-    concrete: '#5a5d62',
-  } as const;
+  const day: Record<GroundType, string> = {
+    gravel:   '#9e9a8e',
+    wood:     '#b87c3a',
+    grass:    '#4a8c3f',
+    concrete: '#c8c8c4',
+  };
+  const night: Record<GroundType, string> = {
+    gravel:   '#4a4840',
+    wood:     '#4a2e12',
+    grass:    '#1a3a18',
+    concrete: '#484a4e',
+  };
   return (isNight ? night : day)[g];
 }
 

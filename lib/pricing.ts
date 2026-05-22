@@ -33,7 +33,6 @@ const CLADDING_PRICES = {
 const LIGHTING_PRICE = 9000;
 const WATERFALL_PRICE = 25000;
 const PLATFORM_BASE_PRICE = 35000; // her zaman dahil
-const SEGMENT_PRICE_PER_EXTRA = 3500; // her ek bölme için
 
 export interface PriceBreakdown {
   base: number;
@@ -54,9 +53,8 @@ export function calculateBasePrice(config: PoolConfig): PriceBreakdown {
   const base = Math.round(area * BASE_PER_SQM);
   const frame = FRAME_PRICES[config.frameColor];
   const counts = countPanels(config);
-  const segmentExtra = Math.max(0, config.panelSegments - 1) * SEGMENT_PRICE_PER_EXTRA;
   const panel =
-    counts.glass * GLASS_PER_PANEL + counts.closed * CLOSED_PER_PANEL + segmentExtra;
+    counts.glass * GLASS_PER_PANEL + counts.closed * CLOSED_PER_PANEL;
   const ground = GROUND_PRICES[config.ground];
   const cladding = CLADDING_PRICES[config.cladding];
   const platform = PLATFORM_BASE_PRICE;

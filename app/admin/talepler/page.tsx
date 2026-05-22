@@ -31,7 +31,7 @@ function configSummary(cfg: Record<string, unknown>) {
     { label: 'Boyut',          value: `${w} × ${l} m` },
     { label: 'Çerçeve',        value: CONFIG_LABELS.frameColor[String(cfg.frameColor ?? '')] ?? String(cfg.frameColor ?? '') },
     { label: 'Panel',          value: CONFIG_LABELS.panel[String(cfg.panel ?? '')] ?? String(cfg.panel ?? '') },
-    { label: 'Bölme Sayısı',   value: String(cfg.panelSegments ?? '') },
+    { label: 'Panel Boyutu',   value: '240×120 cm (otomatik)' },
     { label: 'Zemin',          value: CONFIG_LABELS.ground[String(cfg.ground ?? '')] ?? String(cfg.ground ?? '') },
     { label: 'Kaplama',        value: CONFIG_LABELS.cladding[String(cfg.cladding ?? '')] ?? String(cfg.cladding ?? '') },
     { label: 'Işıklandırma',   value: lighting?.enabled ? `Açık (${(lighting.color ?? '').toUpperCase()})` : 'Kapalı' },
