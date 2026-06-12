@@ -1,1 +1,106 @@
-{"nav":{"home":"Inicio","products":"Productos","create":"Diseñar piscina","faq":"FAQ","contact":"Contacto","gallery":"Galería","catalogs":"Catálogos","adminLogin":"Acceso Admin","startDesign":"Empezar diseño","logout":"Cerrar sesión","adminPanel":"Panel Admin","menu":"Menú"},"hero":{"title":"Piscinas Caretta Innovadoras","subtitle":"¡Sumérgete en el Lujo!","description":"¿Listo para transformar su espacio con una piscina Caretta de última tecnología? Cree su propia piscina y entre en el mundo del lujo.","cta":"Crear su propia piscina"},"quote":{"title":"Solicitar presupuesto","subtitle":"Nuestro equipo le contactará lo antes posible.","name":"Nombre completo","email":"Correo electrónico","phone":"Teléfono","send":"Enviar solicitud","sending":"Enviando…","success":"¡Su solicitud ha sido recibida!","getQuote":"Obtener presupuesto","required":"* campo obligatorio"},"contact":{"title":"Contacto","subtitle":"Contáctenos","description":"Contáctenos para información o presupuesto.","phone":"Llámenos","email":"Correo","address":"Oficina central","social":"Redes sociales","send":"Enviar","messagePlaceholder":"Su mensaje","namePlaceholder":"Su nombre","phonePlaceholder":"+34 6__ ___ __ __","emailPlaceholder":"ejemplo@mail.es"},"catalog":{"title":"Catálogos","subtitle":"Documentos","description":"Vea nuestros modelos de piscinas en PDF.","preview":"VISTA PREVIA"},"gallery":{"title":"Galería","subtitle":"Proyectos completados","description":"Fotos de proyectos en jardines y espacios vitales.","all":"Todos","pool":"Piscina","fair":"Feria","factory":"Fábrica","photos":"fotos"},"faq":{"title":"FAQ","subtitle":"Preguntas frecuentes","description":"Respuestas rápidas a sus preguntas."},"configurator":{"resetView":"Restablecer vista","summary":"Resumen","customerPrice":"Precio cliente","dealerPrice":"Precio distribuidor","subtotal":"Subtotal","total":"Total","discount":"Descuento distribuidor","size":"Tamaño","frame":"Marco","panel":"Panel","lighting":"Iluminación","waterfall":"Cascada","ground":"Tipo de suelo","cladding":"Revestimiento interior","open":"Activado","closed":"Desactivado","none":"Ninguno","yes":"Sí","next":"Siguiente →","prev":"← Anterior","hideHelp":"Ocultar ayuda","help":"Ayuda"},"footer":{"description":"Soluciones de piscinas modulares de lujo y sostenibles.","pages":"Páginas","contact":"Contacto","rights":"Todos los derechos reservados."}}
+﻿{
+    "nav":  {
+                "home":  "Inicio",
+                "products":  "Productos",
+                "create":  "Diseñar piscina",
+                "faq":  "FAQ",
+                "contact":  "Contacto",
+                "gallery":  "Galería",
+                "catalogs":  "Catálogos",
+                "adminLogin":  "Acceso Admin",
+                "startDesign":  "Empezar diseño",
+                "logout":  "Cerrar sesión",
+                "adminPanel":  "Panel Admin",
+                "menu":  "Menú"
+            },
+    "hero":  {
+                 "title":  "Piscinas Caretta Innovadoras",
+                 "subtitle":  "¡Sumérgete en el Lujo!",
+                 "description":  "¿Listo para transformar su espacio con una piscina Caretta de última tecnología? Cree su propia piscina y entre en el mundo del lujo.",
+                 "cta":  "Crear su propia piscina"
+             },
+    "quote":  {
+                  "title":  "Solicitar presupuesto",
+                  "subtitle":  "Nuestro equipo le contactará lo antes posible.",
+                  "name":  "Nombre completo",
+                  "email":  "Correo electrónico",
+                  "phone":  "Teléfono",
+                  "send":  "Enviar solicitud",
+                  "sending":  "Enviando…",
+                  "success":  "¡Su solicitud ha sido recibida!",
+                  "getQuote":  "Obtener presupuesto",
+                  "required":  "* campo obligatorio"
+              },
+    "contact":  {
+                    "title":  "Contacto",
+                    "subtitle":  "Contáctenos",
+                    "description":  "Contáctenos para información o presupuesto.",
+                    "phone":  "Llámenos",
+                    "email":  "Correo",
+                    "address":  "Oficina central",
+                    "social":  "Redes sociales",
+                    "send":  "Enviar",
+                    "messagePlaceholder":  "Su mensaje",
+                    "namePlaceholder":  "Su nombre",
+                    "phonePlaceholder":  "+34 6__ ___ __ __",
+                    "emailPlaceholder":  "ejemplo@mail.es"
+                },
+    "catalog":  {
+                    "title":  "Catálogos",
+                    "subtitle":  "Documentos",
+                    "description":  "Vea nuestros modelos de piscinas en PDF.",
+                    "preview":  "VISTA PREVIA",
+                    "empty":  "No se han añadido catálogos todavía."
+                },
+    "gallery":  {
+                    "title":  "Galería",
+                    "subtitle":  "Proyectos completados",
+                    "description":  "Fotos de proyectos en jardines y espacios vitales.",
+                    "all":  "Todos",
+                    "pool":  "Piscina",
+                    "fair":  "Feria",
+                    "factory":  "Fábrica",
+                    "photos":  "fotos"
+                },
+    "faq":  {
+                "title":  "FAQ",
+                "subtitle":  "Preguntas frecuentes",
+                "description":  "Respuestas rápidas a sus preguntas.",
+                "empty":  "No se han añadido preguntas todavía."
+            },
+    "configurator":  {
+                         "resetView":  "Restablecer vista",
+                         "summary":  "Resumen",
+                         "customerPrice":  "Precio cliente",
+                         "dealerPrice":  "Precio distribuidor",
+                         "subtotal":  "Subtotal",
+                         "total":  "Total",
+                         "discount":  "Descuento distribuidor",
+                         "size":  "Tamaño",
+                         "frame":  "Marco",
+                         "panel":  "Panel",
+                         "lighting":  "Iluminación",
+                         "waterfall":  "Cascada",
+                         "ground":  "Tipo de suelo",
+                         "cladding":  "Revestimiento interior",
+                         "open":  "Activado",
+                         "closed":  "Desactivado",
+                         "none":  "Ninguno",
+                         "yes":  "Sí",
+                         "next":  "Siguiente →",
+                         "prev":  "← Anterior",
+                         "hideHelp":  "Ocultar ayuda",
+                         "help":  "Ayuda"
+                     },
+    "footer":  {
+                   "description":  "Soluciones de piscinas modulares de lujo y sostenibles.",
+                   "pages":  "Páginas",
+                   "contact":  "Contacto",
+                   "rights":  "Todos los derechos reservados."
+               },
+    "products":  {
+                     "heading":  "Imagínese junto a la piscina, disfrutando del sol y de la tranquilidad de su propia piscina.",
+                     "desc":  "Con Caretta Pool, este sueño ahora es realidad. Explore nuestros paquetes y encuentre la mejor opción.",
+                     "cta":  "Diseñe su piscina"
+                 }
+}

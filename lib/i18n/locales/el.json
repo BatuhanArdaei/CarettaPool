@@ -1,1 +1,106 @@
-{"nav":{"home":"Αρχική","products":"Προϊόντα","create":"Σχεδίαση πισίνας","faq":"FAQ","contact":"Επικοινωνία","gallery":"Γκαλερί","catalogs":"Κατάλογοι","adminLogin":"Admin","startDesign":"Έναρξη σχεδίου","logout":"Αποσύνδεση","adminPanel":"Admin Panel","menu":"Menu"},"hero":{"title":"Καινοτόμες Πισίνες Caretta","subtitle":"Βουτήξτε στην Πολυτέλεια!","description":"","cta":"Δημιουργήστε τη δική σας πισίνα"},"quote":{"title":"Quote","subtitle":"","name":"Name","email":"Email","phone":"Phone","send":"Send","sending":"Sending…","success":"Received!","getQuote":"Get Quote","required":"* required"},"contact":{"title":"Επικοινωνία","subtitle":"","description":"","phone":"Phone","email":"Email","address":"Address","social":"Social","send":"Send","messagePlaceholder":"Message","namePlaceholder":"Name","phonePlaceholder":"+30 6__ ___ __ __","emailPlaceholder":"email@mail.com"},"catalog":{"title":"Κατάλογοι","subtitle":"","description":"","preview":"PREVIEW"},"gallery":{"title":"Γκαλερί","subtitle":"","description":"","all":"All","pool":"Pool","fair":"Fair","factory":"Factory","photos":"photos"},"faq":{"title":"FAQ","subtitle":"","description":""},"configurator":{"resetView":"Reset","summary":"Summary","customerPrice":"Price","dealerPrice":"Dealer Price","subtotal":"Subtotal","total":"Σύνολο","discount":"Discount","size":"Size","frame":"Frame","panel":"Panel","lighting":"Lighting","waterfall":"Waterfall","ground":"Ground","cladding":"Cladding","open":"On","closed":"Off","none":"None","yes":"Yes","next":"Επόμενο →","prev":"← Προηγούμενο","hideHelp":"Hide help","help":"Help"},"footer":{"description":"Luxury modular pool solutions.","pages":"Pages","contact":"Επικοινωνία","rights":"All rights reserved."}}
+﻿{
+    "nav":  {
+                "home":  "Αρχική",
+                "products":  "Προϊόντα",
+                "create":  "Σχεδίαση πισίνας",
+                "faq":  "FAQ",
+                "contact":  "Επικοινωνία",
+                "gallery":  "Γκαλερί",
+                "catalogs":  "Κατάλογοι",
+                "adminLogin":  "Admin",
+                "startDesign":  "Έναρξη σχεδίου",
+                "logout":  "Αποσύνδεση",
+                "adminPanel":  "Admin Panel",
+                "menu":  "Menu"
+            },
+    "hero":  {
+                 "title":  "Καινοτόμες Πισίνες Caretta",
+                 "subtitle":  "Βουτήξτε στην Πολυτέλεια!",
+                 "description":  "",
+                 "cta":  "Δημιουργήστε τη δική σας πισίνα"
+             },
+    "quote":  {
+                  "title":  "Quote",
+                  "subtitle":  "",
+                  "name":  "Name",
+                  "email":  "Email",
+                  "phone":  "Phone",
+                  "send":  "Send",
+                  "sending":  "Sending…",
+                  "success":  "Received!",
+                  "getQuote":  "Get Quote",
+                  "required":  "* required"
+              },
+    "contact":  {
+                    "title":  "Επικοινωνία",
+                    "subtitle":  "",
+                    "description":  "",
+                    "phone":  "Phone",
+                    "email":  "Email",
+                    "address":  "Address",
+                    "social":  "Social",
+                    "send":  "Send",
+                    "messagePlaceholder":  "Message",
+                    "namePlaceholder":  "Name",
+                    "phonePlaceholder":  "+30 6__ ___ __ __",
+                    "emailPlaceholder":  "email@mail.com"
+                },
+    "catalog":  {
+                    "title":  "Κατάλογοι",
+                    "subtitle":  "",
+                    "description":  "",
+                    "preview":  "PREVIEW",
+                    "empty":  "No catalogs have been added yet."
+                },
+    "gallery":  {
+                    "title":  "Γκαλερί",
+                    "subtitle":  "",
+                    "description":  "",
+                    "all":  "All",
+                    "pool":  "Pool",
+                    "fair":  "Fair",
+                    "factory":  "Factory",
+                    "photos":  "photos"
+                },
+    "faq":  {
+                "title":  "FAQ",
+                "subtitle":  "",
+                "description":  "",
+                "empty":  "No questions have been added yet."
+            },
+    "configurator":  {
+                         "resetView":  "Reset",
+                         "summary":  "Summary",
+                         "customerPrice":  "Price",
+                         "dealerPrice":  "Dealer Price",
+                         "subtotal":  "Subtotal",
+                         "total":  "Σύνολο",
+                         "discount":  "Discount",
+                         "size":  "Size",
+                         "frame":  "Frame",
+                         "panel":  "Panel",
+                         "lighting":  "Lighting",
+                         "waterfall":  "Waterfall",
+                         "ground":  "Ground",
+                         "cladding":  "Cladding",
+                         "open":  "On",
+                         "closed":  "Off",
+                         "none":  "None",
+                         "yes":  "Yes",
+                         "next":  "Επόμενο →",
+                         "prev":  "← Προηγούμενο",
+                         "hideHelp":  "Hide help",
+                         "help":  "Help"
+                     },
+    "footer":  {
+                   "description":  "Luxury modular pool solutions.",
+                   "pages":  "Pages",
+                   "contact":  "Επικοινωνία",
+                   "rights":  "All rights reserved."
+               },
+    "products":  {
+                     "heading":  "Imagine yourself by the pool, soaking up the sun and enjoying the tranquility of your very own pool.",
+                     "desc":  "With Caretta Pool, this dream is now a reality. Explore our different packages and find the best option.",
+                     "cta":  "Design Your Pool"
+                 }
+}

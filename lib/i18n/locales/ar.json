@@ -1,1 +1,106 @@
-{"nav":{"home":"الرئيسية","products":"المنتجات","create":"تصميم حمام السباحة","faq":"FAQ","contact":"تواصل معنا","gallery":"المعرض","catalogs":"الكتالوجات","adminLogin":"Admin","startDesign":"ابدأ التصميم","logout":"تسجيل الخروج","adminPanel":"Admin Panel","menu":"Menu"},"hero":{"title":"حمامات سباحة كاريتا المبتكرة","subtitle":"انغمس في الفخامة!","description":"","cta":"أنشئ حمام سباحتك"},"quote":{"title":"Quote","subtitle":"","name":"Name","email":"Email","phone":"Phone","send":"Send","sending":"Sending…","success":"Received!","getQuote":"Get Quote","required":"* required"},"contact":{"title":"تواصل معنا","subtitle":"","description":"","phone":"Phone","email":"Email","address":"Address","social":"Social","send":"Send","messagePlaceholder":"Message","namePlaceholder":"Name","phonePlaceholder":"+966 5__ ___ __ __","emailPlaceholder":"email@mail.com"},"catalog":{"title":"الكتالوجات","subtitle":"","description":"","preview":"PREVIEW"},"gallery":{"title":"المعرض","subtitle":"","description":"","all":"All","pool":"Pool","fair":"Fair","factory":"Factory","photos":"photos"},"faq":{"title":"FAQ","subtitle":"","description":""},"configurator":{"resetView":"Reset","summary":"Summary","customerPrice":"Price","dealerPrice":"Dealer Price","subtotal":"Subtotal","total":"المجموع","discount":"Discount","size":"Size","frame":"Frame","panel":"Panel","lighting":"Lighting","waterfall":"Waterfall","ground":"Ground","cladding":"Cladding","open":"On","closed":"Off","none":"None","yes":"Yes","next":"التالي →","prev":"← السابق","hideHelp":"Hide help","help":"Help"},"footer":{"description":"Luxury modular pool solutions.","pages":"Pages","contact":"تواصل معنا","rights":"All rights reserved."}}
+﻿{
+    "nav":  {
+                "home":  "الرئيسية",
+                "products":  "المنتجات",
+                "create":  "تصميم حمام السباحة",
+                "faq":  "FAQ",
+                "contact":  "تواصل معنا",
+                "gallery":  "المعرض",
+                "catalogs":  "الكتالوجات",
+                "adminLogin":  "Admin",
+                "startDesign":  "ابدأ التصميم",
+                "logout":  "تسجيل الخروج",
+                "adminPanel":  "Admin Panel",
+                "menu":  "Menu"
+            },
+    "hero":  {
+                 "title":  "حمامات سباحة كاريتا المبتكرة",
+                 "subtitle":  "انغمس في الفخامة!",
+                 "description":  "",
+                 "cta":  "أنشئ حمام سباحتك"
+             },
+    "quote":  {
+                  "title":  "Quote",
+                  "subtitle":  "",
+                  "name":  "Name",
+                  "email":  "Email",
+                  "phone":  "Phone",
+                  "send":  "Send",
+                  "sending":  "Sending…",
+                  "success":  "Received!",
+                  "getQuote":  "Get Quote",
+                  "required":  "* required"
+              },
+    "contact":  {
+                    "title":  "تواصل معنا",
+                    "subtitle":  "",
+                    "description":  "",
+                    "phone":  "Phone",
+                    "email":  "Email",
+                    "address":  "Address",
+                    "social":  "Social",
+                    "send":  "Send",
+                    "messagePlaceholder":  "Message",
+                    "namePlaceholder":  "Name",
+                    "phonePlaceholder":  "+966 5__ ___ __ __",
+                    "emailPlaceholder":  "email@mail.com"
+                },
+    "catalog":  {
+                    "title":  "الكتالوجات",
+                    "subtitle":  "",
+                    "description":  "",
+                    "preview":  "PREVIEW",
+                    "empty":  "لم تتم إضافة أي كتالوجات بعد."
+                },
+    "gallery":  {
+                    "title":  "المعرض",
+                    "subtitle":  "",
+                    "description":  "",
+                    "all":  "All",
+                    "pool":  "Pool",
+                    "fair":  "Fair",
+                    "factory":  "Factory",
+                    "photos":  "photos"
+                },
+    "faq":  {
+                "title":  "FAQ",
+                "subtitle":  "",
+                "description":  "",
+                "empty":  "لم تتم إضافة أي أسئلة بعد."
+            },
+    "configurator":  {
+                         "resetView":  "Reset",
+                         "summary":  "Summary",
+                         "customerPrice":  "Price",
+                         "dealerPrice":  "Dealer Price",
+                         "subtotal":  "Subtotal",
+                         "total":  "المجموع",
+                         "discount":  "Discount",
+                         "size":  "Size",
+                         "frame":  "Frame",
+                         "panel":  "Panel",
+                         "lighting":  "Lighting",
+                         "waterfall":  "Waterfall",
+                         "ground":  "Ground",
+                         "cladding":  "Cladding",
+                         "open":  "On",
+                         "closed":  "Off",
+                         "none":  "None",
+                         "yes":  "Yes",
+                         "next":  "التالي →",
+                         "prev":  "← السابق",
+                         "hideHelp":  "Hide help",
+                         "help":  "Help"
+                     },
+    "footer":  {
+                   "description":  "Luxury modular pool solutions.",
+                   "pages":  "Pages",
+                   "contact":  "تواصل معنا",
+                   "rights":  "All rights reserved."
+               },
+    "products":  {
+                     "heading":  "تخيل نفسك بجانب حمام السباحة، تستمتع بأشعة الشمس وهدوء حمام السباحة الخاص بك.",
+                     "desc":  "مع Caretta Pool، هذا الحلم أصبح حقيقة. استكشف باقاتنا المختلفة وجد الخيار الأفضل.",
+                     "cta":  "صمم حمام سباحتك"
+                 }
+}

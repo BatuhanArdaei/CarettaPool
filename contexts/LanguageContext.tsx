@@ -14,14 +14,12 @@ type Translations = Record<string, Record<string, string>>;
 
 interface LanguageContextValue {
   lang: LangCode;
-  setLang: (code: LangCode) => void;
   t: (key: string) => string;
   dir: 'ltr' | 'rtl';
 }
 
 const LanguageContext = createContext<LanguageContextValue>({
   lang: 'tr',
-  setLang: () => {},
   t: (k) => k,
   dir: 'ltr',
 });
@@ -38,37 +36,41 @@ async function loadTranslations(code: LangCode): Promise<Translations> {
   }
 }
 
-export function LanguageProvider({ children }: { children: ReactNode }) {
-  const [lang, setLangState] = useState<LangCode>('tr');
-  const [translations, setTranslations] = useState<Translations>({});
+export function LanguageProvider({
+  lang,
+  initialMessages,
+  children,
+}: {
+  lang: LangCode;
+  initialMessages?: Translations;
+  children: ReactNode;
+}) {
+  // Server provides initialMessages so first paint has translations (no flash)
+  const [translations, setTranslations] = useState<Translations>(initialMessages ?? {});
 
   useEffect(() => {
-    const stored = (localStorage.getItem('lang') as LangCode) || 'tr';
-    setLangState(stored);
-    loadTranslations(stored).then(setTranslations);
-  }, []);
+    // On client nav (lang switch), reload for the new lang.
+    // Module cache makes repeat loads for the same lang instant.
+    loadTranslations(lang).then(setTranslations);
+    document.documentElement.lang = lang;
+    document.documentElement.dir = RTL_LANGS.includes(lang) ? 'rtl' : 'ltr';
+  }, [lang]);
 
-  const setLang = useCallback((code: LangCode) => {
-    setLangState(code);
-    localStorage.setItem('lang', code);
-    loadTranslations(code).then(setTranslations);
-    // RTL support
-    document.documentElement.dir = RTL_LANGS.includes(code) ? 'rtl' : 'ltr';
-    document.documentElement.lang = code;
-  }, []);
+  const t = useCallback(
+    (key: string): string => {
+      const parts = key.split('.');
+      if (parts.length === 2) {
+        return translations[parts[0]]?.[parts[1]] ?? key;
+      }
+      return key;
+    },
+    [translations],
+  );
 
-  const t = useCallback((key: string): string => {
-    const parts = key.split('.');
-    if (parts.length === 2) {
-      return translations[parts[0]]?.[parts[1]] ?? key;
-    }
-    return key;
-  }, [translations]);
-
-  const dir = RTL_LANGS.includes(lang) ? 'rtl' : 'ltr';
+  const dir: 'ltr' | 'rtl' = RTL_LANGS.includes(lang) ? 'rtl' : 'ltr';
 
   return (
-    <LanguageContext.Provider value={{ lang, setLang, t, dir }}>
+    <LanguageContext.Provider value={{ lang, t, dir }}>
       {children}
     </LanguageContext.Provider>
   );

@@ -927,6 +927,58 @@ function FenceSegment({
   );
 }
 
+function OuterCladding({
+  halfW,
+  halfL,
+  config,
+  claddingTex,
+}: {
+  halfW: number;
+  halfL: number;
+  config: PoolConfig;
+  claddingTex: THREE.Texture | null;
+}) {
+  if (!claddingTex) return null;
+  const h = PANEL_H;
+  const yMid = BASIN_FLOOR + PANEL_H / 2;
+  const innerW = halfW * 2 - FRAME_T * 2;
+  const innerL = halfL * 2 - FRAME_T * 2;
+  const segGap = 0.02;
+  const sides: { name: PoolSide; axis: 'x' | 'z'; wallCoord: number; spanInner: number }[] = [
+    { name: 'south', axis: 'x', wallCoord:  halfL, spanInner: innerW },
+    { name: 'north', axis: 'x', wallCoord: -halfL, spanInner: innerW },
+    { name: 'east',  axis: 'z', wallCoord:  halfW, spanInner: innerL },
+    { name: 'west',  axis: 'z', wallCoord: -halfW, spanInner: innerL },
+  ];
+  return (
+    <group>
+      {sides.flatMap((side) => {
+        const segments = Math.max(1, Math.round(side.spanInner / PANEL_W));
+        const segLen = side.spanInner / segments;
+        return Array.from({ length: segments }, (_, i) => {
+          if (getPanelType(config, side.name, i) === 'glass') return null;
+          const center = -side.spanInner / 2 + segLen * (i + 0.5);
+          const pLen = segLen - segGap;
+          const sign = side.wallCoord > 0 ? 1 : -1;
+          const offset = sign * 0.002;
+          const position: [number, number, number] = side.axis === 'x'
+            ? [center, yMid, side.wallCoord + offset]
+            : [side.wallCoord + offset, yMid, center];
+          const rotY = side.axis === 'x'
+            ? (side.wallCoord > 0 ? 0 : Math.PI)
+            : (side.wallCoord > 0 ? Math.PI / 2 : -Math.PI / 2);
+          return (
+            <mesh key={`oc-${side.name}-${i}`} position={position} rotation={[0, rotY, 0]} castShadow receiveShadow>
+              <planeGeometry args={[pLen, h]} />
+              <meshStandardMaterial color="#ffffff" map={claddingTex} roughness={0.75} metalness={0.02} />
+            </mesh>
+          );
+        });
+      })}
+    </group>
+  );
+}
+
 function Pool({ config }: { config: PoolConfig }) {
   const w = config.width;
   const l = config.length;
@@ -955,10 +1007,7 @@ function Pool({ config }: { config: PoolConfig }) {
         receiveShadow
       >
         <planeGeometry args={[w - PANEL_T * 2 - 0.02, l - PANEL_T * 2 - 0.02]} />
-        <meshStandardMaterial
-          color={claddingTex ? '#ffffff' : inner}
-          map={claddingTex}
-        />
+        <meshStandardMaterial color={inner} />
       </mesh>
 
       {/* Animated caustics overlay on the pool floor */}
@@ -984,6 +1033,9 @@ function Pool({ config }: { config: PoolConfig }) {
         config={config}
         frame={frame}
       />
+
+      {/* Exterior cladding texture on outer faces — solid panels only */}
+      <OuterCladding halfW={halfW} halfL={halfL} config={config} claddingTex={claddingTex} />
 
       {/* Vertical mullions dividing each side into segments */}
       <Mullions
@@ -1160,7 +1212,6 @@ function SidePanels({
   config: PoolConfig;
   frame: string;
 }) {
-  const claddingTex = useCladdingTexture(config.cladding);
   const inner = claddingColor(config.cladding);
   const panelHeight = PANEL_H;
   const yMid = BASIN_FLOOR + PANEL_H / 2;
@@ -1226,8 +1277,7 @@ function SidePanels({
                 />
               ) : (
                 <meshStandardMaterial
-                  color={claddingTex ? '#ffffff' : inner}
-                  map={claddingTex ?? undefined}
+                  color={inner}
                   roughness={0.65}
                   metalness={0.05}
                 />

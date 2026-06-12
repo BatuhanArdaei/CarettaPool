@@ -1,14 +1,17 @@
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/server';
+import { localePath, type PageKey } from '@/lib/i18n/routes';
+import { getMessages, createT } from '@/lib/i18n/server';
+import type { LangCode } from '@/lib/i18n';
 
-const NAV_LINKS = [
-  { href: '/', label: 'Anasayfa' },
-  { href: '/urunler', label: 'Ürünler' },
-  { href: '/create', label: 'Havuzunu Oluştur' },
-  { href: '/sss', label: 'S.S.S' },
-  { href: '/galeri', label: 'Galeri' },
-  { href: '/kataloglar', label: 'Kataloglar' },
-  { href: '/iletisim', label: 'İletişim' },
+const NAV_PAGES: { page: PageKey | 'home' | 'create'; key: string }[] = [
+  { page: 'home',     key: 'nav.home' },
+  { page: 'products', key: 'nav.products' },
+  { page: 'create',   key: 'nav.create' },
+  { page: 'faq',      key: 'nav.faq' },
+  { page: 'gallery',  key: 'nav.gallery' },
+  { page: 'catalogs', key: 'nav.catalogs' },
+  { page: 'contact',  key: 'nav.contact' },
 ];
 
 const SOCIAL_ICONS: Record<string, React.ReactNode> = {
@@ -19,33 +22,30 @@ const SOCIAL_ICONS: Record<string, React.ReactNode> = {
   tiktok:    <svg viewBox="0 0 24 24" className="h-5 w-5" fill="currentColor"><path d="M12.525.02c1.31-.02 2.61-.01 3.91-.02.08 1.53.63 3.09 1.75 4.17 1.12 1.11 2.7 1.62 4.24 1.79v4.03c-1.44-.05-2.89-.35-4.2-.97-.57-.26-1.1-.59-1.62-.93-.01 2.92.01 5.84-.02 8.75-.08 1.4-.54 2.79-1.35 3.94-1.31 1.92-3.58 3.17-5.91 3.21-1.43.08-2.86-.31-4.08-1.03-2.02-1.19-3.44-3.37-3.65-5.71-.02-.5-.03-1-.01-1.49.18-1.9 1.12-3.72 2.58-4.96 1.66-1.44 3.98-2.13 6.15-1.72.02 1.48-.04 2.96-.04 4.44-.99-.32-2.15-.23-3.02.37-.63.41-1.11 1.04-1.36 1.75-.21.51-.15 1.07-.14 1.61.24 1.64 1.82 3.02 3.5 2.87 1.12-.01 2.19-.66 2.77-1.61.19-.33.4-.67.41-1.06.1-1.79.06-3.57.07-5.36.01-4.03-.01-8.05.02-12.07z"/></svg>,
 };
 
-export default async function Footer() {
+export default async function Footer({ lang = 'tr' }: { lang?: string }) {
   const supabase = createClient();
   const { data: rows } = await supabase
-    .from('site_settings')
-    .select('key, value')
-    .in('key', ['contact', 'social']);
+    .from('site_settings').select('key, value').in('key', ['contact', 'social']);
 
-  const contact = (rows?.find(r => r.key === 'contact')?.value ?? {}) as Record<string, unknown>;
-  const social  = (rows?.find(r => r.key === 'social')?.value ?? {}) as Record<string, string>;
-
+  const contact = (rows?.find((r) => r.key === 'contact')?.value ?? {}) as Record<string, unknown>;
+  const social  = (rows?.find((r) => r.key === 'social')?.value ?? {}) as Record<string, string>;
   const activeSocial = Object.entries(social).filter(([, v]) => v?.trim());
+
+  const msgs = await getMessages(lang as LangCode);
+  const t = createT(msgs);
 
   return (
     <footer className="bg-slate-950 text-slate-400">
       <div className="mx-auto max-w-6xl px-6 py-14">
         <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 sm:gap-8 lg:grid-cols-4 lg:gap-10">
-          {/* Brand + socials */}
+          {/* Brand */}
           <div className="lg:col-span-1">
             <p className="text-lg font-bold text-white">CarettaPool</p>
-            <p className="mt-3 text-sm leading-relaxed">
-              Lüks ve sürdürülebilir modüler havuz çözümleri.
-            </p>
+            <p className="mt-3 text-sm leading-relaxed">{t('footer.description')}</p>
             {activeSocial.length > 0 && (
               <div className="mt-5 flex flex-wrap gap-3">
                 {activeSocial.map(([k, v]) => (
-                  <a key={k} href={v} target="_blank" rel="noopener noreferrer"
-                    aria-label={k}
+                  <a key={k} href={v} target="_blank" rel="noopener noreferrer" aria-label={k}
                     className="flex h-9 w-9 items-center justify-center rounded-full bg-slate-800 text-slate-400 transition-colors hover:bg-brand-500 hover:text-white">
                     {SOCIAL_ICONS[k] ?? null}
                   </a>
@@ -56,12 +56,12 @@ export default async function Footer() {
 
           {/* Nav */}
           <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Sayfalar</p>
+            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">{t('footer.pages')}</p>
             <ul className="mt-4 space-y-2">
-              {NAV_LINKS.map(l => (
-                <li key={l.href}>
-                  <Link href={l.href} className="text-sm text-slate-400 transition-colors hover:text-white">
-                    {l.label}
+              {NAV_PAGES.map((n) => (
+                <li key={n.page}>
+                  <Link href={localePath(lang, n.page)} className="text-sm text-slate-400 transition-colors hover:text-white">
+                    {t(n.key)}
                   </Link>
                 </li>
               ))}
@@ -70,34 +70,25 @@ export default async function Footer() {
 
           {/* Contact */}
           <div className="lg:col-span-2">
-            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">İletişim</p>
+            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">{t('footer.contact')}</p>
             <div className="mt-4 space-y-3 text-sm">
-              {(contact.phones as string[] | undefined)?.filter(Boolean).map(p => (
-                <a key={p} href={`tel:${p.replace(/\s/g,'')}`}
-                  className="block text-slate-300 hover:text-white">{p}</a>
+              {(contact.phones as string[] | undefined)?.filter(Boolean).map((p) => (
+                <a key={p} href={`tel:${p.replace(/\s/g, '')}`} className="block text-slate-300 hover:text-white">{p}</a>
               ))}
-              {contact.email && (
-                <a href={`mailto:${contact.email}`} className="block text-slate-300 hover:text-white">
-                  {String(contact.email)}
-                </a>
+              {!!contact.email && (
+                <a href={`mailto:${String(contact.email)}`} className="block text-slate-300 hover:text-white">{String(contact.email)}</a>
               )}
-              {contact.address && (
-                <p className="text-slate-300">{String(contact.address)}</p>
-              )}
+              {!!contact.address && <p className="text-slate-300">{String(contact.address)}</p>}
             </div>
           </div>
         </div>
 
         <div className="mt-12 flex flex-col items-center justify-between gap-4 border-t border-slate-800 pt-8 text-xs sm:flex-row">
-          <p>© {new Date().getFullYear()} CarettaPool. Tüm hakları saklıdır.</p>
+          <p>© {new Date().getFullYear()} CarettaPool. {t('footer.rights')}</p>
           <p>
             Powered by{' '}
-            <a
-              href="https://weonix.co"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="font-semibold text-brand-400 hover:text-brand-300 transition-colors"
-            >
+            <a href="https://weonix.co" target="_blank" rel="noopener noreferrer"
+              className="font-semibold text-brand-400 hover:text-brand-300 transition-colors">
               WeOniX
             </a>
           </p>

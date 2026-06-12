@@ -3,10 +3,11 @@
 import Link from 'next/link';
 import Image from 'next/image';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { localePath } from '@/lib/i18n/routes';
 import { POOL_PRODUCTS, formatDimensions } from '@/lib/products-catalog';
 
 export default function HomeContent() {
-  const { t } = useLanguage();
+  const { t, lang } = useLanguage();
 
   return (
     <div>
@@ -34,7 +35,7 @@ export default function HomeContent() {
             <p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-500">{t('home.bizkimiz_tag')}</p>
             <h2 className="mt-4 text-3xl font-bold leading-tight text-slate-900 md:text-5xl">{t('home.bizkimiz_title')}</h2>
             <p className="mt-6 max-w-lg text-slate-500">{t('home.bizkimiz_desc')}</p>
-            <Link href="/urunler" className="mt-8 inline-flex items-center justify-center rounded-md bg-brand-500 px-7 py-3 text-sm font-medium text-white transition-colors hover:bg-brand-400">
+            <Link href={localePath(lang, 'products')} className="mt-8 inline-flex items-center justify-center rounded-md bg-brand-500 px-7 py-3 text-sm font-medium text-white transition-colors hover:bg-brand-400">
               {t('home.bizkimiz_cta')}
             </Link>
           </div>
@@ -129,7 +130,7 @@ export default function HomeContent() {
             ))}
           </div>
           <div className="mt-12 text-center">
-            <Link href="/urunler" className="inline-flex items-center justify-center rounded-md border border-slate-300 px-6 py-3 text-sm font-medium text-slate-700 transition-colors hover:border-brand-500 hover:text-brand-700">
+            <Link href={localePath(lang, 'products')} className="inline-flex items-center justify-center rounded-md border border-slate-300 px-6 py-3 text-sm font-medium text-slate-700 transition-colors hover:border-brand-500 hover:text-brand-700">
               {t('home.products_cta')}
             </Link>
           </div>
@@ -142,10 +143,10 @@ export default function HomeContent() {
           <h2 className="text-3xl font-bold md:text-4xl">{t('home.cta_title')}</h2>
           <p className="mt-4 text-white/85">{t('home.cta_desc')}</p>
           <div className="mt-8 flex flex-wrap justify-center gap-3">
-            <Link href="/create" className="inline-flex items-center justify-center rounded-md bg-white px-6 py-3 text-sm font-medium text-brand-700 transition-colors hover:bg-slate-100">
+            <Link href={localePath(lang, 'create')} className="inline-flex items-center justify-center rounded-md bg-white px-6 py-3 text-sm font-medium text-brand-700 transition-colors hover:bg-slate-100">
               {t('home.cta_btn')}
             </Link>
-            <Link href="/iletisim" className="inline-flex items-center justify-center rounded-md border border-white/40 px-6 py-3 text-sm font-medium text-white transition-colors hover:bg-white/10">
+            <Link href={localePath(lang, 'contact')} className="inline-flex items-center justify-center rounded-md border border-white/40 px-6 py-3 text-sm font-medium text-white transition-colors hover:bg-white/10">
               {t('home.cta_contact')}
             </Link>
           </div>

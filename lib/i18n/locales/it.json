@@ -1,1 +1,106 @@
-{"nav":{"home":"Home","products":"Prodotti","create":"Progetta piscina","faq":"FAQ","contact":"Contatti","gallery":"Galleria","catalogs":"Cataloghi","adminLogin":"Admin","startDesign":"Inizia design","logout":"Disconnetti","adminPanel":"Admin Panel","menu":"Menu"},"hero":{"title":"Piscine Caretta Innovative","subtitle":"Immergiti nel Lusso!","description":"","cta":"Crea la tua piscina"},"quote":{"title":"Quote","subtitle":"","name":"Name","email":"Email","phone":"Phone","send":"Send","sending":"Sending…","success":"Received!","getQuote":"Get Quote","required":"* required"},"contact":{"title":"Contatti","subtitle":"","description":"","phone":"Phone","email":"Email","address":"Address","social":"Social","send":"Send","messagePlaceholder":"Message","namePlaceholder":"Name","phonePlaceholder":"+39 3__ ___ __ __","emailPlaceholder":"email@mail.com"},"catalog":{"title":"Cataloghi","subtitle":"","description":"","preview":"PREVIEW"},"gallery":{"title":"Galleria","subtitle":"","description":"","all":"All","pool":"Pool","fair":"Fair","factory":"Factory","photos":"photos"},"faq":{"title":"FAQ","subtitle":"","description":""},"configurator":{"resetView":"Reset","summary":"Summary","customerPrice":"Price","dealerPrice":"Dealer Price","subtotal":"Subtotal","total":"Totale","discount":"Discount","size":"Size","frame":"Frame","panel":"Panel","lighting":"Lighting","waterfall":"Waterfall","ground":"Ground","cladding":"Cladding","open":"On","closed":"Off","none":"None","yes":"Yes","next":"Avanti →","prev":"← Indietro","hideHelp":"Hide help","help":"Help"},"footer":{"description":"Luxury modular pool solutions.","pages":"Pages","contact":"Contatti","rights":"All rights reserved."}}
+﻿{
+    "nav":  {
+                "home":  "Home",
+                "products":  "Prodotti",
+                "create":  "Progetta piscina",
+                "faq":  "FAQ",
+                "contact":  "Contatti",
+                "gallery":  "Galleria",
+                "catalogs":  "Cataloghi",
+                "adminLogin":  "Admin",
+                "startDesign":  "Inizia design",
+                "logout":  "Disconnetti",
+                "adminPanel":  "Admin Panel",
+                "menu":  "Menu"
+            },
+    "hero":  {
+                 "title":  "Piscine Caretta Innovative",
+                 "subtitle":  "Immergiti nel Lusso!",
+                 "description":  "",
+                 "cta":  "Crea la tua piscina"
+             },
+    "quote":  {
+                  "title":  "Quote",
+                  "subtitle":  "",
+                  "name":  "Name",
+                  "email":  "Email",
+                  "phone":  "Phone",
+                  "send":  "Send",
+                  "sending":  "Sending…",
+                  "success":  "Received!",
+                  "getQuote":  "Get Quote",
+                  "required":  "* required"
+              },
+    "contact":  {
+                    "title":  "Contatti",
+                    "subtitle":  "",
+                    "description":  "",
+                    "phone":  "Phone",
+                    "email":  "Email",
+                    "address":  "Address",
+                    "social":  "Social",
+                    "send":  "Send",
+                    "messagePlaceholder":  "Message",
+                    "namePlaceholder":  "Name",
+                    "phonePlaceholder":  "+39 3__ ___ __ __",
+                    "emailPlaceholder":  "email@mail.com"
+                },
+    "catalog":  {
+                    "title":  "Cataloghi",
+                    "subtitle":  "",
+                    "description":  "",
+                    "preview":  "PREVIEW",
+                    "empty":  "Nessun catalogo aggiunto ancora."
+                },
+    "gallery":  {
+                    "title":  "Galleria",
+                    "subtitle":  "",
+                    "description":  "",
+                    "all":  "All",
+                    "pool":  "Pool",
+                    "fair":  "Fair",
+                    "factory":  "Factory",
+                    "photos":  "photos"
+                },
+    "faq":  {
+                "title":  "FAQ",
+                "subtitle":  "",
+                "description":  "",
+                "empty":  "Nessuna domanda aggiunta ancora."
+            },
+    "configurator":  {
+                         "resetView":  "Reset",
+                         "summary":  "Summary",
+                         "customerPrice":  "Price",
+                         "dealerPrice":  "Dealer Price",
+                         "subtotal":  "Subtotal",
+                         "total":  "Totale",
+                         "discount":  "Discount",
+                         "size":  "Size",
+                         "frame":  "Frame",
+                         "panel":  "Panel",
+                         "lighting":  "Lighting",
+                         "waterfall":  "Waterfall",
+                         "ground":  "Ground",
+                         "cladding":  "Cladding",
+                         "open":  "On",
+                         "closed":  "Off",
+                         "none":  "None",
+                         "yes":  "Yes",
+                         "next":  "Avanti →",
+                         "prev":  "← Indietro",
+                         "hideHelp":  "Hide help",
+                         "help":  "Help"
+                     },
+    "footer":  {
+                   "description":  "Luxury modular pool solutions.",
+                   "pages":  "Pages",
+                   "contact":  "Contatti",
+                   "rights":  "All rights reserved."
+               },
+    "products":  {
+                     "heading":  "Immagina di stare a bordo piscina, godendoti il sole e la tranquillità della tua piscina.",
+                     "desc":  "Con Caretta Pool, questo sogno diventa realtà. Esplora i nostri pacchetti e trova l\u0027opzione migliore.",
+                     "cta":  "Progetta la tua piscina"
+                 }
+}
