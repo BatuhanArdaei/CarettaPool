@@ -48,15 +48,15 @@ export default function NavbarClient({ isAuthenticated, role }: Props) {
     <>
       <header className="fixed top-0 left-0 right-0 z-40 border-b border-slate-800/60 bg-slate-950/80 backdrop-blur-md transition-all">
         <div className="flex h-16 items-center justify-between px-0 sm:h-20 md:h-24">
-          <Link href={localePath(lang, 'home')} className="flex shrink-0 items-center pl-0" aria-label="CarettaPool">
+          <Link href={localePath(lang, 'home')} className="flex shrink-0 items-center pl-4 sm:pl-6" aria-label="CarettaPool">
             <Image
               src="/carettapool.png"
               alt="CarettaPool"
               width={600}
               height={150}
               priority
-              className="h-20 w-auto object-contain sm:h-22 md:h-24"
-              style={{ maxWidth: '320px' }}
+              className="h-14 w-auto object-contain sm:h-16 md:h-20"
+              style={{ maxWidth: '400px' }}
             />
           </Link>
 
@@ -99,7 +99,7 @@ export default function NavbarClient({ isAuthenticated, role }: Props) {
 
             <LanguageSwitcher />
 
-            {isAuthenticated ? (
+            {isAuthenticated && (
               <>
                 {role === 'admin' && (
                   <Link href="/admin"
@@ -114,11 +114,6 @@ export default function NavbarClient({ isAuthenticated, role }: Props) {
                   </button>
                 </form>
               </>
-            ) : (
-              <Link href={localePath(lang, 'login')}
-                className="rounded-lg border border-brand-600 bg-brand-600/10 px-4 py-2 text-sm font-medium text-brand-400 transition-colors hover:bg-brand-600/20">
-                {t('nav.adminLogin')}
-              </Link>
             )}
 
             {!minimal && (
@@ -159,6 +154,12 @@ export default function NavbarClient({ isAuthenticated, role }: Props) {
             className="mt-3 rounded-lg bg-brand-500 px-4 py-3 text-center text-sm font-medium text-white hover:bg-brand-400">
             {t('nav.startDesign')}
           </Link>
+          {!isAuthenticated && (
+            <Link href={localePath(lang, 'login')} onClick={() => setMenuOpen(false)}
+              className="mt-2 rounded-lg border border-brand-600 bg-brand-600/10 px-4 py-3 text-center text-sm font-medium text-brand-400 transition-colors hover:bg-brand-600/20">
+              {t('nav.adminLogin')}
+            </Link>
+          )}
         </nav>
       </div>
     </>

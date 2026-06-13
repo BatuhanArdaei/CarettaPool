@@ -8,14 +8,20 @@ import { getRegion, REGIONS, type Region } from '@/lib/regions';
 import ConfigPanel from './ConfigPanel';
 import RegionSelector from './RegionSelector';
 import LoadingScreen from './LoadingScreen';
+import { useLanguage } from '@/contexts/LanguageContext';
+
+function PoolSceneLoading() {
+  const { t } = useLanguage();
+  return (
+    <div className="flex h-full items-center justify-center text-slate-500">
+      {t('configurator.loading_3d')}
+    </div>
+  );
+}
 
 const PoolScene = dynamic(() => import('./PoolScene'), {
   ssr: false,
-  loading: () => (
-    <div className="flex h-full items-center justify-center text-slate-500">
-      3D sahne yükleniyor…
-    </div>
-  ),
+  loading: () => <PoolSceneLoading />,
 });
 
 interface Props {
@@ -26,6 +32,7 @@ interface Props {
 }
 
 export default function ConfiguratorClient({ userId, userEmail, role, fullName }: Props) {
+  const { t } = useLanguage();
   const [modelLoading, setModelLoading] = useState(false);
   const [region,       setRegion]       = useState<Region | null>(null);
   const [config, setConfig] = useState<PoolConfig>(defaultPoolConfig);
@@ -94,7 +101,7 @@ export default function ConfiguratorClient({ userId, userEmail, role, fullName }
             onClick={() => controlsRef.current?.reset()}
             className="absolute top-3 left-3 z-10 rounded-md bg-white/90 px-3 py-1.5 text-xs font-medium text-slate-700 shadow-sm ring-1 ring-slate-200 hover:bg-white"
           >
-            Bakış Açısını Sıfırla
+            {t('configurator.resetView')}
           </button>
         </div>
 

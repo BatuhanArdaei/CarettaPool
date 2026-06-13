@@ -23,7 +23,7 @@ export default async function LangLayout({
   return (
     <LanguageProvider lang={params.lang as LangCode} initialMessages={initialMessages}>
       <Navbar />
-      <main className="flex-1 pt-20 md:pt-24">{children}</main>
+      <main className="flex-1 pt-16 sm:pt-20 md:pt-24">{children}</main>
       <Footer lang={params.lang} />
       <WhatsAppButton />
     </LanguageProvider>

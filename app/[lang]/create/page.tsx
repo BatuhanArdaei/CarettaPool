@@ -4,7 +4,7 @@ import BayiPopup from '@/components/BayiPopup';
 
 export const metadata = { title: 'Tasarla — CarettaPool' };
 
-export default async function CreatePage() {
+export default async function LangCreatePage() {
   const supabase = createClient();
   const { data: { user } } = await supabase.auth.getUser();
 

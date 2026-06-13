@@ -4,7 +4,7 @@ import Image from 'next/image';
 import { createClient } from '@/lib/supabase/server';
 import { SLUG_MAP, localePath } from '@/lib/i18n/routes';
 import { getMessages, createT } from '@/lib/i18n/server';
-import { POOL_PRODUCTS, formatDimensions, getProductSpecs } from '@/lib/products-catalog';
+import { POOL_PRODUCTS, formatDimensions, getProductSpecItems } from '@/lib/products-catalog';
 import GaleriGrid from '@/app/galeri/GaleriGrid';
 import ContactForm from '@/app/iletisim/ContactForm';
 import type { LangCode } from '@/lib/i18n';
@@ -64,7 +64,7 @@ function ProductRow({
   lang: string;
   t: (k: string) => string;
 }) {
-  const specs = getProductSpecs(product);
+  const specItems = getProductSpecItems(product);
   return (
     <article
       className={`grid items-center gap-6 border-t border-slate-100 py-10 first:border-t-0 sm:gap-10 md:grid-cols-2 md:py-20 ${
@@ -81,7 +81,9 @@ function ProductRow({
         <h2 className="mt-2 text-3xl font-bold tracking-tight text-slate-900 md:text-4xl">{product.name}</h2>
         <p className="mt-2 text-sm text-slate-500">{formatDimensions(product)}</p>
         <ul className="mt-6 list-disc space-y-1.5 pl-5 text-sm text-slate-600 marker:text-slate-400">
-          {specs.map((s, i) => <li key={i}>{s}</li>)}
+          {specItems.map((item, i) => (
+            <li key={i}>{t(item.key).replace('{n}', String(item.n ?? ''))}</li>
+          ))}
         </ul>
         <Link
           href={localePath(lang, 'create')}
