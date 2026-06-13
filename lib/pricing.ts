@@ -1,38 +1,37 @@
 import { countPanels, type PoolConfig } from './types';
 
-const BASE_PER_SQM = 22000;
-
-const FRAME_PRICES = {
-  anthracite: 0,
-  blue: 5000,
-  white: 5000,
+// ─── Global defaults (used when no site/dealer override is set) ──────────────
+export const DEFAULT_PRICES = {
+  base_per_sqm:         22000,
+  frame_blue:           5000,
+  frame_white:          5000,
+  frame_anthracite:     0,
+  panel_glass:          4500,
+  panel_closed:         0,
+  ground_gravel:        0,
+  ground_wood:          22000,
+  ground_grass:         8000,
+  ground_concrete:      12000,
+  cladding_white:       0,
+  cladding_blue_mosaic: 18000,
+  cladding_gray_stone:  26000,
+  cladding_turquoise:   14000,
+  cladding_texture:     32000,
+  lighting:             9000,
+  waterfall:            25000,
+  platform:             35000,
 } as const;
 
-const GLASS_PER_PANEL = 4500;       // her cam bölme için
-const CLOSED_PER_PANEL = 0;         // kapalı bölmeler tabana dahil
+export type PriceKey = keyof typeof DEFAULT_PRICES;
 
-const GROUND_PRICES = {
-  gravel: 0,
-  wood: 22000,
-  grass: 8000,
-  concrete: 12000,
-} as const;
+// Key-by-key override map. Any key not present falls back to DEFAULT_PRICES.
+export type CustomPrices = Partial<Record<string, number>>;
 
-const CLADDING_PRICES = {
-  white: 0,
-  blue_mosaic: 18000,
-  gray_stone: 26000,
-  turquoise: 14000,
-  texture1: 32000,
-  texture2: 32000,
-  texture3: 32000,
-  texture4: 32000,
-  texture5: 32000,
-} as const;
+function pr(custom: CustomPrices | null, key: PriceKey): number {
+  return (custom != null && key in custom) ? (custom[key] as number) : DEFAULT_PRICES[key];
+}
 
-const LIGHTING_PRICE = 9000;
-const WATERFALL_PRICE = 25000;
-const PLATFORM_BASE_PRICE = 35000; // her zaman dahil
+// ─── Types ───────────────────────────────────────────────────────────────────
 
 export interface PriceBreakdown {
   base: number;
@@ -48,47 +47,51 @@ export interface PriceBreakdown {
   total: number;
 }
 
-export function calculateBasePrice(config: PoolConfig): PriceBreakdown {
+// ─── Calculation ─────────────────────────────────────────────────────────────
+// customPrices overrides DEFAULT_PRICES key-by-key.
+// Pass the merged (globalPrices + dealerPrices) map from the API layer.
+
+export function calculateBasePrice(
+  config: PoolConfig,
+  customPrices: CustomPrices | null = null,
+): PriceBreakdown {
   const area = config.width * config.length;
-  const base = Math.round(area * BASE_PER_SQM);
-  const frame = FRAME_PRICES[config.frameColor];
+  const base = Math.round(area * pr(customPrices, 'base_per_sqm'));
+
+  const frameKey = `frame_${config.frameColor}` as PriceKey;
+  const frame = pr(customPrices, frameKey);
+
   const counts = countPanels(config);
   const panel =
-    counts.glass * GLASS_PER_PANEL + counts.closed * CLOSED_PER_PANEL;
-  const ground = GROUND_PRICES[config.ground];
-  const cladding = CLADDING_PRICES[config.cladding];
-  const platform = PLATFORM_BASE_PRICE;
-  const lighting = config.lighting.enabled ? LIGHTING_PRICE : 0;
-  const waterfall = config.waterfall ? WATERFALL_PRICE : 0;
+    counts.glass  * pr(customPrices, 'panel_glass') +
+    counts.closed * pr(customPrices, 'panel_closed');
 
-  const subtotal =
-    base + frame + panel + ground + cladding + platform + lighting + waterfall;
+  const groundKey = `ground_${config.ground}` as PriceKey;
+  const ground = pr(customPrices, groundKey);
+
+  const STD_CLADDINGS = new Set(['white', 'blue_mosaic', 'gray_stone', 'turquoise']);
+  const cladding = STD_CLADDINGS.has(config.cladding)
+    ? pr(customPrices, `cladding_${config.cladding}` as PriceKey)
+    : pr(customPrices, 'cladding_texture');
+
+  const platform  = pr(customPrices, 'platform');
+  const lighting  = config.lighting.enabled ? pr(customPrices, 'lighting')  : 0;
+  const waterfall = config.waterfall         ? pr(customPrices, 'waterfall') : 0;
+
+  const subtotal = base + frame + panel + ground + cladding + platform + lighting + waterfall;
 
   return {
-    base,
-    frame,
-    panel,
-    ground,
-    cladding,
-    platform,
-    lighting,
-    waterfall,
-    subtotal,
-    discount: 0,
-    total: subtotal,
+    base, frame, panel, ground, cladding, platform,
+    lighting, waterfall, subtotal, discount: 0, total: subtotal,
   };
 }
 
 export function applyDealerDiscount(
   breakdown: PriceBreakdown,
-  discountRate: number
+  discountRate: number,
 ): PriceBreakdown {
   const discount = Math.round(breakdown.subtotal * (discountRate / 100));
-  return {
-    ...breakdown,
-    discount,
-    total: breakdown.subtotal - discount,
-  };
+  return { ...breakdown, discount, total: breakdown.subtotal - discount };
 }
 
 export function formatTRY(value: number): string {

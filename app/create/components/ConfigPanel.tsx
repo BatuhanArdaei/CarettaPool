@@ -21,6 +21,7 @@ import { formatTRY, type PriceBreakdown } from '@/lib/pricing';
 import { countPanels } from '@/lib/types';
 import type { Region } from '@/lib/regions';
 import { useLanguage } from '@/contexts/LanguageContext';
+import CountryPhoneInput from '@/components/CountryPhoneInput';
 
 interface Props {
   config: PoolConfig;
@@ -70,7 +71,7 @@ export default function ConfigPanel({
   return (
     <aside className="card flex max-h-[80vh] flex-col">
       {/* Stepper */}
-      <div className="border-b border-slate-200 p-3">
+      <div id="tour-stepper" className="border-b border-slate-200 p-3">
         <div className="flex items-stretch justify-between gap-0.5">
           {STEPS.map((s, i) => (
             <button
@@ -128,7 +129,7 @@ export default function ConfigPanel({
       </div>
 
       {/* Step content */}
-      <div className="flex-1 space-y-5 overflow-y-auto p-4">
+      <div id="tour-content" className="flex-1 space-y-5 overflow-y-auto p-4">
         {step.key === 'size'      && <SizeStep config={config} set={set} region={region} />}
         {step.key === 'frame'     && <FrameStep config={config} set={set} />}
         {step.key === 'panels'    && <PanelsStep config={config} set={set} onChange={onChange} />}
@@ -153,7 +154,7 @@ export default function ConfigPanel({
       </div>
 
       {/* Footer nav */}
-      <div className="flex shrink-0 items-center justify-between gap-2 border-t border-slate-200 p-3">
+      <div id="tour-nav" className="flex shrink-0 items-center justify-between gap-2 border-t border-slate-200 p-3">
         <button
           type="button"
           onClick={() => setStepIdx(Math.max(0, stepIdx - 1))}
@@ -730,16 +731,23 @@ function SummaryStep({
   loading: boolean; priceError: string | null; userId: string; userEmail: string;
   fullName: string; role: 'customer' | 'dealer' | 'admin';
 }) {
-  const { t } = useLanguage();
+  const { t, lang } = useLanguage();
   const router = useRouter();
   const supabase = createClient();
   const [saving, setSaving] = useStateR(false);
   const [saved, setSaved] = useStateR(false);
   const [saveError, setSaveError] = useStateR<string | null>(null);
   const [showPopup, setShowPopup] = useStateR(false);
-  const [contact, setContact] = useStateR({ name: '', email: '', phone: '' });
+
+  const LANG_DIAL: Record<string, string> = {
+    tr: '+90', en: '+44', de: '+49', nl: '+31', fr: '+33',
+    es: '+34', it: '+39', pt: '+351', pl: '+48', ro: '+40',
+    no: '+47', da: '+45', lt: '+370', el: '+30', ar: '+966',
+  };
+  const [contact, setContact] = useStateR({ name: '', email: '', phone: '', dialCode: LANG_DIAL[lang] ?? '+90' });
 
   const isGuest = !userId;
+  const showPrices = role === 'dealer' || role === 'admin';
 
   async function submitRequest(contactInfo?: { name: string; email: string; phone: string }) {
     setSaving(true); setSaveError(null); setSaved(false);
@@ -807,43 +815,45 @@ function SummaryStep({
         </ul>
       </div>
 
-      {/* Price */}
-      <div className="rounded-xl bg-white p-4 ring-1 ring-slate-200 space-y-1.5">
-        <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-2">
-          {t('configurator.price_detail')}
-        </p>
-        {[
-          [t('configurator.base_cost'),          breakdown.base],
-          breakdown.frame    > 0 ? [t('configurator.frame'),             breakdown.frame]    : null,
-          breakdown.panel    > 0 ? [t('configurator.glass_panels_cost'), breakdown.panel]    : null,
-          [t('configurator.platform_cost'),       breakdown.platform],
-          breakdown.ground   > 0 ? [t('configurator.subfloor_cost'),     breakdown.ground]   : null,
-          breakdown.cladding > 0 ? [t('configurator.inner_cladding_cost'),breakdown.cladding]: null,
-          breakdown.lighting > 0 ? [t('configurator.lighting'),          breakdown.lighting] : null,
-          breakdown.waterfall> 0 ? [t('configurator.waterfall'),         breakdown.waterfall]: null,
-        ].filter(Boolean).map((row) => {
-          const [label, val] = row as [string, number];
-          return (
-            <div key={label} className="flex justify-between text-sm text-slate-600">
-              <span>{label}</span>
-              <span>{formatTRY(val)}</span>
+      {/* Price — only visible to dealers and admins */}
+      {showPrices && (
+        <div className="rounded-xl bg-white p-4 ring-1 ring-slate-200 space-y-1.5">
+          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-2">
+            {t('configurator.price_detail')}
+          </p>
+          {[
+            [t('configurator.base_cost'),          breakdown.base],
+            breakdown.frame    > 0 ? [t('configurator.frame'),             breakdown.frame]    : null,
+            breakdown.panel    > 0 ? [t('configurator.glass_panels_cost'), breakdown.panel]    : null,
+            [t('configurator.platform_cost'),       breakdown.platform],
+            breakdown.ground   > 0 ? [t('configurator.subfloor_cost'),     breakdown.ground]   : null,
+            breakdown.cladding > 0 ? [t('configurator.inner_cladding_cost'),breakdown.cladding]: null,
+            breakdown.lighting > 0 ? [t('configurator.lighting'),          breakdown.lighting] : null,
+            breakdown.waterfall> 0 ? [t('configurator.waterfall'),         breakdown.waterfall]: null,
+          ].filter(Boolean).map((row) => {
+            const [label, val] = row as [string, number];
+            return (
+              <div key={label} className="flex justify-between text-sm text-slate-600">
+                <span>{label}</span>
+                <span>{formatTRY(val)}</span>
+              </div>
+            );
+          })}
+          {isDealer && breakdown.discount > 0 && (
+            <div className="flex justify-between text-sm text-emerald-700 pt-1">
+              <span>{t('configurator.dealer_discount_pct').replace('{n}', String(discountRate))}</span>
+              <span>-{formatTRY(breakdown.discount)}</span>
             </div>
-          );
-        })}
-        {isDealer && breakdown.discount > 0 && (
-          <div className="flex justify-between text-sm text-emerald-700 pt-1">
-            <span>{t('configurator.dealer_discount_pct').replace('{n}', String(discountRate))}</span>
-            <span>-{formatTRY(breakdown.discount)}</span>
+          )}
+          <div className="flex items-baseline justify-between border-t border-slate-200 pt-3 mt-2">
+            <span className="text-sm font-semibold text-slate-700">{t('configurator.total')}</span>
+            <span className="text-2xl font-bold text-brand-700">
+              {loading ? '…' : formatTRY(breakdown.total)}
+            </span>
           </div>
-        )}
-        <div className="flex items-baseline justify-between border-t border-slate-200 pt-3 mt-2">
-          <span className="text-sm font-semibold text-slate-700">{t('configurator.total')}</span>
-          <span className="text-2xl font-bold text-brand-700">
-            {loading ? '…' : formatTRY(breakdown.total)}
-          </span>
+          {priceError && <p className="text-xs text-red-600">{priceError}</p>}
         </div>
-        {priceError && <p className="text-xs text-red-600">{priceError}</p>}
-      </div>
+      )}
 
       <button
         type="button"
@@ -869,9 +879,10 @@ function SummaryStep({
             </button>
             <h3 className="text-xl font-bold text-slate-900">{t('configurator.quote_title')}</h3>
             <p className="mt-1 text-sm text-slate-500">{t('configurator.quote_subtitle')}</p>
-            <div className="mt-5 flex items-center justify-between rounded-xl bg-brand-50 px-4 py-3">
-              <span className="text-sm text-slate-600">{config.width.toFixed(1)} × {config.length.toFixed(1)} m</span>
-              <span className="text-lg font-bold text-brand-700">{formatTRY(breakdown.total)}</span>
+            <div className="mt-5 rounded-xl bg-brand-50 px-4 py-3">
+              <span className="text-sm text-slate-600">
+                {config.width.toFixed(1)} × {config.length.toFixed(1)} m havuz konfigürasyonu
+              </span>
             </div>
             <div className="mt-4 space-y-3">
               <div>
@@ -888,14 +899,24 @@ function SummaryStep({
               </div>
               <div>
                 <label className="label">{t('configurator.phone_label')}</label>
-                <input type="tel" className="input" value={contact.phone}
-                  onChange={e => setContact(p => ({...p, phone: e.target.value}))}
-                  placeholder="+90 5__ ___ __ __" />
+                <CountryPhoneInput
+                  dialCode={contact.dialCode}
+                  phone={contact.phone}
+                  onDialChange={(dial) => setContact((p) => ({ ...p, dialCode: dial }))}
+                  onPhoneChange={(ph) => setContact((p) => ({ ...p, phone: ph }))}
+                />
               </div>
             </div>
             <button
               type="button"
-              onClick={() => { if (!contact.name || !contact.email) return; submitRequest(contact); }}
+              onClick={() => {
+                if (!contact.name || !contact.email) return;
+                submitRequest({
+                  name: contact.name,
+                  email: contact.email,
+                  phone: contact.phone ? `${contact.dialCode}${contact.phone}` : '',
+                });
+              }}
               disabled={saving || !contact.name || !contact.email}
               className="btn-primary mt-6 w-full py-3 text-base disabled:opacity-50"
             >

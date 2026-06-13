@@ -99,6 +99,15 @@ export default function NavbarClient({ isAuthenticated, role }: Props) {
 
             <LanguageSwitcher />
 
+            {!isAuthenticated && !minimal && (
+              <Link
+                href={localePath(lang, 'login')}
+                className="hidden rounded-lg border border-slate-700 px-3 py-2 text-xs font-medium text-slate-400 transition-colors hover:border-slate-500 hover:text-slate-200 lg:inline-flex"
+              >
+                {t('nav.adminLogin')}
+              </Link>
+            )}
+
             {isAuthenticated && (
               <>
                 {role === 'admin' && (

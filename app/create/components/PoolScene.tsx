@@ -1007,7 +1007,7 @@ function Pool({ config }: { config: PoolConfig }) {
         receiveShadow
       >
         <planeGeometry args={[w - PANEL_T * 2 - 0.02, l - PANEL_T * 2 - 0.02]} />
-        <meshStandardMaterial color={inner} />
+        <meshStandardMaterial color={claddingTex ? '#ffffff' : inner} map={claddingTex} />
       </mesh>
 
       {/* Animated caustics overlay on the pool floor */}
@@ -1020,7 +1020,7 @@ function Pool({ config }: { config: PoolConfig }) {
       />
 
       {/* Inner cladding rim — visible above water line */}
-      <InnerRim w={w} l={l} waterY={waterY} top={top - COPING_T} color={inner} />
+      <InnerRim w={w} l={l} waterY={waterY} top={top - COPING_T} color={inner} claddingTex={claddingTex} />
 
       {/* Water volume — the body of water inside the pool, visible through glass */}
       <WaterVolume w={w} l={l} waterY={waterY} />
@@ -1032,6 +1032,7 @@ function Pool({ config }: { config: PoolConfig }) {
         top={top}
         config={config}
         frame={frame}
+        claddingTex={claddingTex}
       />
 
       {/* Exterior cladding texture on outer faces — solid panels only */}
@@ -1205,12 +1206,14 @@ function SidePanels({
   top: _top,
   config,
   frame,
+  claddingTex = null,
 }: {
   halfW: number;
   halfL: number;
   top: number;
   config: PoolConfig;
   frame: string;
+  claddingTex?: THREE.Texture | null;
 }) {
   const inner = claddingColor(config.cladding);
   const panelHeight = PANEL_H;
@@ -1277,7 +1280,8 @@ function SidePanels({
                 />
               ) : (
                 <meshStandardMaterial
-                  color={inner}
+                  color={claddingTex ? '#ffffff' : inner}
+                  map={claddingTex}
                   roughness={0.65}
                   metalness={0.05}
                 />
@@ -1296,12 +1300,14 @@ function InnerRim({
   waterY,
   top,
   color,
+  claddingTex = null,
 }: {
   w: number;
   l: number;
   waterY: number;
   top: number;
   color: string;
+  claddingTex?: THREE.Texture | null;
 }) {
   // Thin cladding band visible above the water line, all around the pool perimeter.
   const rimHeight = top - waterY;
@@ -1314,19 +1320,19 @@ function InnerRim({
     <group>
       <mesh position={[0, yMid, halfL]} rotation={[0, Math.PI, 0]}>
         <planeGeometry args={[w - inset * 2, rimHeight]} />
-        <meshStandardMaterial color={color} side={THREE.FrontSide} />
+        <meshStandardMaterial color={claddingTex ? '#ffffff' : color} map={claddingTex} side={THREE.FrontSide} />
       </mesh>
       <mesh position={[0, yMid, -halfL]}>
         <planeGeometry args={[w - inset * 2, rimHeight]} />
-        <meshStandardMaterial color={color} side={THREE.FrontSide} />
+        <meshStandardMaterial color={claddingTex ? '#ffffff' : color} map={claddingTex} side={THREE.FrontSide} />
       </mesh>
       <mesh position={[halfW, yMid, 0]} rotation={[0, -Math.PI / 2, 0]}>
         <planeGeometry args={[l - inset * 2, rimHeight]} />
-        <meshStandardMaterial color={color} side={THREE.FrontSide} />
+        <meshStandardMaterial color={claddingTex ? '#ffffff' : color} map={claddingTex} side={THREE.FrontSide} />
       </mesh>
       <mesh position={[-halfW, yMid, 0]} rotation={[0, Math.PI / 2, 0]}>
         <planeGeometry args={[l - inset * 2, rimHeight]} />
-        <meshStandardMaterial color={color} side={THREE.FrontSide} />
+        <meshStandardMaterial color={claddingTex ? '#ffffff' : color} map={claddingTex} side={THREE.FrontSide} />
       </mesh>
     </group>
   );

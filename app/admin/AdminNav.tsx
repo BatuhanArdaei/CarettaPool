@@ -8,6 +8,7 @@ const LINKS = [
   { href: '/admin/galeri',      label: 'Galeri' },
   { href: '/admin/kataloglar',  label: 'Kataloglar' },
   { href: '/admin/sss',         label: 'S.S.S' },
+  { href: '/admin/fiyatlar',    label: 'Fiyat Yönetimi' },
   { href: '/admin/bayiler',     label: 'Bayiler' },
   { href: '/admin/talepler',          label: 'Havuz Talepleri' },
   { href: '/admin/iletisim-talepleri',label: 'İletişim Talepleri' },

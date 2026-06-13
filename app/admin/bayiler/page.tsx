@@ -2,22 +2,24 @@
 
 import { useEffect, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
+import { DEFAULT_PRICES } from '@/lib/pricing';
 
-/* ─── Pricing options that can be overridden per dealer ─────────── */
+/* ─── Per-dealer overrideable price items ───────────────────────── */
 const PRICE_ITEMS = [
-  { key: 'base_per_sqm',         label: 'Taban Fiyat (m²)',         default: 22000 },
-  { key: 'frame_blue',           label: 'Çerçeve – Mavi',           default: 5000  },
-  { key: 'frame_white',          label: 'Çerçeve – Beyaz',          default: 5000  },
-  { key: 'panel_glass',          label: 'Cam Panel (segment başı)', default: 4500  },
-  { key: 'ground_wood',          label: 'Zemin – Tahta Deck',       default: 22000 },
-  { key: 'ground_grass',         label: 'Zemin – Çimen',            default: 8000  },
-  { key: 'ground_concrete',      label: 'Zemin – Beton',            default: 12000 },
-  { key: 'cladding_blue_mosaic', label: 'Kaplama – Mavi Mozaik',    default: 18000 },
-  { key: 'cladding_gray_stone',  label: 'Kaplama – Gri Taş',        default: 26000 },
-  { key: 'cladding_turquoise',   label: 'Kaplama – Turkuaz',        default: 14000 },
-  { key: 'lighting',             label: 'Işıklandırma',             default: 9000  },
-  { key: 'waterfall',            label: 'Şelale',                   default: 25000 },
-  { key: 'platform',             label: 'Yan Platform',             default: 35000 },
+  { key: 'base_per_sqm',         label: 'Taban Fiyat (m²)',              default: DEFAULT_PRICES.base_per_sqm },
+  { key: 'frame_blue',           label: 'Çerçeve – Mavi',                default: DEFAULT_PRICES.frame_blue },
+  { key: 'frame_white',          label: 'Çerçeve – Beyaz',               default: DEFAULT_PRICES.frame_white },
+  { key: 'panel_glass',          label: 'Cam Panel (segment başı)',       default: DEFAULT_PRICES.panel_glass },
+  { key: 'ground_wood',          label: 'Zemin – Tahta Deck',            default: DEFAULT_PRICES.ground_wood },
+  { key: 'ground_grass',         label: 'Zemin – Çimen',                 default: DEFAULT_PRICES.ground_grass },
+  { key: 'ground_concrete',      label: 'Zemin – Beton',                 default: DEFAULT_PRICES.ground_concrete },
+  { key: 'cladding_blue_mosaic', label: 'Kaplama – Mavi Mozaik',         default: DEFAULT_PRICES.cladding_blue_mosaic },
+  { key: 'cladding_gray_stone',  label: 'Kaplama – Gri Taş',             default: DEFAULT_PRICES.cladding_gray_stone },
+  { key: 'cladding_turquoise',   label: 'Kaplama – Turkuaz',             default: DEFAULT_PRICES.cladding_turquoise },
+  { key: 'cladding_texture',     label: 'Kaplama – Doku (tüm desenler)', default: DEFAULT_PRICES.cladding_texture },
+  { key: 'lighting',             label: 'Işıklandırma',                  default: DEFAULT_PRICES.lighting },
+  { key: 'waterfall',            label: 'Şelale',                        default: DEFAULT_PRICES.waterfall },
+  { key: 'platform',             label: 'Yan Platform',                   default: DEFAULT_PRICES.platform },
 ];
 
 interface Dealer {

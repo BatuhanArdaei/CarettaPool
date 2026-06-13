@@ -20,6 +20,7 @@ export default function BayiPopup() {
   function dismiss() {
     sessionStorage.setItem(STORAGE_KEY, '1');
     setVisible(false);
+    window.dispatchEvent(new Event('caretta:bayi-dismissed'));
   }
 
   if (!visible) return null;

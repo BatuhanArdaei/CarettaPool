@@ -2,12 +2,25 @@ import { createClient } from '@/lib/supabase/server';
 import ContactForm from './ContactForm';
 
 export const metadata = { title: 'İletişim — CarettaPool' };
-export const revalidate = 60;
+export const revalidate = 0;
 
 interface ContactSettings {
   phones?: string[];
   email?: string;
   address?: string;
+  maps_url?: string;
+}
+
+const DEFAULT_MAP_SRC =
+  'https://www.google.com/maps/embed?pb=!1m14!1m8!1m3!1d11857.935885277422!2d6.813464!3d51.216352!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x47b8cbc931e459c7%3A0xe3afc9fb4fe8ef15!2sFichtenstra%C3%9Fe%2036%2C%2040233%20D%C3%BCsseldorf-Stadtbezirk%202%2C%20Almanya!5e1!3m2!1str!2sus!4v1781314778191!5m2!1str!2sus';
+
+function resolveMapSrc(contact: ContactSettings): string {
+  if (contact.maps_url?.trim()) {
+    const raw = contact.maps_url.trim();
+    const match = raw.match(/src=["']([^"']+)["']/);
+    return match ? match[1] : raw;
+  }
+  return DEFAULT_MAP_SRC;
 }
 
 export default async function IletisimPage() {
@@ -20,8 +33,11 @@ export default async function IletisimPage() {
   const contact: ContactSettings =
     (data?.find((r) => r.key === 'contact')?.value as ContactSettings) ?? {};
 
+  const mapSrc = resolveMapSrc(contact);
+
   return (
     <div className="bg-white">
+      {/* Content */}
       <section className="mx-auto max-w-5xl px-6 py-16 md:py-24">
         <p className="text-sm font-semibold uppercase tracking-[0.2em] text-brand-600">
           Bize Ulaşın
@@ -70,6 +86,20 @@ export default async function IletisimPage() {
           <ContactForm />
         </div>
       </section>
+
+      {/* Google Maps — full-width strip at the bottom */}
+      <div className="h-[320px] w-full md:h-[420px]">
+        <iframe
+          src={mapSrc}
+          width="100%"
+          height="100%"
+          style={{ border: 0, display: 'block' }}
+          allowFullScreen
+          loading="lazy"
+          referrerPolicy="no-referrer-when-downgrade"
+          title="Ofis Konumu"
+        />
+      </div>
     </div>
   );
 }

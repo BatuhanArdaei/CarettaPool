@@ -5,7 +5,7 @@ import { createClient } from '@/lib/supabase/client';
 
 export default function AdminAyarlar() {
   const supabase = createClient();
-  const [contact, setContact] = useState({ phones: ['', ''], email: '', address: '' });
+  const [contact, setContact] = useState({ phones: ['', ''], email: '', address: '', maps_url: '' });
   const [social, setSocial] = useState({ instagram: '', facebook: '', linkedin: '', youtube: '', tiktok: '' });
   const [msg, setMsg] = useState('');
 
@@ -49,6 +49,14 @@ export default function AdminAyarlar() {
             <input type="email" className="input" value={contact.email} onChange={e => setContact(p => ({ ...p, email: e.target.value }))} /></div>
           <div><label className="label">Adres</label>
             <textarea className="input" rows={2} value={contact.address} onChange={e => setContact(p => ({ ...p, address: e.target.value }))} /></div>
+          <div>
+            <label className="label">Google Maps Embed URL</label>
+            <input className="input font-mono text-xs" value={contact.maps_url} onChange={e => setContact(p => ({ ...p, maps_url: e.target.value }))}
+              placeholder="https://www.google.com/maps/embed?pb=..." />
+            <p className="mt-1 text-[11px] text-slate-400">
+              Google Maps → Paylaş → Haritayı yerleştir → tam &lt;iframe&gt; kodunu veya sadece src URL&apos;sini yapıştırabilirsiniz.
+            </p>
+          </div>
           <button type="submit" className="btn-primary">Kaydet</button>
         </form>
       </div>

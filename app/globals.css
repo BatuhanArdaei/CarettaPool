@@ -38,3 +38,46 @@ body {
     @apply rounded-xl bg-white shadow-sm ring-1 ring-slate-200;
   }
 }
+
+/* driver.js tour overrides */
+.caretta-tour-skip {
+  background: transparent;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  padding: 5px 12px;
+  font-size: 12px;
+  color: #64748b;
+  cursor: pointer;
+  margin-right: auto;
+  transition: color 0.15s, border-color 0.15s;
+}
+.caretta-tour-skip:hover {
+  color: #0f172a;
+  border-color: #94a3b8;
+}
+.caretta-tour-popover .driver-popover-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: #0f172a;
+}
+.caretta-tour-popover .driver-popover-description {
+  font-size: 13px;
+  color: #475569;
+  line-height: 1.5;
+}
+.caretta-tour-popover .driver-popover-next-btn {
+  background: #0ea5c8;
+  border: none;
+  border-radius: 8px;
+  padding: 6px 14px;
+  font-size: 13px;
+  font-weight: 600;
+}
+.caretta-tour-popover .driver-popover-next-btn:hover {
+  background: #0891b2;
+}
+.caretta-tour-popover .driver-popover-prev-btn {
+  border-radius: 8px;
+  padding: 6px 14px;
+  font-size: 13px;
+}
