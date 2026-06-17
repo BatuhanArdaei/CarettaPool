@@ -1010,20 +1010,22 @@ function Pool({ config }: { config: PoolConfig }) {
         <meshStandardMaterial color={claddingTex ? '#ffffff' : inner} map={claddingTex} />
       </mesh>
 
-      {/* Animated caustics overlay on the pool floor */}
-      <PoolCaustics
-        w={w}
-        l={l}
-        floorY={BASIN_FLOOR + 0.012}
-        lightEnabled={config.lighting.enabled}
-        lightColor={config.lighting.color}
-      />
+      {/* Animated caustics overlay on the pool floor — only when water is present */}
+      {config.showWater && (
+        <PoolCaustics
+          w={w}
+          l={l}
+          floorY={BASIN_FLOOR + 0.012}
+          lightEnabled={config.lighting.enabled}
+          lightMode={config.lighting.mode}
+          lightColor={config.lighting.color}
+          lightColor2={config.lighting.color2}
+        />
+      )}
 
-      {/* Inner cladding rim — visible above water line */}
-      <InnerRim w={w} l={l} waterY={waterY} top={top - COPING_T} color={inner} claddingTex={claddingTex} />
 
       {/* Water volume — the body of water inside the pool, visible through glass */}
-      <WaterVolume w={w} l={l} waterY={waterY} />
+      {config.showWater && <WaterVolume w={w} l={l} waterY={waterY} />}
 
       {/* Side panels — one mesh per (side, segment) so each can be glass/closed */}
       <SidePanels
@@ -1035,8 +1037,7 @@ function Pool({ config }: { config: PoolConfig }) {
         claddingTex={claddingTex}
       />
 
-      {/* Exterior cladding texture on outer faces — solid panels only */}
-      <OuterCladding halfW={halfW} halfL={halfL} config={config} claddingTex={claddingTex} />
+      {/* OuterCladding removed — cladding is interior floor only */}
 
       {/* Vertical mullions dividing each side into segments */}
       <Mullions
@@ -1044,6 +1045,7 @@ function Pool({ config }: { config: PoolConfig }) {
         halfL={halfL}
         top={top}
         color={frame}
+        config={config}
       />
 
       {/* 4 corner posts */}
@@ -1057,18 +1059,24 @@ function Pool({ config }: { config: PoolConfig }) {
 
       {/* Water top surface — custom GLSL shader: animated waves + sun glints +
           shimmer + fresnel rim. Lights up at night when pool lighting is on. */}
-      <CinematicWater
-        w={w}
-        l={l}
-        waterY={waterY}
-        lightEnabled={config.lighting.enabled}
-        lightColor={config.lighting.color}
-      />
+      {config.showWater && (
+        <CinematicWater
+          w={w}
+          l={l}
+          waterY={waterY}
+          lightEnabled={config.lighting.enabled}
+          lightMode={config.lighting.mode}
+          lightColor={config.lighting.color}
+          lightColor2={config.lighting.color2}
+        />
+      )}
 
       {/* Pool lighting — three-layer glow with optional RGB animation */}
       {config.lighting.enabled && (
         <PoolLighting
+          mode={config.lighting.mode}
           color={config.lighting.color}
+          color2={config.lighting.color2}
           w={w}
           l={l}
           waterY={waterY}
@@ -1077,7 +1085,7 @@ function Pool({ config }: { config: PoolConfig }) {
 
       {/* LED accent strips — top + bottom perimeter inside the pool */}
       {config.lighting.enabled && (
-        <LedStrips color={config.lighting.color} w={w} l={l} top={top} />
+        <LedStrips color={config.lighting.color} color2={config.lighting.color2} mode={config.lighting.mode} w={w} l={l} top={top} />
       )}
 
       {/* Stainless steel waterfall feature (optional) */}
@@ -1126,11 +1134,12 @@ function CornerPosts({
     [halfW, -halfL],
     [-halfW, -halfL],
   ];
+  const postH = top - COPING_T;
   return (
     <group>
       {corners.map(([x, z], i) => (
-        <mesh key={i} position={[x, top / 2, z]} castShadow>
-          <boxGeometry args={[FRAME_T, top, FRAME_T]} />
+        <mesh key={i} position={[x, postH / 2, z]} castShadow>
+          <boxGeometry args={[FRAME_T, postH, FRAME_T]} />
           <meshStandardMaterial color={color} metalness={0.4} roughness={0.45} />
         </mesh>
       ))}
@@ -1143,11 +1152,13 @@ function Mullions({
   halfL,
   top,
   color,
+  config,
 }: {
   halfW: number;
   halfL: number;
   top: number;
   color: string;
+  config: PoolConfig;
 }) {
   const panelHeight = PANEL_H;
   const yMid = BASIN_FLOOR + PANEL_H / 2;
@@ -1157,6 +1168,16 @@ function Mullions({
   const innerL = halfL * 2 - FRAME_T * 2;
   const segsX = Math.max(1, Math.round(innerW / PANEL_W)); // north/south walls
   const segsZ = Math.max(1, Math.round(innerL / PANEL_W)); // east/west walls
+
+  const hasGlass = (side: PoolSide, segs: number) =>
+    Array.from({ length: segs }, (_, i) => i).some(
+      (i) => getPanelType(config, side, i) === 'glass'
+    );
+
+  const southHasGlass = hasGlass('south', segsX);
+  const northHasGlass = hasGlass('north', segsX);
+  const eastHasGlass  = hasGlass('east',  segsZ);
+  const westHasGlass  = hasGlass('west',  segsZ);
 
   // Distribute (segs - 1) mullions evenly along each side.
   const offsetsX: number[] = [];
@@ -1170,30 +1191,38 @@ function Mullions({
 
   return (
     <group>
-      {/* Mullions on +Z and -Z walls (run along X) */}
+      {/* Mullions on +Z (south) and -Z (north) walls */}
       {offsetsX.map((x, i) => (
         <group key={`x${i}`}>
-          <mesh position={[x, yMid, halfL - mullionD / 2]} castShadow>
-            <boxGeometry args={[mullionT, panelHeight, mullionD]} />
-            <meshStandardMaterial color={color} metalness={0.4} roughness={0.45} />
-          </mesh>
-          <mesh position={[x, yMid, -halfL + mullionD / 2]} castShadow>
-            <boxGeometry args={[mullionT, panelHeight, mullionD]} />
-            <meshStandardMaterial color={color} metalness={0.4} roughness={0.45} />
-          </mesh>
+          {southHasGlass && (
+            <mesh position={[x, yMid, halfL - mullionD / 2]} castShadow>
+              <boxGeometry args={[mullionT, panelHeight, mullionD]} />
+              <meshStandardMaterial color={color} metalness={0.4} roughness={0.45} />
+            </mesh>
+          )}
+          {northHasGlass && (
+            <mesh position={[x, yMid, -halfL + mullionD / 2]} castShadow>
+              <boxGeometry args={[mullionT, panelHeight, mullionD]} />
+              <meshStandardMaterial color={color} metalness={0.4} roughness={0.45} />
+            </mesh>
+          )}
         </group>
       ))}
-      {/* Mullions on +X and -X walls (run along Z) */}
+      {/* Mullions on +X (east) and -X (west) walls */}
       {offsetsZ.map((z, i) => (
         <group key={`z${i}`}>
-          <mesh position={[halfW - mullionD / 2, yMid, z]} castShadow>
-            <boxGeometry args={[mullionD, panelHeight, mullionT]} />
-            <meshStandardMaterial color={color} metalness={0.4} roughness={0.45} />
-          </mesh>
-          <mesh position={[-halfW + mullionD / 2, yMid, z]} castShadow>
-            <boxGeometry args={[mullionD, panelHeight, mullionT]} />
-            <meshStandardMaterial color={color} metalness={0.4} roughness={0.45} />
-          </mesh>
+          {eastHasGlass && (
+            <mesh position={[halfW - mullionD / 2, yMid, z]} castShadow>
+              <boxGeometry args={[mullionD, panelHeight, mullionT]} />
+              <meshStandardMaterial color={color} metalness={0.4} roughness={0.45} />
+            </mesh>
+          )}
+          {westHasGlass && (
+            <mesh position={[-halfW + mullionD / 2, yMid, z]} castShadow>
+              <boxGeometry args={[mullionD, panelHeight, mullionT]} />
+              <meshStandardMaterial color={color} metalness={0.4} roughness={0.45} />
+            </mesh>
+          )}
         </group>
       ))}
     </group>
@@ -1271,17 +1300,17 @@ function SidePanels({
               <boxGeometry args={args} />
               {isGlass ? (
                 <meshStandardMaterial
-                  color="#bcdfee"
+                  color="#d8eef6"
                   transparent
-                  opacity={0.25}
-                  roughness={0.05}
-                  metalness={0}
+                  opacity={0.13}
+                  roughness={0.02}
+                  metalness={0.1}
                   depthWrite={false}
+                  side={THREE.DoubleSide}
                 />
               ) : (
                 <meshStandardMaterial
-                  color={claddingTex ? '#ffffff' : inner}
-                  map={claddingTex}
+                  color={frame}
                   roughness={0.65}
                   metalness={0.05}
                 />
@@ -1474,13 +1503,17 @@ function CinematicWater({
   l,
   waterY,
   lightEnabled,
+  lightMode,
   lightColor,
+  lightColor2,
 }: {
   w: number;
   l: number;
   waterY: number;
   lightEnabled: boolean;
+  lightMode: 'single' | 'dual';
   lightColor: LightColor;
+  lightColor2: LightColor;
 }) {
   const uniforms = useMemo(
     () => ({
@@ -1503,12 +1536,9 @@ function CinematicWater({
     uniforms.uTime.value = state.clock.elapsedTime;
     if (lightEnabled) {
       uniforms.uEmissiveStrength.value = 0.4;
-      if (lightColor === 'rgb') {
-        const hue = (state.clock.elapsedTime * 0.08) % 1;
-        uniforms.uEmissive.value.setHSL(hue, 0.9, 0.45);
-      } else {
-        uniforms.uEmissive.value.set(lightColorHex(lightColor));
-      }
+      uniforms.uEmissive.value.copy(
+        animatedColor(lightMode, lightColor, lightColor2, state.clock.elapsedTime)
+      );
     } else {
       uniforms.uEmissiveStrength.value = 0;
       uniforms.uEmissive.value.set(0, 0, 0);
@@ -1585,13 +1615,17 @@ function PoolCaustics({
   l,
   floorY,
   lightEnabled,
+  lightMode,
   lightColor,
+  lightColor2,
 }: {
   w: number;
   l: number;
   floorY: number;
   lightEnabled: boolean;
+  lightMode: 'single' | 'dual';
   lightColor: LightColor;
+  lightColor2: LightColor;
 }) {
   const uniforms = useMemo(
     () => ({
@@ -1605,13 +1639,9 @@ function PoolCaustics({
   useFrame((state) => {
     uniforms.uTime.value = state.clock.elapsedTime;
     if (lightEnabled) {
-      // Caustics tint follows the pool light color at night
-      if (lightColor === 'rgb') {
-        const hue = (state.clock.elapsedTime * 0.08) % 1;
-        uniforms.uColor.value.setHSL(hue, 0.85, 0.65);
-      } else {
-        uniforms.uColor.value.set(lightColorHex(lightColor));
-      }
+      uniforms.uColor.value.copy(
+        animatedColor(lightMode, lightColor, lightColor2, state.clock.elapsedTime)
+      );
       uniforms.uIntensity.value = 1.1;
     } else {
       uniforms.uColor.value.set('#cfeefc');
@@ -1640,11 +1670,15 @@ function PoolCaustics({
 
 function LedStrips({
   color,
+  color2,
+  mode,
   w,
   l,
   top,
 }: {
   color: LightColor;
+  color2: LightColor;
+  mode: 'single' | 'dual';
   w: number;
   l: number;
   top: number;
@@ -1652,10 +1686,8 @@ function LedStrips({
   const refs = useRef<Array<THREE.Mesh | null>>([]);
 
   useFrame((state) => {
-    if (color !== 'rgb') return;
-    const t = state.clock.elapsedTime;
-    const hue = (t * 0.08) % 1;
-    const c = new THREE.Color().setHSL(hue, 0.95, 0.55);
+    if (mode === 'single' && color !== 'rgb' && color !== 'blue_purple') return;
+    const c = animatedColor(mode, color, color2, state.clock.elapsedTime);
     refs.current.forEach((mesh) => {
       if (!mesh) return;
       const mat = mesh.material as THREE.MeshStandardMaterial;
@@ -1664,7 +1696,7 @@ function LedStrips({
     });
   });
 
-  const baseColor = color === 'rgb' ? '#ff3b3b' : lightColorHex(color);
+  const baseColor = lightColorHex(color);
   const halfW = w / 2;
   const halfL = l / 2;
   const inset = PANEL_T + 0.015;
@@ -1719,12 +1751,16 @@ function LedStrips({
 }
 
 function PoolLighting({
+  mode,
   color,
+  color2,
   w,
   l,
   waterY,
 }: {
+  mode: 'single' | 'dual';
   color: LightColor;
+  color2: LightColor;
   w: number;
   l: number;
   waterY: number;
@@ -1732,16 +1768,14 @@ function PoolLighting({
   const refs = useRef<Array<THREE.PointLight | null>>([null, null, null]);
 
   useFrame((state) => {
-    if (color !== 'rgb') return;
-    const t = state.clock.elapsedTime;
-    const hue = (t * 0.08) % 1;
-    const c = new THREE.Color().setHSL(hue, 0.95, 0.55);
+    if (mode === 'single' && color !== 'rgb' && color !== 'blue_purple') return;
+    const c = animatedColor(mode, color, color2, state.clock.elapsedTime);
     refs.current.forEach((light) => {
       if (light) light.color.copy(c);
     });
   });
 
-  const baseColor = color === 'rgb' ? '#ff3b3b' : lightColorHex(color);
+  const baseColor = lightColorHex(color);
   const maxDim = Math.max(w, l);
 
   return (
@@ -2040,6 +2074,49 @@ function WineGlass({ position }: { position: [number, number, number] }) {
   );
 }
 
+function Parasol({
+  position,
+  rotY = 0,
+}: {
+  position: [number, number, number];
+  rotY?: number;
+}) {
+  // Pole leans ~18° in the rotY direction (toward pool) for a holiday beach feel
+  const tilt = 0.32;
+  return (
+    <group position={position} rotation={[0, rotY, 0]}>
+      {/* Base weight */}
+      <mesh position={[0, 0.07, 0]} castShadow>
+        <cylinderGeometry args={[0.22, 0.26, 0.14, 14]} />
+        <meshStandardMaterial color="#555" metalness={0.45} roughness={0.5} />
+      </mesh>
+      {/* Tilted pole group */}
+      <group rotation={[tilt, 0, 0]}>
+        {/* Pole */}
+        <mesh position={[0, 1.3, 0]} castShadow>
+          <cylinderGeometry args={[0.03, 0.03, 2.6, 8]} />
+          <meshStandardMaterial color="#aaa" metalness={0.6} roughness={0.35} />
+        </mesh>
+        {/* Canopy */}
+        <mesh position={[0, 2.64, 0]} castShadow receiveShadow>
+          <coneGeometry args={[1.45, 0.45, 16, 1, true]} />
+          <meshStandardMaterial color="#e07030" side={THREE.DoubleSide} roughness={0.82} metalness={0} />
+        </mesh>
+        {/* Canopy valance (lower ruffle ring) */}
+        <mesh position={[0, 2.42, 0]} castShadow>
+          <coneGeometry args={[1.55, 0.18, 16, 1, true]} />
+          <meshStandardMaterial color="#c85820" side={THREE.DoubleSide} roughness={0.85} metalness={0} />
+        </mesh>
+        {/* Top finial */}
+        <mesh position={[0, 2.88, 0]} castShadow>
+          <sphereGeometry args={[0.07, 8, 8]} />
+          <meshStandardMaterial color="#888" metalness={0.6} roughness={0.3} />
+        </mesh>
+      </group>
+    </group>
+  );
+}
+
 function SideTable({ position }: { position: [number, number, number] }) {
   return (
     <group position={position}>
@@ -2227,33 +2304,36 @@ function PlatformFurniture({
   const d = 0.14;
   const H = Math.PI / 2;
 
+  // Parasol offset: placed between the two chairs, shifted slightly away from pool
+  const po = cs * 0.5; // half-distance between chairs, along the side axis
+
   if (direction === 'east') {
-    // pool at -X → feet (+Z after rotY=-π/2) point toward -X ✓
     return (
       <group position={[0, 0, 0]}>
         <LoungeChair position={[0, y, -cs]} rotY={-H + d} />
         <SideTable   position={[0, y,   0]} />
         <LoungeChair position={[0, y,  cs]} rotY={-H - d} />
+        <Parasol     position={[0.55, y, po]} rotY={Math.PI * 0.15} />
       </group>
     );
   }
   if (direction === 'west') {
-    // pool at +X → rotY=+π/2
     return (
       <group position={[0, 0, 0]}>
         <LoungeChair position={[0, y, -cs]} rotY={H - d} />
         <SideTable   position={[0, y,   0]} />
         <LoungeChair position={[0, y,  cs]} rotY={H + d} />
+        <Parasol     position={[-0.55, y, po]} rotY={Math.PI * 1.15} />
       </group>
     );
   }
   if (direction === 'north') {
-    // pool at +Z → rotY≈0
     return (
       <group position={[0, 0, 0]}>
         <LoungeChair position={[-cs, y, 0]} rotY={ d} />
         <SideTable   position={[  0, y, 0]} />
         <LoungeChair position={[ cs, y, 0]} rotY={-d} />
+        <Parasol     position={[po, y, -0.55]} rotY={Math.PI * 0.65} />
       </group>
     );
   }
@@ -2263,6 +2343,7 @@ function PlatformFurniture({
       <LoungeChair position={[-cs, y, 0]} rotY={Math.PI - d} />
       <SideTable   position={[  0, y, 0]} />
       <LoungeChair position={[ cs, y, 0]} rotY={Math.PI + d} />
+      <Parasol     position={[po, y, 0.55]} rotY={Math.PI * 1.65} />
     </group>
   );
 }
@@ -2976,12 +3057,30 @@ function frameColorHex(c: FrameColor): string {
   }
 }
 
+function animatedColor(
+  mode: 'single' | 'dual',
+  color: LightColor,
+  color2: LightColor,
+  t: number
+): THREE.Color {
+  if (mode === 'dual') {
+    const blend = Math.sin(t * 0.7) * 0.5 + 0.5;
+    return new THREE.Color(lightColorHex(color)).lerp(new THREE.Color(lightColorHex(color2)), blend);
+  }
+  if (color === 'rgb') return new THREE.Color().setHSL((t * 0.08) % 1, 0.9, 0.45);
+  if (color === 'blue_purple') {
+    return new THREE.Color().setHSL(0.61 + (Math.sin(t * 0.6) * 0.5 + 0.5) * 0.17, 1.0, 0.48);
+  }
+  return new THREE.Color(lightColorHex(color));
+}
+
 function lightColorHex(c: LightColor): string {
   switch (c) {
-    case 'blue': return '#3b82f6';
-    case 'white': return '#ffffff';
-    case 'green': return '#22c55e';
-    case 'purple': return '#a855f7';
-    case 'rgb': return '#ff3b3b';
+    case 'blue':        return '#3b82f6';
+    case 'white':       return '#ffffff';
+    case 'green':       return '#22c55e';
+    case 'purple':      return '#a855f7';
+    case 'rgb':         return '#ff3b3b';
+    case 'blue_purple': return '#6a3cf7';
   }
 }

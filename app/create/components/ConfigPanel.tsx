@@ -38,7 +38,7 @@ interface Props {
   role: 'customer' | 'dealer' | 'admin';
 }
 
-type StepKey = 'size' | 'frame' | 'panels' | 'waterfall' | 'lighting' | 'ground' | 'finish' | 'summary';
+type StepKey = 'size' | 'frame' | 'panels' | 'waterfall' | 'lighting' | 'ground' | 'finish' | 'preview' | 'summary';
 
 export default function ConfigPanel({
   config, onChange,
@@ -57,8 +57,9 @@ export default function ConfigPanel({
     { key: 'waterfall', title: t('configurator.options_title'), short: t('configurator.waterfall'),     tip: t('configurator.options_tip') },
     { key: 'lighting',  title: t('configurator.lighting'),      short: t('configurator.lighting_short'),tip: t('configurator.lighting_tip') },
     { key: 'ground',    title: t('configurator.ground_title'),  short: t('configurator.ground_short'),  tip: t('configurator.ground_tip') },
-    { key: 'finish',    title: t('configurator.finish_title'),  short: t('configurator.finish_short'),  tip: t('configurator.finish_tip') },
-    { key: 'summary',   title: t('configurator.summary_title'), short: t('configurator.summary_short'), tip: t('configurator.summary_tip') },
+    { key: 'finish',    title: t('configurator.finish_title'),   short: t('configurator.finish_short'),   tip: t('configurator.finish_tip') },
+    { key: 'preview',   title: t('configurator.preview_title'),  short: t('configurator.preview_short'),  tip: t('configurator.preview_tip') },
+    { key: 'summary',   title: t('configurator.summary_title'), short: t('configurator.summary_short'),  tip: t('configurator.summary_tip') },
   ];
 
   const set = <K extends keyof PoolConfig>(key: K, value: PoolConfig[K]) =>
@@ -137,6 +138,7 @@ export default function ConfigPanel({
         {step.key === 'lighting'  && <LightingStep config={config} set={set} />}
         {step.key === 'ground'    && <GroundStep config={config} set={set} />}
         {step.key === 'finish'    && <FinishStep config={config} set={set} />}
+        {step.key === 'preview'   && <PreviewStep config={config} set={set} />}
         {step.key === 'summary'   && (
           <SummaryStep
             config={config}
@@ -315,6 +317,7 @@ function PanelsStep({
               side={side}
               config={config}
               onToggle={(idx) => {
+                if (side === 'east') return;
                 const k = panelKey(side, idx);
                 const current = getPanelType(config, side, idx);
                 const next: PanelType = current === 'glass' ? 'closed' : 'glass';
@@ -398,8 +401,13 @@ function LightingStep({
   set: <K extends keyof PoolConfig>(key: K, value: PoolConfig[K]) => void;
 }) {
   const { t } = useLanguage();
+  const disabled = !config.lighting.enabled;
+  const isDual = config.lighting.mode === 'dual';
+  const ALL_COLORS: LightColor[] = ['blue', 'white', 'green', 'purple', 'rgb', 'blue_purple'];
+
   return (
     <div className="space-y-4">
+      {/* On / Off */}
       <Toggle
         options={[
           { value: 'on',  label: t('configurator.open') },
@@ -408,25 +416,63 @@ function LightingStep({
         value={config.lighting.enabled ? 'on' : 'off'}
         onChange={(v) => set('lighting', { ...config.lighting, enabled: v === 'on' })}
       />
+
+      {/* Single / Dual mode */}
       <div>
-        <p className="label">{t('configurator.color_label')}</p>
-        <div className="flex gap-2">
-          {(['blue', 'white', 'green', 'purple', 'rgb'] as LightColor[]).map((c) => (
+        <Toggle
+          options={[
+            { value: 'single', label: t('configurator.single_color') },
+            { value: 'dual',   label: t('configurator.dual_color') },
+          ]}
+          value={config.lighting.mode}
+          onChange={(v) => set('lighting', { ...config.lighting, mode: v as 'single' | 'dual' })}
+          disabled={disabled}
+        />
+      </div>
+
+      {/* Color 1 */}
+      <div>
+        <p className="label">{isDual ? t('configurator.color_1') : t('configurator.color_label')}</p>
+        <div className="flex flex-wrap gap-2">
+          {ALL_COLORS.map((c) => (
             <button
               key={c}
               type="button"
-              disabled={!config.lighting.enabled}
+              disabled={disabled}
               onClick={() => set('lighting', { ...config.lighting, color: c })}
               className={`h-9 w-9 rounded-full border-2 transition-all ${
                 config.lighting.color === c ? 'scale-110 border-slate-900' : 'border-slate-200'
-              } ${!config.lighting.enabled ? 'opacity-40' : ''}`}
+              } ${disabled ? 'opacity-40' : ''}`}
               style={{ background: lightCssColor(c) }}
               aria-label={c}
             />
           ))}
         </div>
-        <p className="mt-2 text-xs text-slate-500">{t('configurator.lighting_note')}</p>
       </div>
+
+      {/* Color 2 — only visible in dual mode */}
+      {isDual && (
+        <div>
+          <p className="label">{t('configurator.color_2')}</p>
+          <div className="flex flex-wrap gap-2">
+            {ALL_COLORS.map((c) => (
+              <button
+                key={c}
+                type="button"
+                disabled={disabled}
+                onClick={() => set('lighting', { ...config.lighting, color2: c })}
+                className={`h-9 w-9 rounded-full border-2 transition-all ${
+                  config.lighting.color2 === c ? 'scale-110 border-slate-900' : 'border-slate-200'
+                } ${disabled ? 'opacity-40' : ''}`}
+                style={{ background: lightCssColor(c) }}
+                aria-label={c}
+              />
+            ))}
+          </div>
+        </div>
+      )}
+
+      <p className="text-xs text-slate-500">{t('configurator.lighting_note')}</p>
     </div>
   );
 }
@@ -595,17 +641,21 @@ function PanelRow({
       </span>
       <div className="flex flex-1 gap-1">
         {Array.from({ length: segmentsForSide(side, config) }, (_, i) => {
-          const type = getPanelType(config, side, i);
+          const isEast = side === 'east';
+          const type = isEast ? 'closed' : getPanelType(config, side, i);
           const isGlass = type === 'glass';
           return (
             <button
               key={i}
               type="button"
-              onClick={() => onToggle(i)}
-              title={isGlass ? t('configurator.toggle_to_closed') : t('configurator.toggle_to_glass')}
+              onClick={() => !isEast && onToggle(i)}
+              disabled={isEast}
+              title={isEast ? t('configurator.closed') : isGlass ? t('configurator.toggle_to_closed') : t('configurator.toggle_to_glass')}
               className={`h-9 flex-1 rounded border text-[11px] font-medium transition ${
                 isGlass
                   ? 'border-sky-300 bg-sky-100 text-sky-700 hover:bg-sky-200'
+                  : isEast
+                  ? 'border-slate-400 bg-slate-700 text-white opacity-60 cursor-not-allowed'
                   : 'border-slate-400 bg-slate-700 text-white hover:bg-slate-800'
               }`}
             >
@@ -660,17 +710,20 @@ function Toggle<T extends string>({
   options,
   value,
   onChange,
+  disabled,
 }: {
   options: { value: T; label: string }[];
   value: T;
   onChange: (v: T) => void;
+  disabled?: boolean;
 }) {
   return (
-    <div className="flex rounded-lg bg-slate-100 p-1 text-sm">
+    <div className={`flex rounded-lg bg-slate-100 p-1 text-sm ${disabled ? 'opacity-40' : ''}`}>
       {options.map((o) => (
         <button
           key={o.value}
           type="button"
+          disabled={disabled}
           onClick={() => onChange(o.value)}
           className={`flex-1 rounded-md px-3 py-2 transition ${
             value === o.value ? 'bg-white font-medium shadow' : 'text-slate-600'
@@ -718,8 +771,33 @@ function lightCssColor(c: LightColor): string {
     case 'white':  return '#f8fafc';
     case 'green':  return '#22c55e';
     case 'purple': return '#a855f7';
-    case 'rgb':    return 'conic-gradient(from 0deg, #ef4444, #f59e0b, #84cc16, #06b6d4, #6366f1, #ec4899, #ef4444)';
+    case 'rgb':         return 'conic-gradient(from 0deg, #ef4444, #f59e0b, #84cc16, #06b6d4, #6366f1, #ec4899, #ef4444)';
+    case 'blue_purple': return 'linear-gradient(135deg, #3b82f6 0%, #a855f7 100%)';
   }
+}
+
+/* ─── Preview ─────────────────────────────────────────────────────── */
+function PreviewStep({
+  config,
+  set,
+}: {
+  config: PoolConfig;
+  set: <K extends keyof PoolConfig>(key: K, value: PoolConfig[K]) => void;
+}) {
+  const { t } = useLanguage();
+  return (
+    <div className="space-y-4">
+      <p className="label">{t('configurator.water_label')}</p>
+      <Toggle
+        options={[
+          { value: 'on',  label: t('configurator.water_on') },
+          { value: 'off', label: t('configurator.water_off') },
+        ]}
+        value={config.showWater ? 'on' : 'off'}
+        onChange={(v) => set('showWater', v === 'on')}
+      />
+    </div>
+  );
 }
 
 /* ─── Summary & Quote ─────────────────────────────────────────────── */
