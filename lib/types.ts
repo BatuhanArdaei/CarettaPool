@@ -1,6 +1,6 @@
 export type FrameColor = 'anthracite' | 'blue' | 'white';
 export type PanelType = 'glass' | 'closed';
-export type LightColor = 'blue' | 'white' | 'green' | 'purple' | 'rgb';
+export type LightColor = 'blue' | 'white' | 'green' | 'purple' | 'rgb' | 'blue_purple';
 export type GroundType = 'gravel' | 'wood' | 'grass' | 'concrete';
 export type CladdingType =
   | 'white'
@@ -21,7 +21,9 @@ export interface PoolConfig {
   panelOverrides: Record<string, PanelType>; // key: `${side}-${index}`
   lighting: {
     enabled: boolean;
+    mode: 'single' | 'dual';
     color: LightColor;
+    color2: LightColor;
   };
   ground: GroundType;
   cladding: CladdingType;
@@ -30,6 +32,7 @@ export interface PoolConfig {
   railings: boolean;
   innerLadder: boolean;
   waterfall: boolean;
+  showWater: boolean;
 }
 
 export const defaultPoolConfig: PoolConfig = {
@@ -38,7 +41,7 @@ export const defaultPoolConfig: PoolConfig = {
   frameColor: 'anthracite',
   panel: 'glass',
   panelOverrides: {},
-  lighting: { enabled: false, color: 'blue' },
+  lighting: { enabled: false, mode: 'single', color: 'blue', color2: 'purple' },
   ground: 'grass',
   cladding: 'white',
   platformDirection: 'east',
@@ -46,6 +49,7 @@ export const defaultPoolConfig: PoolConfig = {
   railings: false,
   innerLadder: true,
   waterfall: false,
+  showWater: true,
 };
 
 export function panelKey(side: PoolSide, index: number): string {
@@ -57,6 +61,7 @@ export function getPanelType(
   side: PoolSide,
   index: number
 ): PanelType {
+  if (side === 'east') return 'closed'; // makine dairesi — her zaman kapalı
   return config.panelOverrides[panelKey(side, index)] ?? config.panel;
 }
 

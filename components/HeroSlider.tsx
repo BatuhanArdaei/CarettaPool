@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { localePath } from '@/lib/i18n/routes';
 
 interface Slide {
   image: string;
@@ -21,7 +22,7 @@ const SLIDE_DURATION = 6500; // ms
 export default function HeroSlider() {
   const [idx, setIdx] = useState(0);
   const [progress, setProgress] = useState(0);
-  const { t } = useLanguage();
+  const { t, lang } = useLanguage();
 
   // requestAnimationFrame loop for smooth progress; advances to next slide
   // when the bar fills up.
@@ -71,7 +72,7 @@ export default function HeroSlider() {
           {t('hero.description')}
         </p>
         <Link
-          href="/create"
+          href={localePath(lang, 'create')}
           className="mt-6 inline-flex items-center justify-center rounded-md bg-brand-500 px-5 py-3 text-sm font-medium text-white shadow-lg transition-colors hover:bg-brand-400 sm:mt-10 sm:px-8 sm:py-3.5"
         >
           {t('hero.cta')}

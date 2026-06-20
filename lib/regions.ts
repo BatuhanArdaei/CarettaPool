@@ -27,11 +27,11 @@ export const REGIONS: Region[] = [
     name: 'Avrupa',
     countryCode: 'eu',
     minLength: 4,
-    maxLength: 14,
+    maxLength: 13,
     minWidth: 2.30,
     maxWidth: 2.90,
     description: 'Avrupa\'ya deniz yolu',
-    note: 'Uzunluk 4–14 m · Genişlik 2.30–2.90 m',
+    note: 'Uzunluk 4–13 m · Genişlik 2.30–2.90 m',
   },
   {
     id: 'usa',

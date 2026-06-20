@@ -6,28 +6,28 @@ import { usePathname } from 'next/navigation';
 import { useState, useEffect } from 'react';
 import LanguageSwitcher from './LanguageSwitcher';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { localePath, type PageKey } from '@/lib/i18n/routes';
 
 interface Props {
   isAuthenticated: boolean;
   role: string | null;
 }
 
-// Nav links use translation keys — labels resolved inside component via t()
-const NAV_LINK_KEYS = [
-  { href: '/',           key: 'nav.home' },
-  { href: '/urunler',    key: 'nav.products' },
-  { href: '/create',     key: 'nav.create' },
-  { href: '/sss',        key: 'nav.faq' },
-  { href: '/iletisim',   key: 'nav.contact' },
-  { href: '/galeri',     key: 'nav.gallery' },
-  { href: '/kataloglar', key: 'nav.catalogs' },
+const NAV_PAGES: { page: PageKey | 'home' | 'create'; key: string }[] = [
+  { page: 'home',     key: 'nav.home' },
+  { page: 'products', key: 'nav.products' },
+  { page: 'create',   key: 'nav.create' },
+  { page: 'faq',      key: 'nav.faq' },
+  { page: 'contact',  key: 'nav.contact' },
+  { page: 'gallery',  key: 'nav.gallery' },
+  { page: 'catalogs', key: 'nav.catalogs' },
 ];
 
 export default function NavbarClient({ isAuthenticated, role }: Props) {
   const pathname = usePathname();
-  const minimal = pathname?.startsWith('/create') ?? false;
+  const minimal = pathname?.includes('/create') ?? false;
   const [menuOpen, setMenuOpen] = useState(false);
-  const { t } = useLanguage();
+  const { t, lang } = useLanguage();
 
   useEffect(() => { setMenuOpen(false); }, [pathname]);
   useEffect(() => {
@@ -35,25 +35,28 @@ export default function NavbarClient({ isAuthenticated, role }: Props) {
     return () => { document.body.style.overflow = ''; };
   }, [menuOpen]);
 
-  const adminLink = role === 'admin' ? { href: '/admin', key: 'nav.adminPanel' } : null;
-  const links = [
-    ...NAV_LINK_KEYS,
-    ...(adminLink ? [adminLink] : []),
-  ];
+  const links = NAV_PAGES.map((n) => ({
+    href: localePath(lang, n.page),
+    key:  n.key,
+  }));
+
+  if (role === 'admin') {
+    links.push({ href: '/admin', key: 'nav.adminPanel' });
+  }
 
   return (
     <>
       <header className="fixed top-0 left-0 right-0 z-40 border-b border-slate-800/60 bg-slate-950/80 backdrop-blur-md transition-all">
         <div className="flex h-16 items-center justify-between px-0 sm:h-20 md:h-24">
-          <Link href="/" className="flex shrink-0 items-center pl-0" aria-label="CarettaPool">
+          <Link href={localePath(lang, 'home')} className="flex shrink-0 items-center pl-4 sm:pl-6" aria-label="CarettaPool">
             <Image
               src="/carettapool.png"
               alt="CarettaPool"
               width={600}
               height={150}
               priority
-              className="h-20 w-auto object-contain sm:h-22 md:h-24"
-              style={{ maxWidth: '320px' }}
+              className="h-14 w-auto object-contain sm:h-16 md:h-20"
+              style={{ maxWidth: '400px' }}
             />
           </Link>
 
@@ -75,11 +78,10 @@ export default function NavbarClient({ isAuthenticated, role }: Props) {
           )}
 
           <div className="flex items-center gap-2 pr-4 md:pr-6">
-            {/* Hamburger — mobile only, BEFORE auth buttons */}
             {!minimal && (
               <button
                 type="button"
-                aria-label={menuOpen ? t('nav.menu') : t('nav.menu')}
+                aria-label={t('nav.menu')}
                 onClick={() => setMenuOpen((o) => !o)}
                 className="flex h-10 w-10 items-center justify-center rounded-md text-slate-300 transition-colors hover:bg-slate-800 lg:hidden"
               >
@@ -97,8 +99,16 @@ export default function NavbarClient({ isAuthenticated, role }: Props) {
 
             <LanguageSwitcher />
 
-            {/* Auth buttons */}
-            {isAuthenticated ? (
+            {!isAuthenticated && !minimal && (
+              <Link
+                href={localePath(lang, 'login')}
+                className="hidden rounded-lg border border-slate-700 px-3 py-2 text-xs font-medium text-slate-400 transition-colors hover:border-slate-500 hover:text-slate-200 lg:inline-flex"
+              >
+                {t('nav.adminLogin')}
+              </Link>
+            )}
+
+            {isAuthenticated && (
               <>
                 {role === 'admin' && (
                   <Link href="/admin"
@@ -113,16 +123,10 @@ export default function NavbarClient({ isAuthenticated, role }: Props) {
                   </button>
                 </form>
               </>
-            ) : (
-              <Link href="/login?redirect=/admin"
-                className="rounded-lg border border-brand-600 bg-brand-600/10 px-4 py-2 text-sm font-medium text-brand-400 transition-colors hover:bg-brand-600/20">
-                {t('nav.adminLogin')}
-              </Link>
             )}
 
-            {/* Desktop CTA */}
             {!minimal && (
-              <Link href="/create"
+              <Link href={localePath(lang, 'create')}
                 className="hidden rounded-lg bg-brand-500 px-4 py-2 text-sm font-medium text-white shadow-sm transition-colors hover:bg-brand-400 lg:inline-flex">
                 {t('nav.startDesign')}
               </Link>
@@ -131,12 +135,10 @@ export default function NavbarClient({ isAuthenticated, role }: Props) {
         </div>
       </header>
 
-      {/* Mobile overlay */}
       {menuOpen && (
         <div className="fixed inset-0 z-30 bg-black/40 lg:hidden" onClick={() => setMenuOpen(false)} aria-hidden="true" />
       )}
 
-      {/* Mobile drawer */}
       <div className={`fixed inset-y-0 right-0 z-40 w-72 bg-slate-950 shadow-2xl transition-transform duration-300 ease-in-out lg:hidden ${menuOpen ? 'translate-x-0' : 'translate-x-full'}`}>
         <div className="flex h-16 items-center justify-between border-b border-slate-800 px-5">
           <span className="text-sm font-semibold text-white">{t('nav.menu')}</span>
@@ -157,10 +159,16 @@ export default function NavbarClient({ isAuthenticated, role }: Props) {
               {t(l.key)}
             </Link>
           ))}
-          <Link href="/create" onClick={() => setMenuOpen(false)}
+          <Link href={localePath(lang, 'create')} onClick={() => setMenuOpen(false)}
             className="mt-3 rounded-lg bg-brand-500 px-4 py-3 text-center text-sm font-medium text-white hover:bg-brand-400">
             {t('nav.startDesign')}
           </Link>
+          {!isAuthenticated && (
+            <Link href={localePath(lang, 'login')} onClick={() => setMenuOpen(false)}
+              className="mt-2 rounded-lg border border-brand-600 bg-brand-600/10 px-4 py-3 text-center text-sm font-medium text-brand-400 transition-colors hover:bg-brand-600/20">
+              {t('nav.adminLogin')}
+            </Link>
+          )}
         </nav>
       </div>
     </>

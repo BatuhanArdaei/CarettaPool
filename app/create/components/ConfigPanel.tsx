@@ -20,12 +20,13 @@ import { createClient } from '@/lib/supabase/client';
 import { formatTRY, type PriceBreakdown } from '@/lib/pricing';
 import { countPanels } from '@/lib/types';
 import type { Region } from '@/lib/regions';
+import { useLanguage } from '@/contexts/LanguageContext';
+import CountryPhoneInput from '@/components/CountryPhoneInput';
 
 interface Props {
   config: PoolConfig;
   onChange: (next: PoolConfig) => void;
   region: Region;
-  // Özet adımı için
   breakdown: PriceBreakdown;
   isDealer: boolean;
   discountRate: number;
@@ -37,63 +38,7 @@ interface Props {
   role: 'customer' | 'dealer' | 'admin';
 }
 
-interface StepDef {
-  key: 'size' | 'frame' | 'panels' | 'waterfall' | 'lighting' | 'ground' | 'finish' | 'summary';
-  title: string;
-  short: string;
-  tip: string;
-}
-
-const STEPS: StepDef[] = [
-  {
-    key: 'size',
-    title: 'Boyut',
-    short: 'Boyut',
-    tip: 'Havuzun genişlik ve uzunluğunu metre cinsinden belirleyin. Slider\'ları çekerek 3D ortamda anlık güncellemeyi görebilirsiniz.',
-  },
-  {
-    key: 'frame',
-    title: 'Çerçeve Rengi',
-    short: 'Çerçeve',
-    tip: 'Çelik çerçevenin rengini seçin. Antrasit standart sertir; mavi ve beyaz dekoratif renklerdir.',
-  },
-  {
-    key: 'panels',
-    title: 'Cam Paneller',
-    short: 'Paneller',
-    tip: 'Önce tümü için varsayılan tipi (cam veya kapalı) seçin, sonra bölme sayısını belirleyin. Aşağıdaki ızgaradan istediğiniz bölmeyi tıklayarak tek tek değiştirebilirsiniz.',
-  },
-  {
-    key: 'waterfall',
-    title: 'Opsiyonlar',
-    short: 'Opsiyonlar',
-    tip: 'Şelale, yan platform, dış uzatma ve merdiven gibi opsiyonel ekipmanları bu adımdan açıp kapatabilirsiniz.',
-  },
-  {
-    key: 'lighting',
-    title: 'Işıklandırma',
-    short: 'Işık',
-    tip: 'Sualtı LED + havuz çevresi LED şerit. Açıkken ortam gece moduna geçer ve ışık çevreyi aydınlatır. RGB seçeneği renkler arası canlı animasyon yapar.',
-  },
-  {
-    key: 'ground',
-    title: 'Zemin Önizleme',
-    short: 'Zemin',
-    tip: 'Havuz çevresindeki zemin tipini seçin. 3D sahnede anlık önizleyebilirsiniz.',
-  },
-  {
-    key: 'finish',
-    title: 'Kaplama',
-    short: 'Kaplama',
-    tip: 'Havuzun iç ve dış yüzeylerinde kullanılacak kaplama desenini seçin.',
-  },
-  {
-    key: 'summary',
-    title: 'Özet & Teklif',
-    short: 'Özet',
-    tip: 'Seçimlerinizi gözden geçirin. Her şey doğruysa "Teklif Al" butonuna basarak talebinizi iletebilirsiniz.',
-  },
-];
+type StepKey = 'size' | 'frame' | 'panels' | 'waterfall' | 'lighting' | 'ground' | 'finish' | 'preview' | 'summary';
 
 export default function ConfigPanel({
   config, onChange,
@@ -101,8 +46,21 @@ export default function ConfigPanel({
   breakdown, isDealer, discountRate, loading, priceError,
   userId, userEmail, fullName, role,
 }: Props) {
+  const { t } = useLanguage();
   const [stepIdx, setStepIdx] = useState(0);
   const [tipOpen, setTipOpen] = useState(true);
+
+  const STEPS: { key: StepKey; title: string; short: string; tip: string }[] = [
+    { key: 'size',      title: t('configurator.size'),          short: t('configurator.size'),          tip: t('configurator.size_tip') },
+    { key: 'frame',     title: t('configurator.frame_title'),   short: t('configurator.frame'),         tip: t('configurator.frame_tip') },
+    { key: 'panels',    title: t('configurator.panels_title'),  short: t('configurator.panels_short'),  tip: t('configurator.panels_tip') },
+    { key: 'waterfall', title: t('configurator.options_title'), short: t('configurator.waterfall'),     tip: t('configurator.options_tip') },
+    { key: 'lighting',  title: t('configurator.lighting'),      short: t('configurator.lighting_short'),tip: t('configurator.lighting_tip') },
+    { key: 'ground',    title: t('configurator.ground_title'),  short: t('configurator.ground_short'),  tip: t('configurator.ground_tip') },
+    { key: 'finish',    title: t('configurator.finish_title'),   short: t('configurator.finish_short'),   tip: t('configurator.finish_tip') },
+    { key: 'preview',   title: t('configurator.preview_title'),  short: t('configurator.preview_short'),  tip: t('configurator.preview_tip') },
+    { key: 'summary',   title: t('configurator.summary_title'), short: t('configurator.summary_short'),  tip: t('configurator.summary_tip') },
+  ];
 
   const set = <K extends keyof PoolConfig>(key: K, value: PoolConfig[K]) =>
     onChange({ ...config, [key]: value });
@@ -114,7 +72,7 @@ export default function ConfigPanel({
   return (
     <aside className="card flex max-h-[80vh] flex-col">
       {/* Stepper */}
-      <div className="border-b border-slate-200 p-3">
+      <div id="tour-stepper" className="border-b border-slate-200 p-3">
         <div className="flex items-stretch justify-between gap-0.5">
           {STEPS.map((s, i) => (
             <button
@@ -160,31 +118,28 @@ export default function ConfigPanel({
             onClick={() => setTipOpen(!tipOpen)}
             className="text-[11px] font-medium text-slate-500 underline-offset-2 hover:text-slate-700 hover:underline"
           >
-            {tipOpen ? 'Yardımı gizle' : 'Yardım'}
+            {tipOpen ? t('configurator.hideHelp') : t('configurator.help')}
           </button>
         </div>
         {tipOpen && (
           <div className="mt-2 rounded-md bg-amber-50 p-2.5 text-xs leading-relaxed text-amber-900 ring-1 ring-amber-200/60">
-            <span className="font-semibold">İpucu: </span>
+            <span className="font-semibold">{t('configurator.tip_prefix')}</span>
             {step.tip}
           </div>
         )}
       </div>
 
       {/* Step content */}
-      <div className="flex-1 space-y-5 overflow-y-auto p-4">
-        {step.key === 'size' && <SizeStep config={config} set={set} region={region} />}
-        {step.key === 'frame' && <FrameStep config={config} set={set} />}
-        {step.key === 'panels' && (
-          <PanelsStep config={config} set={set} onChange={onChange} />
-        )}
-        {step.key === 'waterfall' && (
-          <WaterfallStep config={config} set={set} />
-        )}
-        {step.key === 'lighting' && <LightingStep config={config} set={set} />}
-        {step.key === 'ground'   && <GroundStep  config={config} set={set} />}
-        {step.key === 'finish'   && <FinishStep  config={config} set={set} />}
-        {step.key === 'summary' && (
+      <div id="tour-content" className="flex-1 space-y-5 overflow-y-auto p-4">
+        {step.key === 'size'      && <SizeStep config={config} set={set} region={region} />}
+        {step.key === 'frame'     && <FrameStep config={config} set={set} />}
+        {step.key === 'panels'    && <PanelsStep config={config} set={set} onChange={onChange} />}
+        {step.key === 'waterfall' && <WaterfallStep config={config} set={set} />}
+        {step.key === 'lighting'  && <LightingStep config={config} set={set} />}
+        {step.key === 'ground'    && <GroundStep config={config} set={set} />}
+        {step.key === 'finish'    && <FinishStep config={config} set={set} />}
+        {step.key === 'preview'   && <PreviewStep config={config} set={set} />}
+        {step.key === 'summary'   && (
           <SummaryStep
             config={config}
             breakdown={breakdown}
@@ -201,27 +156,25 @@ export default function ConfigPanel({
       </div>
 
       {/* Footer nav */}
-      <div className="flex shrink-0 items-center justify-between gap-2 border-t border-slate-200 p-3">
+      <div id="tour-nav" className="flex shrink-0 items-center justify-between gap-2 border-t border-slate-200 p-3">
         <button
           type="button"
           onClick={() => setStepIdx(Math.max(0, stepIdx - 1))}
           disabled={isFirst}
           className="btn-outline px-3 py-1.5 text-sm disabled:cursor-not-allowed disabled:opacity-40"
         >
-          ← Önceki
+          ← {t('configurator.prev')}
         </button>
         <span className="text-xs font-medium text-slate-500">
           {stepIdx + 1} / {STEPS.length}
         </span>
         <button
           type="button"
-          onClick={() =>
-            setStepIdx(Math.min(STEPS.length - 1, stepIdx + 1))
-          }
+          onClick={() => setStepIdx(Math.min(STEPS.length - 1, stepIdx + 1))}
           disabled={isLast}
           className="btn-primary px-3 py-1.5 text-sm disabled:cursor-not-allowed disabled:opacity-40"
         >
-          Sonraki →
+          {t('configurator.next')} →
         </button>
       </div>
     </aside>
@@ -241,12 +194,9 @@ function SizeStep({
   set: <K extends keyof PoolConfig>(key: K, value: PoolConfig[K]) => void;
   region: Region;
 }) {
-  // From the camera angle, config.length (Z axis) appears as visual WIDTH
-  // and config.width (X axis) appears as visual DEPTH/LENGTH.
-  // Sliders are mapped accordingly so labels match visual behaviour.
+  const { t } = useLanguage();
   return (
     <div className="space-y-4">
-      {/* Region badge */}
       <div className="flex items-center gap-2 rounded-lg bg-brand-50 px-3 py-2 text-xs text-brand-700 ring-1 ring-brand-200">
         <svg viewBox="0 0 16 16" className="h-3.5 w-3.5 shrink-0" fill="currentColor">
           <path d="M8 0a8 8 0 1 0 0 16A8 8 0 0 0 8 0zm0 2a6 6 0 1 1 0 12A6 6 0 0 1 8 2z" opacity=".3"/>
@@ -257,9 +207,8 @@ function SizeStep({
         </span>
       </div>
 
-      {/* Genişlik → config.width */}
       <RangeRow
-        label="Genişlik"
+        label={t('configurator.width_label')}
         value={config.width}
         min={region.minWidth}
         max={region.maxWidth}
@@ -268,9 +217,8 @@ function SizeStep({
         onChange={(v) => set('width', Math.min(v, region.maxWidth))}
       />
 
-      {/* Uzunluk → config.length */}
       <RangeRow
-        label="Uzunluk"
+        label={t('configurator.length_label')}
         value={config.length}
         min={region.minLength}
         max={region.maxLength}
@@ -280,7 +228,7 @@ function SizeStep({
       />
 
       <div className="rounded-md bg-slate-50 p-3 text-xs text-slate-600">
-        Toplam alan:{' '}
+        {t('configurator.total_area')}:{' '}
         <span className="font-semibold text-slate-900">
           {(config.width * config.length).toFixed(1)} m²
         </span>
@@ -296,15 +244,15 @@ function FrameStep({
   config: PoolConfig;
   set: <K extends keyof PoolConfig>(key: K, value: PoolConfig[K]) => void;
 }) {
+  const { t } = useLanguage();
+  const colors: { value: FrameColor; key: string; hex: string }[] = [
+    { value: 'anthracite', key: 'configurator.anthracite', hex: '#3a3f45' },
+    { value: 'blue',       key: 'configurator.blue_color', hex: '#2da6d2' },
+    { value: 'white',      key: 'configurator.white_color', hex: '#e5e7eb' },
+  ];
   return (
     <div className="flex gap-2">
-      {(
-        [
-          { value: 'anthracite', label: 'Antrasit', hex: '#3a3f45' },
-          { value: 'blue', label: 'Mavi', hex: '#2da6d2' },
-          { value: 'white', label: 'Beyaz', hex: '#e5e7eb' },
-        ] as { value: FrameColor; label: string; hex: string }[]
-      ).map((c) => (
+      {colors.map((c) => (
         <button
           key={c.value}
           type="button"
@@ -315,11 +263,8 @@ function FrameStep({
               : 'border-slate-200 hover:bg-slate-50'
           }`}
         >
-          <span
-            className="h-10 w-full rounded border border-slate-300"
-            style={{ background: c.hex }}
-          />
-          <span className="text-xs font-medium text-slate-700">{c.label}</span>
+          <span className="h-10 w-full rounded border border-slate-300" style={{ background: c.hex }} />
+          <span className="text-xs font-medium text-slate-700">{t(c.key)}</span>
         </button>
       ))}
     </div>
@@ -335,36 +280,33 @@ function PanelsStep({
   set: <K extends keyof PoolConfig>(key: K, value: PoolConfig[K]) => void;
   onChange: (next: PoolConfig) => void;
 }) {
+  const { t } = useLanguage();
   return (
     <div className="space-y-4">
       <div>
-        <p className="label">Tümü için varsayılan</p>
+        <p className="label">{t('configurator.all_default')}</p>
         <Toggle
           options={[
-            { value: 'glass', label: 'Cam (Şeffaf)' },
-            { value: 'closed', label: 'Kapalı Panel' },
+            { value: 'glass',  label: t('configurator.glass_panel') },
+            { value: 'closed', label: t('configurator.closed_panel') },
           ]}
           value={config.panel}
           onChange={(v) =>
-            onChange({
-              ...config,
-              panel: v as PanelType,
-              panelOverrides: {},
-            })
+            onChange({ ...config, panel: v as PanelType, panelOverrides: {} })
           }
         />
       </div>
 
       <div>
         <div className="mb-2 flex items-center justify-between">
-          <p className="label mb-0">Bölmeleri tek tek seç</p>
+          <p className="label mb-0">{t('configurator.select_individual')}</p>
           {Object.keys(config.panelOverrides).length > 0 && (
             <button
               type="button"
               onClick={() => set('panelOverrides', {})}
               className="text-xs text-slate-500 underline hover:text-slate-700"
             >
-              Sıfırla
+              {t('configurator.reset_btn')}
             </button>
           )}
         </div>
@@ -375,10 +317,10 @@ function PanelsStep({
               side={side}
               config={config}
               onToggle={(idx) => {
+                if (side === 'east') return;
                 const k = panelKey(side, idx);
                 const current = getPanelType(config, side, idx);
-                const next: PanelType =
-                  current === 'glass' ? 'closed' : 'glass';
+                const next: PanelType = current === 'glass' ? 'closed' : 'glass';
                 const overrides = { ...config.panelOverrides };
                 if (next === config.panel) {
                   delete overrides[k];
@@ -402,74 +344,51 @@ function WaterfallStep({
   config: PoolConfig;
   set: <K extends keyof PoolConfig>(key: K, value: PoolConfig[K]) => void;
 }) {
+  const { t } = useLanguage();
+  const onLabel  = t('configurator.yes');
+  const offLabel = t('configurator.none');
+
   return (
     <div className="space-y-5">
-      {/* Şelale */}
       <div className="space-y-2">
-        <p className="label">Şelale</p>
+        <p className="label">{t('configurator.waterfall')}</p>
         <Toggle
-          options={[
-            { value: 'on', label: 'Var' },
-            { value: 'off', label: 'Yok' },
-          ]}
+          options={[{ value: 'on', label: onLabel }, { value: 'off', label: offLabel }]}
           value={config.waterfall ? 'on' : 'off'}
           onChange={(v) => set('waterfall', v === 'on')}
         />
-        <p className="text-xs text-slate-500">
-          Paslanmaz çelik kavisli su perdesi havuzun kısa kenarına yerleşir.
-        </p>
+        <p className="text-xs text-slate-500">{t('configurator.waterfall_note')}</p>
       </div>
 
-      {/* Platform dış uzatma */}
-      {(
-        <div className="space-y-2">
-          <p className="label">Dış Uzatma</p>
-          <Toggle
-            options={[
-              { value: 'on', label: 'Var' },
-              { value: 'off', label: 'Yok' },
-            ]}
-            value={config.platformExtension ? 'on' : 'off'}
-            onChange={(v) => set('platformExtension', v === 'on')}
-          />
-          <p className="text-xs text-slate-500">
-            Makine odası ötesindeki açık platform şeridi (ayak + korkuluk). Kapalıyken platform yalnızca makine odası genişliğine iner.
-          </p>
-        </div>
-      )}
-
-      {/* İç Merdiven */}
       <div className="space-y-2">
-        <p className="label">İç Merdiven</p>
+        <p className="label">{t('configurator.ext_label')}</p>
         <Toggle
-          options={[
-            { value: 'on', label: 'Var' },
-            { value: 'off', label: 'Yok' },
-          ]}
+          options={[{ value: 'on', label: onLabel }, { value: 'off', label: offLabel }]}
+          value={config.platformExtension ? 'on' : 'off'}
+          onChange={(v) => set('platformExtension', v === 'on')}
+        />
+        <p className="text-xs text-slate-500">{t('configurator.ext_note')}</p>
+      </div>
+
+      <div className="space-y-2">
+        <p className="label">{t('configurator.ladder_label')}</p>
+        <Toggle
+          options={[{ value: 'on', label: onLabel }, { value: 'off', label: offLabel }]}
           value={config.innerLadder ? 'on' : 'off'}
           onChange={(v) => set('innerLadder', v === 'on')}
         />
-        <p className="text-xs text-slate-500">
-          Havuz içindeki paslanmaz çelik giriş merdiveni.
-        </p>
+        <p className="text-xs text-slate-500">{t('configurator.ladder_note')}</p>
       </div>
 
-      {/* Korkuluklar */}
       <div className="space-y-2">
-        <p className="label">Korkuluklar</p>
+        <p className="label">{t('configurator.railings_label')}</p>
         <Toggle
-          options={[
-            { value: 'on', label: 'Var' },
-            { value: 'off', label: 'Yok' },
-          ]}
+          options={[{ value: 'on', label: onLabel }, { value: 'off', label: offLabel }]}
           value={config.railings ? 'on' : 'off'}
           onChange={(v) => set('railings', v === 'on')}
         />
-        <p className="text-xs text-slate-500">
-          Platform üzerindeki güvenlik korkulukları.
-        </p>
+        <p className="text-xs text-slate-500">{t('configurator.railings_note')}</p>
       </div>
-
     </div>
   );
 }
@@ -481,79 +400,110 @@ function LightingStep({
   config: PoolConfig;
   set: <K extends keyof PoolConfig>(key: K, value: PoolConfig[K]) => void;
 }) {
+  const { t } = useLanguage();
+  const disabled = !config.lighting.enabled;
+  const isDual = config.lighting.mode === 'dual';
+  const ALL_COLORS: LightColor[] = ['blue', 'white', 'green', 'purple', 'rgb', 'blue_purple'];
+
   return (
     <div className="space-y-4">
+      {/* On / Off */}
       <Toggle
         options={[
-          { value: 'on', label: 'Açık' },
-          { value: 'off', label: 'Kapalı' },
+          { value: 'on',  label: t('configurator.open') },
+          { value: 'off', label: t('configurator.closed') },
         ]}
         value={config.lighting.enabled ? 'on' : 'off'}
-        onChange={(v) =>
-          set('lighting', { ...config.lighting, enabled: v === 'on' })
-        }
+        onChange={(v) => set('lighting', { ...config.lighting, enabled: v === 'on' })}
       />
+
+      {/* Single / Dual mode */}
       <div>
-        <p className="label">Renk</p>
-        <div className="flex gap-2">
-          {(['blue', 'white', 'green', 'purple', 'rgb'] as LightColor[]).map(
-            (c) => (
+        <Toggle
+          options={[
+            { value: 'single', label: t('configurator.single_color') },
+            { value: 'dual',   label: t('configurator.dual_color') },
+          ]}
+          value={config.lighting.mode}
+          onChange={(v) => set('lighting', { ...config.lighting, mode: v as 'single' | 'dual' })}
+          disabled={disabled}
+        />
+      </div>
+
+      {/* Color 1 */}
+      <div>
+        <p className="label">{isDual ? t('configurator.color_1') : t('configurator.color_label')}</p>
+        <div className="flex flex-wrap gap-2">
+          {ALL_COLORS.map((c) => (
+            <button
+              key={c}
+              type="button"
+              disabled={disabled}
+              onClick={() => set('lighting', { ...config.lighting, color: c })}
+              className={`h-9 w-9 rounded-full border-2 transition-all ${
+                config.lighting.color === c ? 'scale-110 border-slate-900' : 'border-slate-200'
+              } ${disabled ? 'opacity-40' : ''}`}
+              style={{ background: lightCssColor(c) }}
+              aria-label={c}
+            />
+          ))}
+        </div>
+      </div>
+
+      {/* Color 2 — only visible in dual mode */}
+      {isDual && (
+        <div>
+          <p className="label">{t('configurator.color_2')}</p>
+          <div className="flex flex-wrap gap-2">
+            {ALL_COLORS.map((c) => (
               <button
                 key={c}
                 type="button"
-                disabled={!config.lighting.enabled}
-                onClick={() =>
-                  set('lighting', { ...config.lighting, color: c })
-                }
+                disabled={disabled}
+                onClick={() => set('lighting', { ...config.lighting, color2: c })}
                 className={`h-9 w-9 rounded-full border-2 transition-all ${
-                  config.lighting.color === c
-                    ? 'scale-110 border-slate-900'
-                    : 'border-slate-200'
-                } ${!config.lighting.enabled ? 'opacity-40' : ''}`}
+                  config.lighting.color2 === c ? 'scale-110 border-slate-900' : 'border-slate-200'
+                } ${disabled ? 'opacity-40' : ''}`}
                 style={{ background: lightCssColor(c) }}
-                title={c === 'rgb' ? 'RGB animasyon' : c}
                 aria-label={c}
               />
-            )
-          )}
+            ))}
+          </div>
         </div>
-        <p className="mt-2 text-xs text-slate-500">
-          Işık açıkken sahne otomatik olarak gece moduna geçer.
-        </p>
-      </div>
+      )}
+
+      <p className="text-xs text-slate-500">{t('configurator.lighting_note')}</p>
     </div>
   );
 }
 
 const CLADDING_TEXTURES: { file: string; name: string }[] = [
-  { file: 'BELIZE MIX 60x120.jpg',           name: 'Belize Mix' },
-  { file: 'BEST CEPPO BONE 60x120.jpg',       name: 'Best Ceppo Bone' },
-  { file: 'BEST CEPPO CREAM.jpg',             name: 'Best Ceppo Cream' },
-  { file: 'BEST CEPPO PEARL 60x120.jpg',      name: 'Best Ceppo Pearl' },
-  { file: 'BEST CEPPO TARMAC 60x120_.jpg',    name: 'Best Ceppo Tarmac' },
-  { file: 'BEST MIX CREAM 60x120.jpg',        name: 'Best Mix Cream' },
-  { file: 'BEST SILENCE Pearl 60x120.jpg',    name: 'Best Silence Pearl' },
-  { file: 'Best Silence Whale 60x120.jpg',    name: 'Best Silence Whale' },
-  { file: 'BEST STONE TARMAC 60x120.jpg',     name: 'Best Stone Tarmac' },
-  { file: 'FLORIDA TURKUAZ 60X120.jpg',       name: 'Florida Turkuaz' },
-  { file: 'KARYA MAVi 60x120.jpg',            name: 'Karya Mavi' },
-  { file: 'MERİDYEN YEŞİL 60x120.jpg',        name: 'Meridyen Yeşil' },
-  { file: 'Meridyen Yeşil Bookmatch 60x120.jpg', name: 'Meridyen Yeşil Bookmatch' },
-  { file: 'Oceon Mavi 30x60.jpg',             name: 'Oceon Mavi' },
-  { file: 'Oceon Turkuaz 30x60.jpg',          name: 'Oceon Turkuaz' },
-  { file: 'Onice Moon 60x120.jpg',            name: 'Onice Moon' },
-  { file: 'Oxide Antrasit 60x120.jpg',        name: 'Oxide Antrasit' },
-  { file: 'Oxide Cobalt 60X120.jpg',          name: 'Oxide Cobalt' },
-  { file: 'oxide sky 60x120.jpg',             name: 'Oxide Sky' },
-  { file: 'OXSiDE TURKUAZ  60x120.jpg',       name: 'Oxide Turkuaz' },
-  { file: 'PARADISE QARYY MAVI_F1.jpg',       name: 'Paradise Qaryy Mavi' },
-  { file: 'Paradise Amazon 60x120.jpg',       name: 'Paradise Amazon' },
-  { file: 'Paradise Ametist 60x120.jpg',      name: 'Paradise Ametist' },
-  { file: 'Paradise Rain Forest 60x120.jpg',  name: 'Paradise Rain Forest' },
-  { file: 'Paradise Turkuaz 60x120.jpg',      name: 'Paradise Turkuaz' },
-  { file: 'Sardes Açık Gri 60x120.jpg',       name: 'Sardes Açık Gri' },
-  { file: 'SALDA MAVİ render.jpg',            name: 'Salda Mavi' },
-  { file: 'KARYA MAVİ Render 60X120.jpg',     name: 'Karya Mavi Render' },
+  { file: 'BELIZE MIX 60x120.webp',              name: 'Belize Mix' },
+  { file: 'BEST CEPPO BONE 60x120.webp',         name: 'Best Ceppo Bone' },
+  { file: 'BEST CEPPO CREAM.webp',               name: 'Best Ceppo Cream' },
+  { file: 'BEST CEPPO PEARL 60x120.webp',        name: 'Best Ceppo Pearl' },
+  { file: 'BEST CEPPO TARMAC 60x120_.webp',      name: 'Best Ceppo Tarmac' },
+  { file: 'BEST SILENCE Pearl 60x120.webp',      name: 'Best Silence Pearl' },
+  { file: 'Best Silence Whale 60x120.webp',      name: 'Best Silence Whale' },
+  { file: 'BEST STONE TARMAC 60x120.webp',       name: 'Best Stone Tarmac' },
+  { file: 'FLORIDA TURKUAZ 60X120.webp',         name: 'Florida Turkuaz' },
+  { file: 'KARYA MAVi 60x120.webp',              name: 'Karya Mavi' },
+  { file: 'MERIDYEN YESIL 60x120.webp',          name: 'Meridyen Yeşil' },
+  { file: 'Meridyen Yesil Bookmatch 60x120.webp',name: 'Meridyen Yeşil Bookmatch' },
+  { file: 'Oceon Mavi 30x60.webp',               name: 'Oceon Mavi' },
+  { file: 'Oceon Turkuaz 30x60.webp',            name: 'Oceon Turkuaz' },
+  { file: 'Onice Moon 60x120.webp',              name: 'Onice Moon' },
+  { file: 'Oxide Antrasit 60x120.webp',          name: 'Oxide Antrasit' },
+  { file: 'Oxide Cobalt 60X120.webp',            name: 'Oxide Cobalt' },
+  { file: 'oxide sky 60x120.webp',               name: 'Oxide Sky' },
+  { file: 'OXSiDE TURKUAZ  60x120.webp',         name: 'Oxide Turkuaz' },
+  { file: 'PARADISE QARYY MAVI_F1.webp',         name: 'Paradise Qaryy Mavi F1' },
+  { file: 'PARADISE QARYY MAVI_F2.webp',         name: 'Paradise Qaryy Mavi F2' },
+  { file: 'Paradise Amazon 60x120.webp',         name: 'Paradise Amazon' },
+  { file: 'Paradise Ametist 60x120.webp',        name: 'Paradise Ametist' },
+  { file: 'Paradise Rain Forest 60x120.webp',    name: 'Paradise Rain Forest' },
+  { file: 'Paradise Turkuaz 60x120.webp',        name: 'Paradise Turkuaz' },
+  { file: 'SALDA MAVI IC 30x60.webp',            name: 'Salda Mavi' },
 ];
 
 const PAGE = 5;
@@ -565,24 +515,23 @@ function GroundStep({
   config: PoolConfig;
   set: <K extends keyof PoolConfig>(key: K, value: PoolConfig[K]) => void;
 }) {
+  const { t } = useLanguage();
   return (
     <div className="space-y-4">
       <div>
-        <p className="label">Zemin Tipi</p>
+        <p className="label">{t('configurator.ground_type')}</p>
         <SelectGrid
           options={[
-            { value: 'gravel',   label: 'Çakıl' },
-            { value: 'wood',     label: 'Tahta Deck' },
-            { value: 'grass',    label: 'Çimen' },
-            { value: 'concrete', label: 'Beton' },
+            { value: 'gravel',   label: t('configurator.gravel') },
+            { value: 'wood',     label: t('configurator.wood_deck') },
+            { value: 'grass',    label: t('configurator.grass') },
+            { value: 'concrete', label: t('configurator.concrete') },
           ]}
           value={config.ground}
           onChange={(v) => set('ground', v as GroundType)}
         />
       </div>
-      <p className="text-xs text-slate-500">
-        Seçtiğiniz zemin tipi 3D sahnede anlık olarak güncellenir.
-      </p>
+      <p className="text-xs text-slate-500">{t('configurator.ground_note')}</p>
     </div>
   );
 }
@@ -594,29 +543,26 @@ function FinishStep({
   config: PoolConfig;
   set: <K extends keyof PoolConfig>(key: K, value: PoolConfig[K]) => void;
 }) {
+  const { t } = useLanguage();
   const [visible, setVisible] = useStateR(PAGE);
 
   return (
     <div className="space-y-5">
-      {/* İç/Dış Kaplama */}
       <div>
-        <p className="label">İç / Dış Kaplama</p>
-
-        {/* Standart renkler */}
+        <p className="label">{t('configurator.cladding_label')}</p>
         <div className="mb-2">
           <SelectGrid
             options={[
-              { value: 'white',      label: 'Beyaz' },
-              { value: 'blue_mosaic',label: 'Mavi Mozaik' },
-              { value: 'gray_stone', label: 'Gri Taş' },
-              { value: 'turquoise',  label: 'Turkuaz' },
+              { value: 'white',       label: t('configurator.white_cladding') },
+              { value: 'blue_mosaic', label: t('configurator.blue_mosaic') },
+              { value: 'gray_stone',  label: t('configurator.gray_stone') },
+              { value: 'turquoise',   label: t('configurator.turquoise_cladding') },
             ]}
             value={['white','blue_mosaic','gray_stone','turquoise'].includes(config.cladding) ? config.cladding : ''}
             onChange={(v) => set('cladding', v as CladdingType)}
           />
         </div>
 
-        {/* Doku galerisi */}
         <div className="grid grid-cols-5 gap-1.5">
           {CLADDING_TEXTURES.slice(0, visible).map((tex) => {
             const val = `/textures/${tex.file}`;
@@ -660,7 +606,7 @@ function FinishStep({
             onClick={() => setVisible((v) => v + PAGE)}
             className="mt-2 w-full rounded-lg border border-slate-200 py-1.5 text-xs font-medium text-slate-600 hover:border-slate-400 hover:text-slate-800 transition"
           >
-            Daha fazla ({CLADDING_TEXTURES.length - visible} kaplama daha)
+            {t('configurator.more_cladding').replace('{n}', String(CLADDING_TEXTURES.length - visible))}
           </button>
         )}
       </div>
@@ -681,34 +627,39 @@ function PanelRow({
   config: PoolConfig;
   onToggle: (index: number) => void;
 }) {
-  const labels: Record<PoolSide, string> = {
-    north: 'Kuzey',
-    south: 'Güney',
-    east: 'Doğu',
-    west: 'Batı',
+  const { t } = useLanguage();
+  const sideLabel: Record<PoolSide, string> = {
+    north: t('configurator.north'),
+    south: t('configurator.south'),
+    east:  t('configurator.east'),
+    west:  t('configurator.west'),
   };
   return (
     <div className="flex items-center gap-2">
       <span className="w-12 shrink-0 text-xs font-medium text-slate-600">
-        {labels[side]}
+        {sideLabel[side]}
       </span>
       <div className="flex flex-1 gap-1">
         {Array.from({ length: segmentsForSide(side, config) }, (_, i) => {
-          const type = getPanelType(config, side, i);
+          const isEast = side === 'east';
+          const type = isEast ? 'closed' : getPanelType(config, side, i);
           const isGlass = type === 'glass';
           return (
             <button
               key={i}
               type="button"
-              onClick={() => onToggle(i)}
-              title={isGlass ? 'Cam — kapalıya çevir' : 'Kapalı — cama çevir'}
+              onClick={() => !isEast && onToggle(i)}
+              disabled={isEast}
+              title={isEast ? t('configurator.closed') : isGlass ? t('configurator.toggle_to_closed') : t('configurator.toggle_to_glass')}
               className={`h-9 flex-1 rounded border text-[11px] font-medium transition ${
                 isGlass
                   ? 'border-sky-300 bg-sky-100 text-sky-700 hover:bg-sky-200'
+                  : isEast
+                  ? 'border-slate-400 bg-slate-700 text-white opacity-60 cursor-not-allowed'
                   : 'border-slate-400 bg-slate-700 text-white hover:bg-slate-800'
               }`}
             >
-              {isGlass ? 'Cam' : 'Kapalı'}
+              {isGlass ? t('configurator.glass_btn') : t('configurator.closed')}
             </button>
           );
         })}
@@ -759,17 +710,20 @@ function Toggle<T extends string>({
   options,
   value,
   onChange,
+  disabled,
 }: {
   options: { value: T; label: string }[];
   value: T;
   onChange: (v: T) => void;
+  disabled?: boolean;
 }) {
   return (
-    <div className="flex rounded-lg bg-slate-100 p-1 text-sm">
+    <div className={`flex rounded-lg bg-slate-100 p-1 text-sm ${disabled ? 'opacity-40' : ''}`}>
       {options.map((o) => (
         <button
           key={o.value}
           type="button"
+          disabled={disabled}
           onClick={() => onChange(o.value)}
           className={`flex-1 rounded-md px-3 py-2 transition ${
             value === o.value ? 'bg-white font-medium shadow' : 'text-slate-600'
@@ -817,11 +771,36 @@ function lightCssColor(c: LightColor): string {
     case 'white':  return '#f8fafc';
     case 'green':  return '#22c55e';
     case 'purple': return '#a855f7';
-    case 'rgb':    return 'conic-gradient(from 0deg, #ef4444, #f59e0b, #84cc16, #06b6d4, #6366f1, #ec4899, #ef4444)';
+    case 'rgb':         return 'conic-gradient(from 0deg, #ef4444, #f59e0b, #84cc16, #06b6d4, #6366f1, #ec4899, #ef4444)';
+    case 'blue_purple': return 'linear-gradient(135deg, #3b82f6 0%, #a855f7 100%)';
   }
 }
 
-/* ─── Step 7: Özet & Teklif ─────────────────────────────────────── */
+/* ─── Preview ─────────────────────────────────────────────────────── */
+function PreviewStep({
+  config,
+  set,
+}: {
+  config: PoolConfig;
+  set: <K extends keyof PoolConfig>(key: K, value: PoolConfig[K]) => void;
+}) {
+  const { t } = useLanguage();
+  return (
+    <div className="space-y-4">
+      <p className="label">{t('configurator.water_label')}</p>
+      <Toggle
+        options={[
+          { value: 'on',  label: t('configurator.water_on') },
+          { value: 'off', label: t('configurator.water_off') },
+        ]}
+        value={config.showWater ? 'on' : 'off'}
+        onChange={(v) => set('showWater', v === 'on')}
+      />
+    </div>
+  );
+}
+
+/* ─── Summary & Quote ─────────────────────────────────────────────── */
 function SummaryStep({
   config, breakdown, isDealer, discountRate, loading, priceError,
   userId, userEmail, fullName, role,
@@ -830,15 +809,23 @@ function SummaryStep({
   loading: boolean; priceError: string | null; userId: string; userEmail: string;
   fullName: string; role: 'customer' | 'dealer' | 'admin';
 }) {
+  const { t, lang } = useLanguage();
   const router = useRouter();
   const supabase = createClient();
   const [saving, setSaving] = useStateR(false);
   const [saved, setSaved] = useStateR(false);
   const [saveError, setSaveError] = useStateR<string | null>(null);
   const [showPopup, setShowPopup] = useStateR(false);
-  const [contact, setContact] = useStateR({ name: '', email: '', phone: '' });
+
+  const LANG_DIAL: Record<string, string> = {
+    tr: '+90', en: '+44', de: '+49', nl: '+31', fr: '+33',
+    es: '+34', it: '+39', pt: '+351', pl: '+48', ro: '+40',
+    no: '+47', da: '+45', lt: '+370', el: '+30', ar: '+966',
+  };
+  const [contact, setContact] = useStateR({ name: '', email: '', phone: '', dialCode: LANG_DIAL[lang] ?? '+90' });
 
   const isGuest = !userId;
+  const showPrices = role === 'dealer' || role === 'admin';
 
   async function submitRequest(contactInfo?: { name: string; email: string; phone: string }) {
     setSaving(true); setSaveError(null); setSaved(false);
@@ -861,21 +848,41 @@ function SummaryStep({
 
   const panels = countPanels(config);
 
+  const frameLabel: Record<string, string> = {
+    anthracite: t('configurator.anthracite'),
+    blue:       t('configurator.blue_color'),
+    white:      t('configurator.white_color'),
+  };
+  const groundLabel: Record<string, string> = {
+    gravel:   t('configurator.gravel'),
+    wood:     t('configurator.wood_deck'),
+    grass:    t('configurator.grass'),
+    concrete: t('configurator.concrete'),
+  };
+  const claddingLabel: Record<string, string> = {
+    white:       t('configurator.white_cladding'),
+    blue_mosaic: t('configurator.blue_mosaic'),
+    gray_stone:  t('configurator.gray_stone'),
+    turquoise:   t('configurator.turquoise_cladding'),
+  };
+
   const rows: [string, string][] = [
-    ['Boyut', `${config.width.toFixed(1)} × ${config.length.toFixed(1)} m`],
-    ['Çerçeve', { anthracite: 'Antrasit', blue: 'Mavi', white: 'Beyaz' }[config.frameColor] ?? config.frameColor],
-    ['Panel', `${panels.glass} cam, ${panels.closed} kapalı`],
-    ['Işıklandırma', config.lighting.enabled ? `Açık — ${config.lighting.color.toUpperCase()}` : 'Kapalı'],
-    ['Şelale', config.waterfall ? 'Var' : 'Yok'],
-    ['Zemin', { gravel:'Çakıl', wood:'Tahta Deck', grass:'Çimen', concrete:'Beton' }[config.ground] ?? config.ground],
-    ['Kaplama', { white:'Beyaz', blue_mosaic:'Mavi Mozaik', gray_stone:'Gri Taş', turquoise:'Turkuaz' }[config.cladding] ?? 'Özel Desen'],
+    [t('configurator.row_size'),      `${config.width.toFixed(1)} × ${config.length.toFixed(1)} m`],
+    [t('configurator.row_frame'),     frameLabel[config.frameColor] ?? config.frameColor],
+    [t('configurator.row_panel'),     t('configurator.panel_glass_count').replace('{glass}', String(panels.glass)).replace('{closed}', String(panels.closed))],
+    [t('configurator.row_lighting'),  config.lighting.enabled ? t('configurator.light_on_status').replace('{color}', config.lighting.color.toUpperCase()) : t('configurator.none')],
+    [t('configurator.row_waterfall'), config.waterfall ? t('configurator.yes') : t('configurator.none')],
+    [t('configurator.row_ground'),    groundLabel[config.ground] ?? config.ground],
+    [t('configurator.row_cladding'),  claddingLabel[config.cladding] ?? t('configurator.cladding_custom')],
   ];
 
   return (
     <div className="space-y-4">
-      {/* Seçimler */}
+      {/* Selections */}
       <div className="rounded-xl bg-slate-50 p-4">
-        <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-500">Seçimleriniz</p>
+        <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-500">
+          {t('configurator.selections')}
+        </p>
         <ul className="space-y-1.5">
           {rows.map(([k, v]) => (
             <li key={k} className="flex justify-between text-sm">
@@ -886,38 +893,45 @@ function SummaryStep({
         </ul>
       </div>
 
-      {/* Fiyat */}
-      <div className="rounded-xl bg-white p-4 ring-1 ring-slate-200 space-y-1.5">
-        <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-2">Fiyat Detayı</p>
-        {[
-          ['Havuz (taban)', breakdown.base],
-          breakdown.frame > 0 ? ['Çerçeve', breakdown.frame] : null,
-          breakdown.panel > 0 ? ['Cam paneller', breakdown.panel] : null,
-          ['Yan platform', breakdown.platform],
-          breakdown.ground > 0 ? ['Zemin altı', breakdown.ground] : null,
-          breakdown.cladding > 0 ? ['İç kaplama', breakdown.cladding] : null,
-          breakdown.lighting > 0 ? ['Işıklandırma', breakdown.lighting] : null,
-          breakdown.waterfall > 0 ? ['Şelale', breakdown.waterfall] : null,
-        ].filter(Boolean).map(([label, val]) => (
-          <div key={label as string} className="flex justify-between text-sm text-slate-600">
-            <span>{label as string}</span>
-            <span>{formatTRY(val as number)}</span>
+      {/* Price — only visible to dealers and admins */}
+      {showPrices && (
+        <div className="rounded-xl bg-white p-4 ring-1 ring-slate-200 space-y-1.5">
+          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-2">
+            {t('configurator.price_detail')}
+          </p>
+          {[
+            [t('configurator.base_cost'),          breakdown.base],
+            breakdown.frame    > 0 ? [t('configurator.frame'),             breakdown.frame]    : null,
+            breakdown.panel    > 0 ? [t('configurator.glass_panels_cost'), breakdown.panel]    : null,
+            [t('configurator.platform_cost'),       breakdown.platform],
+            breakdown.ground   > 0 ? [t('configurator.subfloor_cost'),     breakdown.ground]   : null,
+            breakdown.cladding > 0 ? [t('configurator.inner_cladding_cost'),breakdown.cladding]: null,
+            breakdown.lighting > 0 ? [t('configurator.lighting'),          breakdown.lighting] : null,
+            breakdown.waterfall> 0 ? [t('configurator.waterfall'),         breakdown.waterfall]: null,
+          ].filter(Boolean).map((row) => {
+            const [label, val] = row as [string, number];
+            return (
+              <div key={label} className="flex justify-between text-sm text-slate-600">
+                <span>{label}</span>
+                <span>{formatTRY(val)}</span>
+              </div>
+            );
+          })}
+          {isDealer && breakdown.discount > 0 && (
+            <div className="flex justify-between text-sm text-emerald-700 pt-1">
+              <span>{t('configurator.dealer_discount_pct').replace('{n}', String(discountRate))}</span>
+              <span>-{formatTRY(breakdown.discount)}</span>
+            </div>
+          )}
+          <div className="flex items-baseline justify-between border-t border-slate-200 pt-3 mt-2">
+            <span className="text-sm font-semibold text-slate-700">{t('configurator.total')}</span>
+            <span className="text-2xl font-bold text-brand-700">
+              {loading ? '…' : formatTRY(breakdown.total)}
+            </span>
           </div>
-        ))}
-        {isDealer && breakdown.discount > 0 && (
-          <div className="flex justify-between text-sm text-emerald-700 pt-1">
-            <span>Bayi indirimi (%{discountRate})</span>
-            <span>-{formatTRY(breakdown.discount)}</span>
-          </div>
-        )}
-        <div className="flex items-baseline justify-between border-t border-slate-200 pt-3 mt-2">
-          <span className="text-sm font-semibold text-slate-700">Toplam</span>
-          <span className="text-2xl font-bold text-brand-700">
-            {loading ? '…' : formatTRY(breakdown.total)}
-          </span>
+          {priceError && <p className="text-xs text-red-600">{priceError}</p>}
         </div>
-        {priceError && <p className="text-xs text-red-600">{priceError}</p>}
-      </div>
+      )}
 
       <button
         type="button"
@@ -925,9 +939,9 @@ function SummaryStep({
         disabled={saving || loading}
         className="btn-primary w-full py-3 text-base"
       >
-        {saving ? 'Gönderiliyor…' : 'Teklif Al'}
+        {saving ? t('configurator.sending_msg') : t('configurator.send_quote')}
       </button>
-      {saved && <p className="text-center text-sm text-emerald-700">Talebiniz alındı!</p>}
+      {saved     && <p className="text-center text-sm text-emerald-700">{t('configurator.success_msg')}</p>}
       {saveError && <p className="text-center text-sm text-red-700">{saveError}</p>}
       {userEmail && <p className="text-center text-xs text-slate-400">{userEmail}</p>}
 
@@ -937,35 +951,54 @@ function SummaryStep({
           <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setShowPopup(false)} />
           <div className="relative z-10 w-full max-w-md rounded-2xl bg-white p-8 shadow-2xl">
             <button onClick={() => setShowPopup(false)} className="absolute right-4 top-4 rounded-full p-1 text-slate-400 hover:bg-slate-100">
-              <svg viewBox="0 0 20 20" className="h-5 w-5" fill="currentColor"><path d="M6.28 5.22a.75.75 0 0 0-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 1 0 1.06 1.06L10 11.06l3.72 3.72a.75.75 0 1 0 1.06-1.06L11.06 10l3.72-3.72a.75.75 0 0 0-1.06-1.06L10 8.94 6.28 5.22Z"/></svg>
+              <svg viewBox="0 0 20 20" className="h-5 w-5" fill="currentColor">
+                <path d="M6.28 5.22a.75.75 0 0 0-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 1 0 1.06 1.06L10 11.06l3.72 3.72a.75.75 0 1 0 1.06-1.06L11.06 10l3.72-3.72a.75.75 0 0 0-1.06-1.06L10 8.94 6.28 5.22Z"/>
+              </svg>
             </button>
-            <h3 className="text-xl font-bold text-slate-900">Teklif Almak İçin</h3>
-            <p className="mt-1 text-sm text-slate-500">Ekibimiz en kısa sürede size ulaşacak.</p>
-            <div className="mt-5 flex items-center justify-between rounded-xl bg-brand-50 px-4 py-3">
-              <span className="text-sm text-slate-600">{config.width.toFixed(1)} × {config.length.toFixed(1)} m</span>
-              <span className="text-lg font-bold text-brand-700">{formatTRY(breakdown.total)}</span>
+            <h3 className="text-xl font-bold text-slate-900">{t('configurator.quote_title')}</h3>
+            <p className="mt-1 text-sm text-slate-500">{t('configurator.quote_subtitle')}</p>
+            <div className="mt-5 rounded-xl bg-brand-50 px-4 py-3">
+              <span className="text-sm text-slate-600">
+                {config.width.toFixed(1)} × {config.length.toFixed(1)} m havuz konfigürasyonu
+              </span>
             </div>
             <div className="mt-4 space-y-3">
               <div>
-                <label className="label">Ad Soyad *</label>
-                <input type="text" className="input" value={contact.name} onChange={e => setContact(p => ({...p, name: e.target.value}))} placeholder="Ad Soyad" />
+                <label className="label">{t('configurator.name_label')}</label>
+                <input type="text" className="input" value={contact.name}
+                  onChange={e => setContact(p => ({...p, name: e.target.value}))}
+                  placeholder={t('configurator.name_label').replace(' *', '')} />
               </div>
               <div>
-                <label className="label">E-posta *</label>
-                <input type="email" className="input" value={contact.email} onChange={e => setContact(p => ({...p, email: e.target.value}))} placeholder="ornek@mail.com" />
+                <label className="label">{t('configurator.email_label')}</label>
+                <input type="email" className="input" value={contact.email}
+                  onChange={e => setContact(p => ({...p, email: e.target.value}))}
+                  placeholder="email@example.com" />
               </div>
               <div>
-                <label className="label">Telefon</label>
-                <input type="tel" className="input" value={contact.phone} onChange={e => setContact(p => ({...p, phone: e.target.value}))} placeholder="+90 5__ ___ __ __" />
+                <label className="label">{t('configurator.phone_label')}</label>
+                <CountryPhoneInput
+                  dialCode={contact.dialCode}
+                  phone={contact.phone}
+                  onDialChange={(dial) => setContact((p) => ({ ...p, dialCode: dial }))}
+                  onPhoneChange={(ph) => setContact((p) => ({ ...p, phone: ph }))}
+                />
               </div>
             </div>
             <button
               type="button"
-              onClick={() => { if (!contact.name || !contact.email) return; submitRequest(contact); }}
+              onClick={() => {
+                if (!contact.name || !contact.email) return;
+                submitRequest({
+                  name: contact.name,
+                  email: contact.email,
+                  phone: contact.phone ? `${contact.dialCode}${contact.phone}` : '',
+                });
+              }}
               disabled={saving || !contact.name || !contact.email}
               className="btn-primary mt-6 w-full py-3 text-base disabled:opacity-50"
             >
-              {saving ? 'Gönderiliyor…' : 'Teklif Gönder'}
+              {saving ? t('configurator.sending_msg') : t('configurator.quote_send')}
             </button>
           </div>
         </div>
@@ -973,6 +1006,3 @@ function SummaryStep({
     </div>
   );
 }
-
-/* ─── Step 7: Özet & Teklif ──────────────────────────────────────── */
-

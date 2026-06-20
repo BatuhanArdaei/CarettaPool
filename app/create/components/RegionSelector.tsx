@@ -4,6 +4,7 @@ import { useState } from 'react';
 import Image from 'next/image';
 import { motion, AnimatePresence } from 'framer-motion';
 import { REGIONS, type Region } from '@/lib/regions';
+import { useLanguage } from '@/contexts/LanguageContext';
 
 const flagUrl = (c: string) =>
   c === 'eu' ? 'https://flagcdn.com/w80/eu.png'
@@ -17,6 +18,7 @@ const REGION_ICONS: Record<string, string> = {
 };
 
 export default function RegionSelector({ onSelect }: { onSelect: (r: Region) => void }) {
+  const { t } = useLanguage();
   const [selected, setSelected] = useState<Region>(REGIONS[0]);
   const [exiting, setExiting]   = useState(false);
 
@@ -60,10 +62,10 @@ export default function RegionSelector({ onSelect }: { onSelect: (r: Region) => 
           </div>
 
           <h1 className="text-2xl font-bold text-slate-900 sm:text-3xl">
-            Teslimat Bölgesi Seçin
+            {t('configurator.region_title')}
           </h1>
           <p className="mt-2 text-sm text-slate-500">
-            Havuzunuzun teslim edileceği bölgeyi seçin — boyut limitleri otomatik belirlenir.
+            {t('configurator.region_desc')}
           </p>
         </motion.div>
 
@@ -166,7 +168,7 @@ export default function RegionSelector({ onSelect }: { onSelect: (r: Region) => 
 
               {/* Limits badge */}
               <div className="shrink-0 rounded-lg bg-slate-50 px-3 py-2 text-center ring-1 ring-slate-200">
-                <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Limit</p>
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">{t('configurator.region_limit')}</p>
                 <p className="text-sm font-bold text-slate-800">
                   {selected.maxLength} × {selected.maxWidth} m
                 </p>
@@ -188,7 +190,7 @@ export default function RegionSelector({ onSelect }: { onSelect: (r: Region) => 
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.2 }}
             >
-              {selected.name} ile Devam Et
+              {t('configurator.region_continue').replace('{name}', selected.name)}
               <svg viewBox="0 0 16 16" className="h-4 w-4 fill-current opacity-80">
                 <path d="M6.22 3.22a.75.75 0 0 1 1.06 0l4.25 4.25a.75.75 0 0 1 0 1.06l-4.25 4.25a.749.749 0 0 1-1.275-.53.749.749 0 0 1 .215-.53L9.94 8 6.22 4.28a.75.75 0 0 1 0-1.06Z"/>
               </svg>
@@ -203,7 +205,7 @@ export default function RegionSelector({ onSelect }: { onSelect: (r: Region) => 
           animate={{ opacity: 1 }}
           transition={{ delay: 0.7 }}
         >
-          Taşıma koşullarına göre boyut limitleri değişiklik gösterebilir.
+          {t('configurator.region_note')}
         </motion.p>
 
       </div>

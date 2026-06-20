@@ -2,25 +2,36 @@
 
 import { useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
-import PhoneInput from '@/components/PhoneInput';
+import { useLanguage } from '@/contexts/LanguageContext';
+import CountryPhoneInput from '@/components/CountryPhoneInput';
+
+const LANG_DIAL: Record<string, string> = {
+  tr: '+90', en: '+44', de: '+49', nl: '+31', fr: '+33',
+  es: '+34', it: '+39', pt: '+351', pl: '+48', ro: '+40',
+  no: '+47', da: '+45', lt: '+370', el: '+30', ar: '+966',
+};
 
 export default function ContactForm() {
+  const { lang } = useLanguage();
   const supabase = createClient();
-  const [form, setForm] = useState({ name: '', email: '', phone: '', message: '' });
+  const [form, setForm] = useState({
+    name: '', email: '', phone: '', dialCode: LANG_DIAL[lang] ?? '+90', message: '',
+  });
   const [status, setStatus] = useState<'idle' | 'sending' | 'sent' | 'error'>('idle');
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setStatus('sending');
+    const fullPhone = form.phone ? `${form.dialCode}${form.phone}` : null;
     const { error } = await supabase.from('contact_requests').insert({
       name: form.name,
       email: form.email,
-      phone: form.phone || null,
+      phone: fullPhone,
       message: form.message,
     });
     if (error) { setStatus('error'); return; }
     setStatus('sent');
-    setForm({ name: '', email: '', phone: '', message: '' });
+    setForm({ name: '', email: '', phone: '', dialCode: LANG_DIAL[lang] ?? '+90', message: '' });
   }
 
   if (status === 'sent') {
@@ -51,11 +62,12 @@ export default function ContactForm() {
           onChange={e => setForm(p => ({ ...p, email: e.target.value }))} required />
       </div>
       <div>
-        <label className="label" htmlFor="phone">Telefon</label>
-        <PhoneInput
-          id="phone"
-          value={form.phone}
-          onChange={v => setForm(p => ({ ...p, phone: v }))}
+        <label className="label">Telefon</label>
+        <CountryPhoneInput
+          dialCode={form.dialCode}
+          phone={form.phone}
+          onDialChange={(dial) => setForm(p => ({ ...p, dialCode: dial }))}
+          onPhoneChange={(ph) => setForm(p => ({ ...p, phone: ph }))}
         />
       </div>
       <div>

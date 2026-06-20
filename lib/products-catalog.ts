@@ -105,6 +105,24 @@ export function getProductSpecs(p: PoolProduct): string[] {
   ];
 }
 
+export type SpecItem = { key: string; n?: number };
+
+export function getProductSpecItems(p: PoolProduct): SpecItem[] {
+  return [
+    { key: 'products.spec_machine_room' },
+    { key: 'products.spec_shutter' },
+    { key: 'products.spec_polyurea' },
+    { key: 'products.spec_polyaspartic' },
+    { key: 'products.spec_laminat' },
+    { key: 'products.spec_composite' },
+    { key: 'products.spec_rgb',      n: p.rgbLights },
+    { key: 'products.spec_inlet',    n: p.inletNozzles },
+    { key: 'products.spec_cleaner',  n: p.cleanerNozzles },
+    { key: 'products.spec_vacuum',   n: p.vacuumNozzles },
+    { key: 'products.spec_skimmer',  n: p.skimmerCount },
+  ];
+}
+
 export function formatDimensions(p: PoolProduct): string {
   return `${p.width.toFixed(2).replace('.', ',')} × ${p.length.toFixed(2).replace('.', ',')}`;
 }
