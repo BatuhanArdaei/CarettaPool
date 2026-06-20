@@ -35,6 +35,23 @@ const PANEL_T = 0.04;
 const BASIN_FLOOR = 0.06;
 const PLATFORM_DEPTH = 2.0;
 
+/**
+ * Drives the render loop at a capped FPS while something is animating
+ * (water surface, caustics, RGB/dual lighting). Under frameloop="demand"
+ * this replaces per-frame invalidate() calls so we render ~30fps instead of
+ * an uncapped 60fps — roughly halving idle GPU load while staying smooth.
+ * Browsers throttle setInterval in hidden tabs, so it also pauses in background.
+ */
+function AnimationTicker({ active, fps = 30 }: { active: boolean; fps?: number }) {
+  const invalidate = useThree((s) => s.invalidate);
+  useEffect(() => {
+    if (!active) return;
+    const id = setInterval(() => invalidate(), 1000 / fps);
+    return () => clearInterval(id);
+  }, [active, fps, invalidate]);
+  return null;
+}
+
 /** Fires invalidate() whenever config changes so demand rendering picks it up. */
 function ConfigInvalidator({ config }: { config: PoolConfig }) {
   const invalidate = useThree((s) => s.invalidate);
@@ -57,6 +74,10 @@ export default function PoolScene({
       camera={{ position: [12, 9, 14], fov: 42 }}
       dpr={[1, 1.5]}
       gl={{ antialias: false, powerPreference: 'high-performance' }}
+      onCreated={({ gl }) => {
+        gl.toneMapping = THREE.ACESFilmicToneMapping;
+        gl.toneMappingExposure = 1.08;
+      }}
     >
       <Suspense fallback={null}>
         {isNight ? (
@@ -84,6 +105,7 @@ export default function PoolScene({
               castShadow
               shadow-mapSize-width={1024}
               shadow-mapSize-height={1024}
+              shadow-bias={-0.0004}
             />
             {/* Soft fill from opposite side */}
             <directionalLight position={[-12, 8, -10]} intensity={0.18} color="#8ea4cc" />
@@ -100,6 +122,7 @@ export default function PoolScene({
               castShadow
               shadow-mapSize-width={1024}
               shadow-mapSize-height={1024}
+              shadow-bias={-0.0004}
             />
             {/* Visible sun disk in the sky */}
             <mesh position={[100, 30, 100]}>
@@ -141,6 +164,8 @@ export default function PoolScene({
         />
         {/* Invalidate on config change so demand-rendering stays in sync */}
         <ConfigInvalidator config={config} />
+        {/* Cap animated rendering to ~30fps while water/lighting animate */}
+        <AnimationTicker active={config.showWater || config.lighting.enabled} />
         {/* Navigation cube — click faces to snap to that view */}
         <GizmoHelper alignment="bottom-right" margin={[60, 60]}>
           <GizmoViewcube
@@ -1091,6 +1116,19 @@ function Pool({ config }: { config: PoolConfig }) {
       {/* Stainless steel waterfall feature (optional) */}
       {config.waterfall && <Waterfall halfL={halfL} top={top} />}
 
+      {/* Automatic slatted roller cover (optional) — slides closed when enabled */}
+      {config.poolCover && (
+        <PoolCover
+          w={w}
+          l={l}
+          top={top}
+          waterY={waterY}
+          frame={frame}
+          direction={config.platformDirection}
+          closed={config.poolCoverClosed}
+        />
+      )}
+
       {/* In-pool ladder (optional) */}
       {config.innerLadder && (
         <PoolLadder
@@ -1302,9 +1340,10 @@ function SidePanels({
                 <meshStandardMaterial
                   color="#d8eef6"
                   transparent
-                  opacity={0.13}
-                  roughness={0.02}
-                  metalness={0.1}
+                  opacity={0.16}
+                  roughness={0.04}
+                  metalness={0.0}
+                  envMapIntensity={1.6}
                   depthWrite={false}
                   side={THREE.DoubleSide}
                 />
@@ -1463,6 +1502,8 @@ const WATER_FRAG = /* glsl */ `
   uniform vec3 uEmissive;
   uniform float uEmissiveStrength;
   uniform float uOpacity;
+  uniform vec3 uSkyColor;
+  uniform vec3 uHorizonColor;
 
   void main() {
     // Edge-to-center color depth (shallow at edges, deeper toward middle)
@@ -1481,7 +1522,14 @@ const WATER_FRAG = /* glsl */ `
     float spec = pow(max(dot(vWorldNormal, halfway), 0.0), 120.0) * 1.6;
 
     // Fresnel rim — brighter at grazing angles
-    float fresnel = pow(1.0 - max(dot(vWorldNormal, viewDir), 0.0), 4.0);
+    float fresnel = pow(1.0 - max(dot(vWorldNormal, viewDir), 0.0), 3.5);
+
+    // Sky/environment reflection along the reflected view ray (cheap IBL approx).
+    // Reflected ray pointing up sees the zenith colour, near-horizontal sees the
+    // paler horizon — gives the surface a believable mirrored sky.
+    vec3 reflDir = reflect(-viewDir, vWorldNormal);
+    float skyT = clamp(reflDir.y * 0.5 + 0.5, 0.0, 1.0);
+    vec3 skyRefl = mix(uHorizonColor, uSkyColor, skyT);
 
     // Tiny foam tint at the very top of wave peaks
     float peakNorm = clamp(vWaveHeight / max(uAmp, 0.0001), 0.0, 3.0);
@@ -1490,7 +1538,7 @@ const WATER_FRAG = /* glsl */ `
     vec3 col = base
       + uSunColor * spec
       + uSunColor * sparkle
-      + vec3(0.55, 0.78, 1.0) * fresnel * 0.32
+      + skyRefl * fresnel * 0.55
       + vec3(0.95, 0.98, 1.0) * foam
       + uEmissive * uEmissiveStrength;
 
@@ -1528,6 +1576,8 @@ function CinematicWater({
       uEmissive: { value: new THREE.Color('#000000') },
       uEmissiveStrength: { value: 0 },
       uOpacity: { value: 0.9 },
+      uSkyColor: { value: new THREE.Color('#5a9bd4') },
+      uHorizonColor: { value: new THREE.Color('#d6ebf7') },
     }),
     []
   );
@@ -1539,11 +1589,17 @@ function CinematicWater({
       uniforms.uEmissive.value.copy(
         animatedColor(lightMode, lightColor, lightColor2, state.clock.elapsedTime)
       );
+      // Night sky reflection — dark blue
+      uniforms.uSkyColor.value.set('#10182e');
+      uniforms.uHorizonColor.value.set('#1d2748');
     } else {
       uniforms.uEmissiveStrength.value = 0;
       uniforms.uEmissive.value.set(0, 0, 0);
+      // Day sky reflection
+      uniforms.uSkyColor.value.set('#5a9bd4');
+      uniforms.uHorizonColor.value.set('#d6ebf7');
     }
-    state.invalidate(); // keep water animation running under demand rendering
+    // Frame pacing handled by <AnimationTicker> (≈30fps) — no per-frame invalidate here
   });
 
   return (
@@ -2915,7 +2971,7 @@ function Waterfall({
   const postW = 0.30;       // width along X (extrusion depth of the C)
   const postT = 0.075;      // post depth in Z direction (slightly thicker than sheet)
 
-  const baseZ = -halfL + 0.1; // outer face of the waterfall, on the coping
+  const baseZ = -halfL - 0.08; // seated back on the wooden coping (not over the water)
   const postY = top + postH / 2;
   const postTopY = top + postH;
 
@@ -2967,6 +3023,124 @@ function Waterfall({
       >
         <meshStandardMaterial {...steelMatProps} />
       </mesh>
+    </group>
+  );
+}
+
+function PoolCover({
+  w,
+  l,
+  top: _top,
+  waterY,
+  frame,
+  direction,
+  closed = true,
+}: {
+  w: number;
+  l: number;
+  top: number;
+  waterY: number;
+  frame: string;
+  direction: PlatformDirection;
+  closed?: boolean;
+}) {
+  // Automatic slatted roller cover ("rulo panjur"). A roller drum sits at one
+  // short end; the slats unroll along the pool length (Z axis) to close over
+  // the water. Animated: once enabled the slats slide out to fully cover.
+  const halfL = l / 2;
+
+  // Drum goes on the short end opposite the platform/stairs. If the platform is
+  // on a long side (east/west), default the drum to the north end.
+  const drumSide: 'north' | 'south' = direction === 'north' ? 'south' : 'north';
+  const dirZ = drumSide === 'north' ? 1 : -1; // slats extend toward +Z or -Z
+
+  const drumR = 0.13;
+  const endInset = PANEL_T + 0.06;
+  const coverW = w - PANEL_T * 2 - 0.1;   // a bit narrower than the inner span
+  const yCover = waterY + 0.04;           // rests just above the water surface
+
+  const zDrum = drumSide === 'north' ? -halfL + drumR + endInset : halfL - drumR - endInset;
+  const zStart = zDrum + dirZ * (drumR + 0.02);
+  const zClosed = drumSide === 'north' ? halfL - endInset : -halfL + endInset;
+  const travel = Math.abs(zClosed - zStart);
+
+  const slatW = 0.14;
+  const N = Math.max(4, Math.round(travel / slatW));
+  const slatLen = travel / N;
+  const slatGap = 0.012;
+  const drumLen = coverW + 0.06;
+
+  const slatRefs = useRef<(THREE.Mesh | null)[]>([]);
+  const leadRef = useRef<THREE.Group | null>(null);
+  const progress = useRef(0); // 0 = retracted, 1 = fully closed
+
+  const applyProgress = (p: number) => {
+    const extended = p * N;
+    for (let i = 0; i < N; i++) {
+      const m = slatRefs.current[i];
+      if (m) m.visible = i + 1 <= extended;
+    }
+    const lead = leadRef.current;
+    if (lead) {
+      lead.position.z = zStart + dirZ * travel * p;
+      lead.visible = p > 0.01;
+    }
+  };
+
+  useFrame((state, delta) => {
+    const target = closed ? 1 : 0;
+    const p = progress.current;
+    if (Math.abs(p - target) < 0.0005) return;
+    // ~2 seconds end-to-end (0.5 units per second), slides both ways
+    const step = delta * 0.5;
+    const next = p < target ? Math.min(target, p + step) : Math.max(target, p - step);
+    progress.current = next;
+    applyProgress(next);
+    state.invalidate(); // keep animating under demand rendering
+  });
+
+  const slatMat = { color: '#c9ced3', roughness: 0.55, metalness: 0.15 };
+
+  return (
+    <group>
+      {/* Roller drum spanning the pool width */}
+      <mesh position={[0, yCover + 0.02, zDrum]} rotation={[0, 0, Math.PI / 2]} castShadow receiveShadow>
+        <cylinderGeometry args={[drumR, drumR, drumLen, 24]} />
+        <meshStandardMaterial color={frame} roughness={0.5} metalness={0.3} />
+      </mesh>
+      {/* Side supports / end caps for the drum */}
+      {[-1, 1].map((s) => (
+        <mesh key={s} position={[(s * drumLen) / 2, yCover + 0.02, zDrum]} castShadow receiveShadow>
+          <boxGeometry args={[0.05, drumR * 2 + 0.08, drumR * 2 + 0.08]} />
+          <meshStandardMaterial color={frame} roughness={0.5} metalness={0.3} />
+        </mesh>
+      ))}
+
+      {/* Slats — laid flat just above the water, revealed one by one as it closes */}
+      {Array.from({ length: N }, (_, i) => {
+        const zc = zStart + dirZ * slatLen * (i + 0.5);
+        return (
+          <mesh
+            key={i}
+            ref={(m) => { slatRefs.current[i] = m; }}
+            position={[0, yCover, zc]}
+            visible={false}
+            castShadow
+            receiveShadow
+          >
+            <boxGeometry args={[coverW, 0.022, slatLen - slatGap]} />
+            <meshStandardMaterial {...slatMat} />
+          </mesh>
+        );
+      })}
+
+      {/* Leading-edge bar that pulls the slats across */}
+      <group ref={leadRef} position={[0, yCover, zStart]} visible={false}>
+        <mesh castShadow receiveShadow>
+          <boxGeometry args={[coverW + 0.03, 0.05, 0.06]} />
+          <meshStandardMaterial color={frame} roughness={0.45} metalness={0.25} />
+        </mesh>
+      </group>
     </group>
   );
 }

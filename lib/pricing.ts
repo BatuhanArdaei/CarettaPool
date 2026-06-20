@@ -19,6 +19,7 @@ export const DEFAULT_PRICES = {
   cladding_texture:     32000,
   lighting:             9000,
   waterfall:            25000,
+  pool_cover:           38000,
   platform:             35000,
 } as const;
 
@@ -42,6 +43,7 @@ export interface PriceBreakdown {
   platform: number;
   lighting: number;
   waterfall: number;
+  poolCover: number;
   subtotal: number;
   discount: number;
   total: number;
@@ -77,12 +79,13 @@ export function calculateBasePrice(
   const platform  = pr(customPrices, 'platform');
   const lighting  = config.lighting.enabled ? pr(customPrices, 'lighting')  : 0;
   const waterfall = config.waterfall         ? pr(customPrices, 'waterfall') : 0;
+  const poolCover = config.poolCover         ? pr(customPrices, 'pool_cover') : 0;
 
-  const subtotal = base + frame + panel + ground + cladding + platform + lighting + waterfall;
+  const subtotal = base + frame + panel + ground + cladding + platform + lighting + waterfall + poolCover;
 
   return {
     base, frame, panel, ground, cladding, platform,
-    lighting, waterfall, subtotal, discount: 0, total: subtotal,
+    lighting, waterfall, poolCover, subtotal, discount: 0, total: subtotal,
   };
 }
 

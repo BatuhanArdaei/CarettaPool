@@ -12,6 +12,7 @@ import {
   type LightColor,
   type PanelType,
   type PoolConfig,
+  type PoolCoverType,
   type PoolSide,
 } from '@/lib/types';
 import { useState as useStateR } from 'react';
@@ -54,7 +55,7 @@ export default function ConfigPanel({
     { key: 'size',      title: t('configurator.size'),          short: t('configurator.size'),          tip: t('configurator.size_tip') },
     { key: 'frame',     title: t('configurator.frame_title'),   short: t('configurator.frame'),         tip: t('configurator.frame_tip') },
     { key: 'panels',    title: t('configurator.panels_title'),  short: t('configurator.panels_short'),  tip: t('configurator.panels_tip') },
-    { key: 'waterfall', title: t('configurator.options_title'), short: t('configurator.waterfall'),     tip: t('configurator.options_tip') },
+    { key: 'waterfall', title: t('configurator.options_title'), short: t('configurator.options_title'), tip: t('configurator.options_tip') },
     { key: 'lighting',  title: t('configurator.lighting'),      short: t('configurator.lighting_short'),tip: t('configurator.lighting_tip') },
     { key: 'ground',    title: t('configurator.ground_title'),  short: t('configurator.ground_short'),  tip: t('configurator.ground_tip') },
     { key: 'finish',    title: t('configurator.finish_title'),   short: t('configurator.finish_short'),   tip: t('configurator.finish_tip') },
@@ -72,38 +73,56 @@ export default function ConfigPanel({
   return (
     <aside className="card flex max-h-[80vh] flex-col">
       {/* Stepper */}
-      <div id="tour-stepper" className="border-b border-slate-200 p-3">
-        <div className="flex items-stretch justify-between gap-0.5">
-          {STEPS.map((s, i) => (
-            <button
-              key={s.key}
-              type="button"
-              onClick={() => setStepIdx(i)}
-              className="flex flex-1 flex-col items-center gap-1 px-0.5 py-1 transition"
-              title={s.title}
-            >
-              <span
-                className={`flex h-7 w-7 items-center justify-center rounded-full text-xs font-bold transition ${
-                  i === stepIdx
-                    ? 'bg-brand-600 text-white shadow'
-                    : i < stepIdx
-                    ? 'bg-brand-100 text-brand-700'
-                    : 'bg-slate-200 text-slate-500'
-                }`}
+      <div id="tour-stepper" className="border-b border-slate-200 px-4 py-3.5">
+        <div className="relative flex items-center justify-between">
+          {/* Connecting track */}
+          <div className="pointer-events-none absolute inset-x-[14px] top-1/2 h-1 -translate-y-1/2 rounded-full bg-slate-200" />
+          {/* Progress fill */}
+          <div
+            className="pointer-events-none absolute left-[14px] top-1/2 h-1 -translate-y-1/2 rounded-full bg-brand-500 transition-all duration-300 ease-out"
+            style={{ width: `calc((100% - 28px) * ${STEPS.length > 1 ? stepIdx / (STEPS.length - 1) : 0})` }}
+          />
+          {STEPS.map((s, i) => {
+            const done = i < stepIdx;
+            const active = i === stepIdx;
+            return (
+              <button
+                key={s.key}
+                type="button"
+                onClick={() => setStepIdx(i)}
+                title={s.title}
+                aria-label={s.title}
+                aria-current={active ? 'step' : undefined}
+                className="group relative z-10 flex h-7 w-7 items-center justify-center focus:outline-none"
               >
-                {i + 1}
-              </span>
-              <span
-                className={`text-center text-[9px] leading-tight ${
-                  i === stepIdx
-                    ? 'font-semibold text-brand-700'
-                    : 'text-slate-500'
-                }`}
-              >
-                {s.short}
-              </span>
-            </button>
-          ))}
+                <span
+                  className={`flex h-7 w-7 items-center justify-center rounded-full text-xs font-bold transition-all duration-200 ${
+                    active
+                      ? 'scale-110 bg-brand-600 text-white shadow ring-4 ring-brand-100'
+                      : done
+                      ? 'bg-brand-500 text-white'
+                      : 'bg-white text-slate-400 ring-1 ring-inset ring-slate-300 group-hover:text-brand-500 group-hover:ring-brand-400'
+                  }`}
+                >
+                  {done ? (
+                    <svg
+                      viewBox="0 0 20 20"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth={3}
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      className="h-3.5 w-3.5"
+                    >
+                      <path d="M5 10.5l3.5 3.5L15 6.5" />
+                    </svg>
+                  ) : (
+                    i + 1
+                  )}
+                </span>
+              </button>
+            );
+          })}
         </div>
       </div>
 
@@ -361,6 +380,26 @@ function WaterfallStep({
       </div>
 
       <div className="space-y-2">
+        <p className="label">{t('configurator.cover_label')}</p>
+        <Toggle
+          options={[{ value: 'on', label: onLabel }, { value: 'off', label: offLabel }]}
+          value={config.poolCover ? 'on' : 'off'}
+          onChange={(v) => set('poolCover', v === 'on')}
+        />
+        {config.poolCover && (
+          <Toggle
+            options={[
+              { value: 'automatic', label: t('configurator.cover_auto') },
+              { value: 'manual', label: t('configurator.cover_manual') },
+            ]}
+            value={config.poolCoverType}
+            onChange={(v) => set('poolCoverType', v as PoolCoverType)}
+          />
+        )}
+        <p className="text-xs text-slate-500">{t('configurator.cover_note')}</p>
+      </div>
+
+      <div className="space-y-2">
         <p className="label">{t('configurator.ext_label')}</p>
         <Toggle
           options={[{ value: 'on', label: onLabel }, { value: 'off', label: offLabel }]}
@@ -440,8 +479,10 @@ function LightingStep({
               type="button"
               disabled={disabled}
               onClick={() => set('lighting', { ...config.lighting, color: c })}
-              className={`h-9 w-9 rounded-full border-2 transition-all ${
-                config.lighting.color === c ? 'scale-110 border-slate-900' : 'border-slate-200'
+              className={`h-9 w-9 rounded-full border border-white shadow-sm transition-all duration-200 ${
+                config.lighting.color === c
+                  ? 'scale-110 ring-2 ring-brand-600 ring-offset-2'
+                  : 'ring-1 ring-slate-200 hover:scale-105 hover:ring-brand-400'
               } ${disabled ? 'opacity-40' : ''}`}
               style={{ background: lightCssColor(c) }}
               aria-label={c}
@@ -461,8 +502,10 @@ function LightingStep({
                 type="button"
                 disabled={disabled}
                 onClick={() => set('lighting', { ...config.lighting, color2: c })}
-                className={`h-9 w-9 rounded-full border-2 transition-all ${
-                  config.lighting.color2 === c ? 'scale-110 border-slate-900' : 'border-slate-200'
+                className={`h-9 w-9 rounded-full border border-white shadow-sm transition-all duration-200 ${
+                  config.lighting.color2 === c
+                    ? 'scale-110 ring-2 ring-brand-600 ring-offset-2'
+                    : 'ring-1 ring-slate-200 hover:scale-105 hover:ring-brand-400'
                 } ${disabled ? 'opacity-40' : ''}`}
                 style={{ background: lightCssColor(c) }}
                 aria-label={c}
@@ -725,8 +768,10 @@ function Toggle<T extends string>({
           type="button"
           disabled={disabled}
           onClick={() => onChange(o.value)}
-          className={`flex-1 rounded-md px-3 py-2 transition ${
-            value === o.value ? 'bg-white font-medium shadow' : 'text-slate-600'
+          className={`flex-1 rounded-md px-3 py-2 transition-all duration-200 ${
+            value === o.value
+              ? 'bg-white font-semibold text-brand-700 shadow-sm ring-1 ring-slate-200/70'
+              : 'text-slate-500 hover:text-slate-700'
           }`}
         >
           {o.label}
@@ -796,6 +841,22 @@ function PreviewStep({
         value={config.showWater ? 'on' : 'off'}
         onChange={(v) => set('showWater', v === 'on')}
       />
+
+      <div className="space-y-2">
+        <p className="label">{t('configurator.cover_label')}</p>
+        <Toggle
+          options={[
+            { value: 'closed', label: t('configurator.cover_closed') },
+            { value: 'open',   label: t('configurator.cover_open') },
+          ]}
+          value={config.poolCoverClosed ? 'closed' : 'open'}
+          onChange={(v) => set('poolCoverClosed', v === 'closed')}
+          disabled={!config.poolCover}
+        />
+        {!config.poolCover && (
+          <p className="text-xs text-slate-500">{t('configurator.cover_preview_hint')}</p>
+        )}
+      </div>
     </div>
   );
 }
@@ -872,6 +933,7 @@ function SummaryStep({
     [t('configurator.row_panel'),     t('configurator.panel_glass_count').replace('{glass}', String(panels.glass)).replace('{closed}', String(panels.closed))],
     [t('configurator.row_lighting'),  config.lighting.enabled ? t('configurator.light_on_status').replace('{color}', config.lighting.color.toUpperCase()) : t('configurator.none')],
     [t('configurator.row_waterfall'), config.waterfall ? t('configurator.yes') : t('configurator.none')],
+    [t('configurator.row_cover'),     config.poolCover ? (config.poolCoverType === 'manual' ? t('configurator.cover_manual') : t('configurator.cover_auto')) : t('configurator.none')],
     [t('configurator.row_ground'),    groundLabel[config.ground] ?? config.ground],
     [t('configurator.row_cladding'),  claddingLabel[config.cladding] ?? t('configurator.cladding_custom')],
   ];
@@ -908,6 +970,7 @@ function SummaryStep({
             breakdown.cladding > 0 ? [t('configurator.inner_cladding_cost'),breakdown.cladding]: null,
             breakdown.lighting > 0 ? [t('configurator.lighting'),          breakdown.lighting] : null,
             breakdown.waterfall> 0 ? [t('configurator.waterfall'),         breakdown.waterfall]: null,
+            breakdown.poolCover> 0 ? [t('configurator.cover_label'),       breakdown.poolCover]: null,
           ].filter(Boolean).map((row) => {
             const [label, val] = row as [string, number];
             return (

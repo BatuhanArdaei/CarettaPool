@@ -49,6 +49,7 @@ const PRICE_GROUPS = [
     items: [
       { key: 'lighting'  as PriceKey, label: 'Işıklandırma', unit: 'TL' },
       { key: 'waterfall' as PriceKey, label: 'Şelale',       unit: 'TL' },
+      { key: 'pool_cover' as PriceKey, label: 'Üst Kapak (Otomatik Panjur)', unit: 'TL' },
       { key: 'platform'  as PriceKey, label: 'Yan Platform',  unit: 'TL' },
     ],
   },

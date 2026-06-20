@@ -9,6 +9,7 @@ export type CladdingType =
   | 'turquoise'
   | (string & {});  // texture file paths like '/textures/BEST CEPPO BONE 60x120.jpg'
 export type PlatformDirection = 'north' | 'south' | 'east' | 'west';
+export type PoolCoverType = 'automatic' | 'manual';
 export type PoolSide = 'north' | 'south' | 'east' | 'west';
 
 export const POOL_SIDES: PoolSide[] = ['north', 'south', 'east', 'west'];
@@ -32,6 +33,9 @@ export interface PoolConfig {
   railings: boolean;
   innerLadder: boolean;
   waterfall: boolean;
+  poolCover: boolean;   // optional slatted roller cover over the water
+  poolCoverType: PoolCoverType; // automatic or manual operation (roller either way)
+  poolCoverClosed: boolean; // preview-only: show the cover closed (true) or open/retracted (false)
   showWater: boolean;
 }
 
@@ -49,6 +53,9 @@ export const defaultPoolConfig: PoolConfig = {
   railings: false,
   innerLadder: true,
   waterfall: false,
+  poolCover: false,
+  poolCoverType: 'automatic',
+  poolCoverClosed: true,
   showWater: true,
 };
 
