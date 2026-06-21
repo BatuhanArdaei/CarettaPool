@@ -44,12 +44,28 @@ const PRICE_GROUPS = [
     ],
   },
   {
-    label: 'Ekipman & Opsiyonlar',
-    icon: '⚡',
+    label: 'Işıklandırma',
+    icon: '💡',
     items: [
-      { key: 'lighting'  as PriceKey, label: 'Işıklandırma', unit: 'TL' },
-      { key: 'waterfall' as PriceKey, label: 'Şelale',       unit: 'TL' },
-      { key: 'platform'  as PriceKey, label: 'Yan Platform',  unit: 'TL' },
+      { key: 'lighting'      as PriceKey, label: 'Işıklandırma (tek renk)', unit: 'TL' },
+      { key: 'lighting_dual' as PriceKey, label: 'Çift Renk Ek Ücret',     unit: 'TL' },
+    ],
+  },
+  {
+    label: 'Platform & Ekstralar',
+    icon: '🏗️',
+    items: [
+      { key: 'platform'           as PriceKey, label: 'Yan Platform (standart)',   unit: 'TL' },
+      { key: 'platform_extension' as PriceKey, label: 'Platform Genişletme',       unit: 'TL' },
+      { key: 'waterfall'          as PriceKey, label: 'Şelale',                    unit: 'TL' },
+    ],
+  },
+  {
+    label: 'Aksesuarlar',
+    icon: '🪜',
+    items: [
+      { key: 'railings' as PriceKey, label: 'Korkuluk',     unit: 'TL' },
+      { key: 'ladder'   as PriceKey, label: 'İç Merdiven',  unit: 'TL' },
     ],
   },
 ];

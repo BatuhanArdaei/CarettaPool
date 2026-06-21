@@ -24,7 +24,6 @@ export async function middleware(request: NextRequest) {
     pathname.startsWith('/api') ||
     pathname.startsWith('/_next') ||
     pathname.startsWith('/admin') ||
-    pathname.startsWith('/admin-panel') ||
     pathname.startsWith('/auth') ||
     pathname.includes('.');
   if (skip) return updateSession(request);

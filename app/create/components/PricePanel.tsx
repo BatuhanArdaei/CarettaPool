@@ -118,6 +118,7 @@ export default function PricePanel({
           {breakdown.cladding > 0 && <PriceLine label="İç kaplama" value={breakdown.cladding} />}
           {breakdown.lighting > 0 && <PriceLine label="Işıklandırma" value={breakdown.lighting} />}
           {breakdown.waterfall > 0 && <PriceLine label="Şelale" value={breakdown.waterfall} />}
+          {breakdown.accessories > 0 && <PriceLine label="Aksesuarlar" value={breakdown.accessories} />}
         </div>
 
         <div className="border-t border-slate-200 pt-4 text-sm">

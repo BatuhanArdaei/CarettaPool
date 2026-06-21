@@ -18,8 +18,12 @@ export const DEFAULT_PRICES = {
   cladding_turquoise:   14000,
   cladding_texture:     32000,
   lighting:             9000,
+  lighting_dual:        0,
   waterfall:            25000,
   platform:             35000,
+  platform_extension:   0,
+  railings:             0,
+  ladder:               0,
 } as const;
 
 export type PriceKey = keyof typeof DEFAULT_PRICES;
@@ -42,6 +46,7 @@ export interface PriceBreakdown {
   platform: number;
   lighting: number;
   waterfall: number;
+  accessories: number;
   subtotal: number;
   discount: number;
   total: number;
@@ -74,15 +79,26 @@ export function calculateBasePrice(
     ? pr(customPrices, `cladding_${config.cladding}` as PriceKey)
     : pr(customPrices, 'cladding_texture');
 
-  const platform  = pr(customPrices, 'platform');
-  const lighting  = config.lighting.enabled ? pr(customPrices, 'lighting')  : 0;
-  const waterfall = config.waterfall         ? pr(customPrices, 'waterfall') : 0;
+  const platform =
+    pr(customPrices, 'platform') +
+    (config.platformExtension ? pr(customPrices, 'platform_extension') : 0);
 
-  const subtotal = base + frame + panel + ground + cladding + platform + lighting + waterfall;
+  const lighting = config.lighting.enabled
+    ? pr(customPrices, 'lighting') +
+      (config.lighting.mode === 'dual' ? pr(customPrices, 'lighting_dual') : 0)
+    : 0;
+
+  const waterfall = config.waterfall ? pr(customPrices, 'waterfall') : 0;
+
+  const accessories =
+    (config.railings    ? pr(customPrices, 'railings') : 0) +
+    (config.innerLadder ? pr(customPrices, 'ladder')   : 0);
+
+  const subtotal = base + frame + panel + ground + cladding + platform + lighting + waterfall + accessories;
 
   return {
     base, frame, panel, ground, cladding, platform,
-    lighting, waterfall, subtotal, discount: 0, total: subtotal,
+    lighting, waterfall, accessories, subtotal, discount: 0, total: subtotal,
   };
 }
 

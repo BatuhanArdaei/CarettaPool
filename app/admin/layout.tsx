@@ -1,5 +1,5 @@
 import { redirect } from 'next/navigation';
-import { createClient } from '@/lib/supabase/server';
+import { createClient, createAdminClient } from '@/lib/supabase/server';
 import AdminNav from './AdminNav';
 
 export const metadata = { title: 'Admin — CarettaPool' };
@@ -10,7 +10,8 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect('/login?redirect=/admin');
 
-  const { data: profile } = await supabase
+  const adminSupabase = createAdminClient();
+  const { data: profile } = await adminSupabase
     .from('profiles').select('role').eq('id', user.id).single();
   if (profile?.role !== 'admin') redirect('/');
 
