@@ -55,17 +55,25 @@ const PRICE_GROUPS = [
     label: 'Platform & Ekstralar',
     icon: '🏗️',
     items: [
-      { key: 'platform'           as PriceKey, label: 'Yan Platform (standart)',   unit: 'TL' },
-      { key: 'platform_extension' as PriceKey, label: 'Platform Genişletme',       unit: 'TL' },
-      { key: 'waterfall'          as PriceKey, label: 'Şelale',                    unit: 'TL' },
+      { key: 'platform'           as PriceKey, label: 'Yan Platform (standart)', unit: 'TL' },
+      { key: 'platform_extension' as PriceKey, label: 'Platform Genişletme',     unit: 'TL' },
+      { key: 'waterfall'          as PriceKey, label: 'Şelale',                  unit: 'TL' },
+    ],
+  },
+  {
+    label: 'Üst Kapak',
+    icon: '🔲',
+    items: [
+      { key: 'pool_cover_manual'    as PriceKey, label: 'Üst Kapak – Manuel',    unit: 'TL' },
+      { key: 'pool_cover_automatic' as PriceKey, label: 'Üst Kapak – Otomatik',  unit: 'TL' },
     ],
   },
   {
     label: 'Aksesuarlar',
     icon: '🪜',
     items: [
-      { key: 'railings' as PriceKey, label: 'Korkuluk',     unit: 'TL' },
-      { key: 'ladder'   as PriceKey, label: 'İç Merdiven',  unit: 'TL' },
+      { key: 'railings' as PriceKey, label: 'Korkuluk',    unit: 'TL' },
+      { key: 'ladder'   as PriceKey, label: 'İç Merdiven', unit: 'TL' },
     ],
   },
 ];

@@ -12,21 +12,18 @@ function buildSteps(lang: string): DriveStep[] {
   const s = {
     tr: [
       { title: '🏊 3D Önizleme',        desc: 'Havuzunuzun gerçek zamanlı 3D modelini buradan izleyin. Döndürmek için sürükleyin, yakınlaştırmak için kaydırın.' },
-      { title: '🔄 Görünümü Sıfırla',   desc: 'Kamerayı başlangıç konumuna döndürür. Modeli her açıdan inceleyebilirsiniz.' },
       { title: '📋 Tasarım Adımları',   desc: '8 adımda havuzunuzu yapılandırın: Boyut → Çerçeve → Paneller → Şelale → Aydınlatma → Zemin → Kaplama → Özet.' },
       { title: '⚙️ Seçim Alanı',        desc: 'Her adımın seçenekleri burada görünür. Seçimleriniz 3D modele anında yansır.' },
       { title: '➡️ Adımlar Arası Geçiş', desc: 'İleri ve Geri butonlarıyla adımlar arasında geçiş yapın. Son adımda seçimlerinizi görebilir ve teklif talep edebilirsiniz.' },
     ],
     en: [
       { title: '🏊 3D Preview',      desc: 'See your pool in real-time 3D. Drag to rotate, scroll to zoom.' },
-      { title: '🔄 Reset View',      desc: 'Returns the camera to its default position.' },
       { title: '📋 Design Steps',    desc: 'Configure your pool in 8 steps. Click any step to jump directly to it.' },
       { title: '⚙️ Options',         desc: 'Each step shows its options here. Your choices are instantly reflected in the 3D model.' },
       { title: '➡️ Navigation',      desc: 'Use Back and Next to move between steps. In the last step you can request a quote.' },
     ],
     de: [
       { title: '🏊 3D-Vorschau',            desc: 'Sehen Sie Ihren Pool in Echtzeit-3D. Ziehen zum Drehen, Scrollen zum Zoomen.' },
-      { title: '🔄 Ansicht zurücksetzen',   desc: 'Setzt die Kamera auf die Standardposition zurück.' },
       { title: '📋 Entwurfsschritte',       desc: 'Konfigurieren Sie Ihren Pool in 8 Schritten. Klicken Sie auf einen Schritt, um direkt dorthin zu springen.' },
       { title: '⚙️ Optionen',               desc: 'Jeder Schritt zeigt seine Optionen hier. Ihre Auswahl spiegelt sich sofort im 3D-Modell wider.' },
       { title: '➡️ Navigation',             desc: 'Verwenden Sie Zurück und Weiter, um zwischen den Schritten zu wechseln. Im letzten Schritt können Sie ein Angebot anfordern.' },
@@ -34,8 +31,8 @@ function buildSteps(lang: string): DriveStep[] {
   };
 
   const texts = (s as Record<string, typeof s.tr>)[lang] ?? s.en;
-  const elements = ['#tour-preview', '#tour-reset', '#tour-stepper', '#tour-content', '#tour-nav'];
-  const sides: DriveStep['popover']['side'][] = ['right', 'bottom', 'bottom', 'right', 'top'];
+  const elements = ['#tour-preview', '#tour-stepper', '#tour-content', '#tour-nav'];
+  const sides: NonNullable<DriveStep['popover']>['side'][] = ['right', 'bottom', 'right', 'top'];
 
   return texts.map((t, i) => ({
     element: elements[i],

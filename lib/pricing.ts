@@ -2,28 +2,30 @@ import { countPanels, type PoolConfig } from './types';
 
 // ─── Global defaults (used when no site/dealer override is set) ──────────────
 export const DEFAULT_PRICES = {
-  base_per_sqm:         22000,
-  frame_blue:           5000,
-  frame_white:          5000,
-  frame_anthracite:     0,
-  panel_glass:          4500,
-  panel_closed:         0,
-  ground_gravel:        0,
-  ground_wood:          22000,
-  ground_grass:         8000,
-  ground_concrete:      12000,
-  cladding_white:       0,
-  cladding_blue_mosaic: 18000,
-  cladding_gray_stone:  26000,
-  cladding_turquoise:   14000,
-  cladding_texture:     32000,
-  lighting:             9000,
-  lighting_dual:        0,
-  waterfall:            25000,
-  platform:             35000,
-  platform_extension:   0,
-  railings:             0,
-  ladder:               0,
+  base_per_sqm:          22000,
+  frame_blue:            5000,
+  frame_white:           5000,
+  frame_anthracite:      0,
+  panel_glass:           4500,
+  panel_closed:          0,
+  ground_gravel:         0,
+  ground_wood:           22000,
+  ground_grass:          8000,
+  ground_concrete:       12000,
+  cladding_white:        0,
+  cladding_blue_mosaic:  18000,
+  cladding_gray_stone:   26000,
+  cladding_turquoise:    14000,
+  cladding_texture:      32000,
+  lighting:              9000,
+  lighting_dual:         0,
+  waterfall:             25000,
+  platform:              35000,
+  platform_extension:    0,
+  railings:              0,
+  ladder:                0,
+  pool_cover_manual:     38000,
+  pool_cover_automatic:  55000,
 } as const;
 
 export type PriceKey = keyof typeof DEFAULT_PRICES;
@@ -47,6 +49,7 @@ export interface PriceBreakdown {
   lighting: number;
   waterfall: number;
   accessories: number;
+  poolCover: number;
   subtotal: number;
   discount: number;
   total: number;
@@ -94,11 +97,15 @@ export function calculateBasePrice(
     (config.railings    ? pr(customPrices, 'railings') : 0) +
     (config.innerLadder ? pr(customPrices, 'ladder')   : 0);
 
-  const subtotal = base + frame + panel + ground + cladding + platform + lighting + waterfall + accessories;
+  const poolCover = config.poolCover
+    ? pr(customPrices, config.poolCoverType === 'automatic' ? 'pool_cover_automatic' : 'pool_cover_manual')
+    : 0;
+
+  const subtotal = base + frame + panel + ground + cladding + platform + lighting + waterfall + accessories + poolCover;
 
   return {
     base, frame, panel, ground, cladding, platform,
-    lighting, waterfall, accessories, subtotal, discount: 0, total: subtotal,
+    lighting, waterfall, accessories, poolCover, subtotal, discount: 0, total: subtotal,
   };
 }
 
