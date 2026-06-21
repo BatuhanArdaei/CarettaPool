@@ -10,7 +10,7 @@ import {
   Sky,
   Stars,
 } from '@react-three/drei';
-import { EffectComposer, Bloom, SMAA, Vignette } from '@react-three/postprocessing';
+import { EffectComposer, Bloom, SMAA, Vignette, SSAO } from '@react-three/postprocessing';
 import { BlendFunction, KernelSize } from 'postprocessing';
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
@@ -59,6 +59,21 @@ function ConfigInvalidator({ config }: { config: PoolConfig }) {
   return null;
 }
 
+/** Traverse the entire scene and enable castShadow + receiveShadow on every mesh. */
+function EnableAllShadows({ config }: { config: PoolConfig }) {
+  const { scene, invalidate } = useThree();
+  useEffect(() => {
+    scene.traverse((obj) => {
+      if (obj instanceof THREE.Mesh) {
+        obj.castShadow = true;
+        obj.receiveShadow = true;
+      }
+    });
+    invalidate();
+  }, [config, scene, invalidate]);
+  return null;
+}
+
 export default function PoolScene({
   config,
   controlsRef,
@@ -70,11 +85,12 @@ export default function PoolScene({
   return (
     <Canvas
       frameloop="demand"
-      shadows={isNight}
-      camera={{ position: [12, 9, 14], fov: 42 }}
+      shadows
+      camera={{ position: [12, 7.5, 20], fov: 50 }}
       dpr={[1, 1.5]}
       gl={{ antialias: false, powerPreference: 'high-performance' }}
       onCreated={({ gl }) => {
+        gl.shadowMap.type = THREE.PCFSoftShadowMap;
         gl.toneMapping = THREE.ACESFilmicToneMapping;
         gl.toneMappingExposure = 1.08;
       }}
@@ -103,34 +119,46 @@ export default function PoolScene({
               intensity={0.85}
               color="#dbe8ff"
               castShadow
-              shadow-mapSize-width={1024}
-              shadow-mapSize-height={1024}
+              shadow-mapSize-width={4096}
+              shadow-mapSize-height={4096}
               shadow-bias={-0.0004}
+              shadow-camera-near={0.5}
+              shadow-camera-far={100}
+              shadow-camera-left={-28}
+              shadow-camera-right={28}
+              shadow-camera-top={28}
+              shadow-camera-bottom={-28}
             />
             {/* Soft fill from opposite side */}
             <directionalLight position={[-12, 8, -10]} intensity={0.18} color="#8ea4cc" />
           </>
         ) : (
           <>
-            <Sky sunPosition={[100, 30, 100]} turbidity={2} rayleigh={1} />
-            <ambientLight intensity={0.5} />
-            {/* Sun directional light — same direction as the visible sun sphere */}
+            <Sky sunPosition={[5, 10, 5]} turbidity={1.5} rayleigh={0.8} />
+            <ambientLight color="#87CEEB" intensity={0.4} />
+            {/* Sun directional light — clear afternoon sun */}
             <directionalLight
-              position={[20, 18, 18]}
-              intensity={1.4}
-              color="#fff5dc"
+              position={[8, 12, 6]}
+              intensity={1.5}
+              color="#FFF8F0"
               castShadow
-              shadow-mapSize-width={1024}
-              shadow-mapSize-height={1024}
+              shadow-mapSize-width={4096}
+              shadow-mapSize-height={4096}
               shadow-bias={-0.0004}
+              shadow-camera-near={0.5}
+              shadow-camera-far={100}
+              shadow-camera-left={-28}
+              shadow-camera-right={28}
+              shadow-camera-top={28}
+              shadow-camera-bottom={-28}
             />
             {/* Visible sun disk in the sky */}
-            <mesh position={[100, 30, 100]}>
+            <mesh position={[50, 100, 50]}>
               <sphereGeometry args={[7, 24, 24]} />
               <meshBasicMaterial color="#fff8d6" toneMapped={false} />
             </mesh>
             {/* Soft halo around the sun */}
-            <mesh position={[100, 30, 100]}>
+            <mesh position={[50, 100, 50]}>
               <sphereGeometry args={[10, 16, 16]} />
               <meshBasicMaterial
                 color="#ffe8a0"
@@ -142,11 +170,18 @@ export default function PoolScene({
             </mesh>
           </>
         )}
-        {/* Environment IBL — gives glass/metal materials proper reflections */}
-        <Environment preset={isNight ? 'night' : 'sunset'} background={false} />
+        {/* Environment IBL — real HDR for daytime, night preset for night mode */}
+        {isNight ? (
+          <Environment preset="night" background={false} />
+        ) : (
+          <Environment
+            files="https://dl.polyhaven.org/file/ph-assets/HDRIs/hdr/1k/outdoor_umbrellas_1k.hdr"
+            background={false}
+          />
+        )}
         <Garden ground={config.ground} isNight={isNight} />
         <Trees isNight={isNight} />
-        <VillaSlot isNight={isNight} />
+        <ModernVilla isNight={isNight} />
         <Fence isNight={isNight} />
         <Pool config={config} />
         <OrbitControls
@@ -162,6 +197,8 @@ export default function PoolScene({
             /* frameloop="demand" — OrbitControls triggers invalidate internally */
           }}
         />
+        {/* Enable shadows on ALL scene objects automatically */}
+        <EnableAllShadows config={config} />
         {/* Invalidate on config change so demand-rendering stays in sync */}
         <ConfigInvalidator config={config} />
         {/* Cap animated rendering to ~30fps while water/lighting animate */}
@@ -176,8 +213,21 @@ export default function PoolScene({
             faces={['Sağ', 'Sol', 'Üst', 'Alt', 'Ön', 'Arka']}
           />
         </GizmoHelper>
-        {/* Post-processing — Bloom + Vignette always on for cinematic look */}
+        {/* Post-processing — SSAO + Bloom + SMAA + Vignette for premium look */}
         <EffectComposer multisampling={0}>
+          <SSAO
+            blendFunction={BlendFunction.MULTIPLY}
+            samples={16}
+            rings={3}
+            luminanceInfluence={0.7}
+            radius={0.05}
+            bias={0.025}
+            intensity={isNight ? 2.5 : 1.2}
+            worldDistanceThreshold={1.0}
+            worldDistanceFalloff={0.1}
+            worldProximityThreshold={0.3}
+            worldProximityFalloff={0.02}
+          />
           <Bloom
             intensity={isNight ? 1.2 : 0.45}
             luminanceThreshold={isNight ? 0.18 : 0.88}
@@ -190,6 +240,7 @@ export default function PoolScene({
             darkness={isNight ? 0.55 : 0.32}
             blendFunction={BlendFunction.NORMAL}
           />
+          <SMAA />
         </EffectComposer>
       </Suspense>
     </Canvas>
@@ -260,30 +311,28 @@ function buildGroundTex(type: GroundType, isNight: boolean): THREE.CanvasTexture
     }
 
   } else if (type === 'grass') {
-    // Rich green base with colour variation
-    c.fillStyle = isNight ? '#1c3818' : '#4a8838';
+    // Clean uniform green base
+    c.fillStyle = isNight ? '#1a3416' : '#3d7a2e';
     c.fillRect(0, 0, S, S);
-    // Darker/lighter patches
-    for (let i = 0; i < 60; i++) {
-      const x = rng(S), y = rng(S), r = 8 + rng(28);
+    // Very subtle color variation — small, low-contrast dots only
+    for (let i = 0; i < 200; i++) {
+      const x = rng(S), y = rng(S), r = 2 + rng(6);
       const bright = rng() > 0.5;
       c.beginPath();
       c.arc(x, y, r, 0, Math.PI * 2);
-      c.fillStyle = bright
-        ? `rgba(80,160,50,0.22)`
-        : `rgba(20,50,15,0.22)`;
+      c.fillStyle = bright ? 'rgba(90,160,55,0.1)' : 'rgba(20,55,15,0.1)';
       c.fill();
     }
-    // Dense short grass blades
-    for (let i = 0; i < 900; i++) {
+    // Fine grass texture — short uniform blades
+    for (let i = 0; i < 600; i++) {
       const x = rng(S), y = rng(S);
-      const len = 3 + rng(8);
-      const a = -Math.PI * 0.5 + (rng() - 0.5) * 1.4;
-      const g = isNight ? 40 + rng(30) : 80 + rng(60);
+      const len = 2 + rng(5);
+      const a = -Math.PI * 0.5 + (rng() - 0.5) * 0.8;
+      const g = isNight ? 50 + rng(20) : 95 + rng(40);
       c.beginPath();
       c.moveTo(x, y);
       c.lineTo(x + Math.cos(a) * len, y + Math.sin(a) * len);
-      c.strokeStyle = `rgba(${isNight ? 20 : 40},${g},${isNight ? 15 : 25},0.65)`;
+      c.strokeStyle = `rgba(${isNight ? 15 : 35},${g},${isNight ? 12 : 20},0.5)`;
       c.lineWidth = 1;
       c.stroke();
     }
@@ -317,12 +366,17 @@ function buildGroundTex(type: GroundType, isNight: boolean): THREE.CanvasTexture
   return tex;
 }
 
-/** Maps ground type → real photo texture in /public/ground/ */
+/** Maps ground type → diffuse texture */
 const GROUND_IMG: Record<GroundType, string> = {
-  gravel:   '/ground/gravel.jpg',
-  wood:     '/ground/wood.jpg',
-  grass:    '/ground/grass.jpg',
-  concrete: '/ground/concrete.jpg',
+  gravel:   '/textures/graveltexture.jpg',
+  wood:     '/textures/wooddecktexture.jpg',
+  grass:    'https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/grass_path_2/grass_path_2_diff_1k.jpg',
+  concrete: '/textures/concretetexture.jpg',
+};
+
+/** Normal map URLs for ground types that have them */
+const GROUND_NORMAL_IMG: Partial<Record<GroundType, string>> = {
+  grass: 'https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/grass_path_2/grass_path_2_nor_gl_1k.jpg',
 };
 
 function useGroundTex(type: GroundType, isNight: boolean): THREE.Texture {
@@ -335,7 +389,8 @@ function useGroundTex(type: GroundType, isNight: boolean): THREE.Texture {
     return ct;
   }, [type, isNight]);
 
-  // Optionally replace with a real photo from /public/ground/*.jpg
+  // Load real photo texture — repeat tuned per material
+  const REPEAT: Record<GroundType, number> = { grass: 20, wood: 12, gravel: 18, concrete: 10 };
   const [photoTex, setPhotoTex] = useState<THREE.Texture | null>(null);
   useEffect(() => {
     setPhotoTex(null);
@@ -343,7 +398,9 @@ function useGroundTex(type: GroundType, isNight: boolean): THREE.Texture {
     new THREE.TextureLoader().load(GROUND_IMG[type], (t) => {
       if (!active) return;
       t.wrapS = t.wrapT = THREE.RepeatWrapping;
-      t.repeat.set(36, 36);
+      const r = REPEAT[type];
+      t.repeat.set(r, r);
+      t.anisotropy = 8;
       setPhotoTex(t);
     });
     return () => { active = false; };
@@ -352,52 +409,425 @@ function useGroundTex(type: GroundType, isNight: boolean): THREE.Texture {
   return photoTex ?? canvasTex;
 }
 
+function useGroundNormalTex(type: GroundType): THREE.Texture | null {
+  const [normalTex, setNormalTex] = useState<THREE.Texture | null>(null);
+  useEffect(() => {
+    const url = GROUND_NORMAL_IMG[type];
+    if (!url) { setNormalTex(null); return; }
+    let active = true;
+    new THREE.TextureLoader().load(url, (t) => {
+      if (!active) return;
+      t.wrapS = t.wrapT = THREE.RepeatWrapping;
+      t.repeat.set(20, 20);
+      t.anisotropy = 8;
+      setNormalTex(t);
+    });
+    return () => { active = false; };
+  }, [type]);
+  return normalTex;
+}
+
 function Garden({ ground, isNight }: { ground: GroundType; isNight: boolean }) {
   const tex = useGroundTex(ground, isNight);
+  const normalTex = useGroundNormalTex(ground);
   return (
     <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, 0]} receiveShadow>
       <planeGeometry args={[120, 120]} />
       <meshStandardMaterial
         key={tex.uuid}
         map={tex}
-        roughness={0.9}
+        normalMap={normalTex ?? undefined}
+        normalScale={normalTex ? new THREE.Vector2(0.8, 0.8) : new THREE.Vector2(1, 1)}
+        color={ground === 'grass' ? '#c8e888' : '#ffffff'}
+        roughness={ground === 'concrete' ? 0.75 : ground === 'wood' ? 0.7 : 0.92}
+        metalness={ground === 'concrete' ? 0.02 : 0}
+        envMapIntensity={0.3}
       />
     </mesh>
   );
 }
 
-function Trees({ isNight }: { isNight: boolean }) {
-  const positions = useMemo<[number, number, number][]>(
-    () => [
-      [18, 0, -10],
-      [-18, 0, 6],
-      [20, 0, 14],
-      [-16, 0, 20],
-      [12, 0, 21],
-      [-20, 0, -8],
-      [22, 0, 4],
-      [-22, 0, -16],
-    ],
-    []
+function PoolDeck({ w, l }: { w: number; l: number }) {
+  const [travTex, setTravTex] = useState<THREE.Texture | null>(null);
+  useEffect(() => {
+    let active = true;
+    new THREE.TextureLoader().load(
+      'https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/travertine_floor/travertine_floor_diff_1k.jpg',
+      (t) => {
+        if (!active) return;
+        t.wrapS = t.wrapT = THREE.RepeatWrapping;
+        t.repeat.set(4, 4);
+        t.anisotropy = 8;
+        setTravTex(t);
+      }
+    );
+    return () => { active = false; };
+  }, []);
+
+  const deckW = w + 8;
+  const deckL = l + 8;
+
+  return (
+    <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.005, 0]} receiveShadow>
+      <planeGeometry args={[deckW, deckL]} />
+      <meshStandardMaterial
+        map={travTex ?? undefined}
+        color={travTex ? '#ffffff' : '#e8dfc8'}
+        roughness={0.72}
+        metalness={0.01}
+        envMapIntensity={0.4}
+      />
+    </mesh>
   );
-  const trunk = isNight ? '#2a1c10' : '#5b3a1e';
-  const foliage1 = isNight ? '#1a3a1a' : '#2d6a2d';
-  const foliage2 = isNight ? '#1d4220' : '#327a32';
+}
+
+// Per-tree sphere offsets (x, y, z, radius) relative to trunk top
+const SPHERE_OFFSETS: [number, number, number, number][] = [
+  [0,    3.2, 0,    1.25],
+  [0.7,  2.7, 0.5, 0.90],
+  [-0.8, 2.9, -0.4, 0.95],
+  [0.4,  4.0, -0.6, 0.80],
+  [-0.5, 3.8,  0.6, 0.75],
+  [0.1,  4.8,  0.1, 0.62],
+  [-0.3, 2.2,  0.9, 0.68],
+];
+
+function Trees({ isNight }: { isNight: boolean }) {
+  const treeData = useMemo<Array<{ pos: [number, number, number]; rot: number; scale: number }>>(() => [
+    // Villa flanks — behind and sides of house
+    { pos: [-9,  0, -19], rot: 0.30,  scale: 1.10 },
+    { pos: [ 11, 0, -18], rot: -0.45, scale: 0.95 },
+    { pos: [-14, 0, -14], rot: 0.70,  scale: 1.20 },
+    { pos: [ 15, 0, -13], rot: -0.25, scale: 1.05 },
+    // Side borders — don't block pool front view
+    { pos: [-20, 0, -6],  rot: -0.60, scale: 0.90 },
+    { pos: [ 20, 0, -5],  rot: 0.20,  scale: 1.00 },
+    { pos: [-20, 0,  4],  rot: 0.55,  scale: 0.85 },
+    { pos: [ 20, 0,  5],  rot: -0.35, scale: 0.95 },
+    // Far background fill
+    { pos: [-16, 0, -19], rot: -0.15, scale: 0.80 },
+    { pos: [  6, 0, -20], rot: 0.90,  scale: 1.08 },
+  ], []);
+
+  const trunkColor = isNight ? '#1a0e06' : '#4a2f1a';
+  const leafPalette = isNight
+    ? ['#0a200a', '#0c2810', '#0f2e12', '#0d2a0e', '#122e12', '#0e2c10', '#102a0e']
+    : ['#1e4d12', '#2d5a1b', '#245218', '#284e16', '#1e4a14', '#266018', '#224c16'];
+
   return (
     <group>
-      {positions.map((p, i) => (
-        <group key={i} position={p}>
-          <mesh castShadow position={[0, 0.6, 0]}>
-            <cylinderGeometry args={[0.15, 0.2, 1.2, 8]} />
-            <meshStandardMaterial color={trunk} />
+      {treeData.map(({ pos, rot, scale }, ti) => (
+        <group key={ti} position={pos} rotation={[0, rot, 0]} scale={[scale, scale, scale]}>
+          {/* Trunk */}
+          <mesh castShadow receiveShadow position={[0, 0.9, 0]}>
+            <cylinderGeometry args={[0.12, 0.20, 1.8, 10]} />
+            <meshStandardMaterial color={trunkColor} roughness={0.96} />
           </mesh>
-          <mesh castShadow position={[0, 1.8, 0]}>
-            <coneGeometry args={[0.9, 1.8, 10]} />
-            <meshStandardMaterial color={foliage1} />
+          {/* Sphere cluster foliage */}
+          {SPHERE_OFFSETS.map(([sx, sy, sz, sr], si) => (
+            <mesh key={si} castShadow receiveShadow position={[sx, sy, sz]}>
+              <sphereGeometry args={[sr, 10, 10]} />
+              <meshStandardMaterial
+                color={leafPalette[(ti * 3 + si) % leafPalette.length]}
+                roughness={1.0}
+                metalness={0}
+              />
+            </mesh>
+          ))}
+        </group>
+      ))}
+    </group>
+  );
+}
+
+function ModernVilla({ isNight }: { isNight: boolean }) {
+  const plaster  = isNight ? '#8e8a82' : '#f2ece0';
+  const plasterD = isNight ? '#706c65' : '#dfd9cc';
+  const roof     = isNight ? '#28282a' : '#343436';
+  const frame    = isNight ? '#0a0c0e' : '#16181c';
+  const glass    = '#1a3050';
+  const glassOp  = isNight ? 0.75 : 0.55;
+  const litCol   = isNight ? '#f5cd70' : '#000';
+  const litEm    = isNight ? 0.55 : 0;
+
+  const [plasterTex, setPlasterTex] = useState<THREE.Texture | null>(null);
+  useEffect(() => {
+    let active = true;
+    new THREE.TextureLoader().load(
+      'https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/plaster_wall/plaster_wall_diff_1k.jpg',
+      (t) => {
+        if (!active) return;
+        t.wrapS = t.wrapT = THREE.RepeatWrapping;
+        t.repeat.set(6, 2);
+        t.anisotropy = 8;
+        setPlasterTex(t);
+      }
+    );
+    return () => { active = false; };
+  }, []);
+
+  const wallMat = { map: plasterTex ?? undefined, color: plaster, roughness: 0.88, metalness: 0 as number };
+  const frameMat = { color: frame, roughness: 0.25, metalness: 0.65 as number };
+  const glassMat = { color: glass, transparent: true as const, opacity: glassOp, roughness: 0.04, metalness: 0.15 as number };
+
+  // === Main block ===
+  const MW = 17; const MD = 7; const GH = 3.6; const UH = 3.5;
+  const TH = GH + UH;
+
+  return (
+    <group position={[0, 0, -20]}>
+
+      {/* ── MAIN BLOCK ── */}
+      {/* Back wall */}
+      <mesh castShadow receiveShadow position={[0, TH / 2, -MD / 2]}>
+        <boxGeometry args={[MW, TH, 0.32]} />
+        <meshStandardMaterial {...wallMat} />
+      </mesh>
+      {/* Left side wall */}
+      <mesh castShadow receiveShadow position={[-MW / 2, TH / 2, 0]}>
+        <boxGeometry args={[0.32, TH, MD]} />
+        <meshStandardMaterial {...wallMat} />
+      </mesh>
+      {/* Right side wall */}
+      <mesh castShadow receiveShadow position={[MW / 2, TH / 2, 0]}>
+        <boxGeometry args={[0.32, TH, MD]} />
+        <meshStandardMaterial {...wallMat} />
+      </mesh>
+      {/* Mid-floor slab (visible overhang line) */}
+      <mesh receiveShadow position={[0, GH + 0.12, 0]}>
+        <boxGeometry args={[MW + 0.1, 0.24, MD + 0.1]} />
+        <meshStandardMaterial color={plasterD} roughness={0.8} />
+      </mesh>
+
+      {/* ── GROUND-FLOOR FACADE (pool-facing) ── */}
+      {/* Left solid panel */}
+      <mesh castShadow receiveShadow position={[-MW / 2 + 1.6, GH / 2, MD / 2]}>
+        <boxGeometry args={[3.2, GH, 0.32]} />
+        <meshStandardMaterial {...wallMat} />
+      </mesh>
+      {/* Right solid panel */}
+      <mesh castShadow receiveShadow position={[MW / 2 - 1.1, GH / 2, MD / 2]}>
+        <boxGeometry args={[2.2, GH, 0.32]} />
+        <meshStandardMaterial {...wallMat} />
+      </mesh>
+      {/* Large glass wall (centre) */}
+      <mesh position={[0.8, GH / 2, MD / 2 + 0.07]}>
+        <boxGeometry args={[10.6, GH - 0.14, 0.07]} />
+        <meshStandardMaterial {...glassMat} />
+      </mesh>
+      {/* Frame — top beam */}
+      <mesh position={[0.8, GH - 0.12, MD / 2]}>
+        <boxGeometry args={[11, 0.22, 0.22]} />
+        <meshStandardMaterial {...frameMat} />
+      </mesh>
+      {/* Frame — bottom sill */}
+      <mesh position={[0.8, 0.12, MD / 2]}>
+        <boxGeometry args={[11, 0.22, 0.24]} />
+        <meshStandardMaterial {...frameMat} />
+      </mesh>
+      {/* Vertical mullions */}
+      {([-4.7, -1.5, 1.8, 5.1] as number[]).map((x, i) => (
+        <mesh key={i} position={[x + 0.8, GH / 2, MD / 2]}>
+          <boxGeometry args={[0.09, GH, 0.22]} />
+          <meshStandardMaterial {...frameMat} />
+        </mesh>
+      ))}
+
+      {/* ── UPPER-FLOOR FACADE ── */}
+      {/* Left solid */}
+      <mesh castShadow receiveShadow position={[-MW / 2 + 2.1, GH + UH / 2, MD / 2]}>
+        <boxGeometry args={[4.2, UH, 0.32]} />
+        <meshStandardMaterial {...wallMat} />
+      </mesh>
+      {/* Left window */}
+      <mesh position={[-2.8, GH + UH / 2, MD / 2 + 0.07]}>
+        <boxGeometry args={[4.6, UH - 0.5, 0.07]} />
+        <meshStandardMaterial {...glassMat} />
+      </mesh>
+      {/* Centre divider */}
+      <mesh castShadow receiveShadow position={[0.4, GH + UH / 2, MD / 2]}>
+        <boxGeometry args={[1.6, UH, 0.32]} />
+        <meshStandardMaterial {...wallMat} />
+      </mesh>
+      {/* Right window */}
+      <mesh position={[5.2, GH + UH / 2, MD / 2 + 0.07]}>
+        <boxGeometry args={[6.2, UH - 0.5, 0.07]} />
+        <meshStandardMaterial {...glassMat} />
+      </mesh>
+      {/* Right solid */}
+      <mesh castShadow receiveShadow position={[MW / 2 - 1, GH + UH / 2, MD / 2]}>
+        <boxGeometry args={[2, UH, 0.32]} />
+        <meshStandardMaterial {...wallMat} />
+      </mesh>
+      {/* Upper frame beams */}
+      <mesh position={[0, GH + 0.14, MD / 2]}>
+        <boxGeometry args={[MW, 0.22, 0.22]} />
+        <meshStandardMaterial {...frameMat} />
+      </mesh>
+      <mesh position={[0, GH + UH - 0.12, MD / 2]}>
+        <boxGeometry args={[MW, 0.22, 0.22]} />
+        <meshStandardMaterial {...frameMat} />
+      </mesh>
+
+      {/* ── FLAT ROOF ── */}
+      <mesh castShadow receiveShadow position={[0, TH + 0.2, 0]}>
+        <boxGeometry args={[MW + 0.5, 0.4, MD + 0.5]} />
+        <meshStandardMaterial color={roof} roughness={0.85} />
+      </mesh>
+      {/* Roof parapet (front) */}
+      <mesh castShadow position={[0, TH + 0.65, MD / 2 + 0.25]}>
+        <boxGeometry args={[MW + 0.5, 0.6, 0.28]} />
+        <meshStandardMaterial color={plaster} roughness={0.88} />
+      </mesh>
+      {/* Parapet cap */}
+      <mesh position={[0, TH + 0.97, MD / 2 + 0.25]}>
+        <boxGeometry args={[MW + 0.5, 0.1, 0.36]} />
+        <meshStandardMaterial color={plasterD} roughness={0.65} />
+      </mesh>
+
+      {/* ── LEFT WING (single story) ── */}
+      <group position={[-MW / 2 - 4.5, 0, -0.5]}>
+        <mesh castShadow receiveShadow position={[0, GH / 2, 0]}>
+          <boxGeometry args={[9, GH, 6]} />
+          <meshStandardMaterial {...wallMat} />
+        </mesh>
+        {/* Wing pool-facing window */}
+        <mesh position={[0, GH / 2, 3.07]}>
+          <boxGeometry args={[5.5, GH - 0.5, 0.07]} />
+          <meshStandardMaterial {...glassMat} />
+        </mesh>
+        <mesh position={[0, GH - 0.12, 3]}>
+          <boxGeometry args={[5.8, 0.22, 0.22]} />
+          <meshStandardMaterial {...frameMat} />
+        </mesh>
+        <mesh position={[0, 0.12, 3]}>
+          <boxGeometry args={[5.8, 0.22, 0.24]} />
+          <meshStandardMaterial {...frameMat} />
+        </mesh>
+        {/* Wing flat roof */}
+        <mesh castShadow position={[0, GH + 0.2, 0]}>
+          <boxGeometry args={[9.4, 0.4, 6.4]} />
+          <meshStandardMaterial color={roof} roughness={0.85} />
+        </mesh>
+        <mesh castShadow position={[0, GH + 0.65, 3.2]}>
+          <boxGeometry args={[9.4, 0.6, 0.28]} />
+          <meshStandardMaterial color={plaster} roughness={0.88} />
+        </mesh>
+      </group>
+
+      {/* ── TERRACE SLAB (connects villa to pool area) ── */}
+      <mesh receiveShadow position={[0, 0.025, MD / 2 + 3.5]}>
+        <boxGeometry args={[MW, 0.05, 7]} />
+        <meshStandardMaterial color={isNight ? '#2c2a28' : '#c8c4b8'} roughness={0.88} />
+      </mesh>
+
+      {/* Interior warm-light emissive planes (night) */}
+      {[
+        { x:  0.8, y: GH / 2,       z: MD / 2 - 0.15, w: 10.2, h: GH - 0.2 },
+        { x: -2.8, y: GH + UH / 2,  z: MD / 2 - 0.15, w:  4.3, h: UH - 0.5 },
+        { x:  5.2, y: GH + UH / 2,  z: MD / 2 - 0.15, w:  5.8, h: UH - 0.5 },
+      ].map((p, i) => (
+        <mesh key={i} position={[p.x, p.y, p.z]} rotation={[0, 0, 0]}>
+          <planeGeometry args={[p.w, p.h]} />
+          <meshStandardMaterial
+            color={litCol}
+            emissive={litCol}
+            emissiveIntensity={litEm}
+            side={THREE.BackSide}
+            transparent
+            opacity={litEm > 0 ? 0.9 : 0}
+          />
+        </mesh>
+      ))}
+    </group>
+  );
+}
+
+function Loungers({ w, l }: { w: number; l: number }) {
+  const halfW = w / 2;
+  const halfL = l / 2;
+  const bedColor = '#f5f0e8';
+  const frameColor = '#c8b89a';
+  const cushionColor = '#e8dfd0';
+
+  return (
+    <group>
+      {/* Lounger 1 — north side of pool, slight angle */}
+      <group position={[halfW + 1.6, 0, -halfL * 0.3]} rotation={[0, -0.25, 0]}>
+        <mesh position={[0, 0.22, 0]} receiveShadow castShadow>
+          <boxGeometry args={[0.7, 0.12, 2.0]} />
+          <meshStandardMaterial color={frameColor} roughness={0.7} metalness={0.2} />
+        </mesh>
+        <mesh position={[0, 0.32, 0]} receiveShadow>
+          <boxGeometry args={[0.62, 0.1, 1.9]} />
+          <meshStandardMaterial color={cushionColor} roughness={0.8} />
+        </mesh>
+        {/* Headrest raised */}
+        <mesh position={[0, 0.38, -0.78]} receiveShadow>
+          <boxGeometry args={[0.62, 0.12, 0.42]} />
+          <meshStandardMaterial color={bedColor} roughness={0.8} />
+        </mesh>
+        {/* Legs */}
+        {[[-0.28, 0], [0.28, 0], [-0.28, 1], [0.28, 1]].map(([lx, lz], i) => (
+          <mesh key={i} position={[lx, 0.1, lz - 0.5]}>
+            <cylinderGeometry args={[0.025, 0.025, 0.2, 6]} />
+            <meshStandardMaterial color={frameColor} metalness={0.4} roughness={0.5} />
           </mesh>
-          <mesh castShadow position={[0, 2.6, 0]}>
-            <coneGeometry args={[0.7, 1.4, 10]} />
-            <meshStandardMaterial color={foliage2} />
+        ))}
+      </group>
+      {/* Lounger 2 — parallel */}
+      <group position={[halfW + 1.6, 0, halfL * 0.3]} rotation={[0, 0.15, 0]}>
+        <mesh position={[0, 0.22, 0]} receiveShadow castShadow>
+          <boxGeometry args={[0.7, 0.12, 2.0]} />
+          <meshStandardMaterial color={frameColor} roughness={0.7} metalness={0.2} />
+        </mesh>
+        <mesh position={[0, 0.32, 0]} receiveShadow>
+          <boxGeometry args={[0.62, 0.1, 1.9]} />
+          <meshStandardMaterial color={cushionColor} roughness={0.8} />
+        </mesh>
+        <mesh position={[0, 0.38, -0.78]} receiveShadow>
+          <boxGeometry args={[0.62, 0.12, 0.42]} />
+          <meshStandardMaterial color={bedColor} roughness={0.8} />
+        </mesh>
+        {[[-0.28, 0], [0.28, 0], [-0.28, 1], [0.28, 1]].map(([lx, lz], i) => (
+          <mesh key={i} position={[lx, 0.1, lz - 0.5]}>
+            <cylinderGeometry args={[0.025, 0.025, 0.2, 6]} />
+            <meshStandardMaterial color={frameColor} metalness={0.4} roughness={0.5} />
+          </mesh>
+        ))}
+      </group>
+    </group>
+  );
+}
+
+function FlowerPots() {
+  const spots: [number, number, number][] = [
+    [-12, 0, -19.5],
+    [-5, 0, -19.5],
+    [6, 0, -19.5],
+  ];
+  return (
+    <group>
+      {spots.map((pos, i) => (
+        <group key={i} position={pos}>
+          {/* Pot */}
+          <mesh position={[0, 0.22, 0]} castShadow receiveShadow>
+            <cylinderGeometry args={[0.25, 0.18, 0.44, 10]} />
+            <meshStandardMaterial color="#c87850" roughness={0.9} />
+          </mesh>
+          {/* Soil */}
+          <mesh position={[0, 0.46, 0]}>
+            <cylinderGeometry args={[0.22, 0.22, 0.06, 10]} />
+            <meshStandardMaterial color="#3a2510" roughness={1} />
+          </mesh>
+          {/* Plant (sphere cluster) */}
+          <mesh position={[0, 0.8 + (i % 2) * 0.15, 0]} castShadow>
+            <sphereGeometry args={[0.28 + (i * 0.04) % 0.12, 10, 10]} />
+            <meshStandardMaterial color="#1e5a1e" roughness={0.9} />
+          </mesh>
+          <mesh position={[0.12, 0.72 + (i % 2) * 0.1, 0.1]} castShadow>
+            <sphereGeometry args={[0.18, 8, 8]} />
+            <meshStandardMaterial color="#236924" roughness={0.9} />
           </mesh>
         </group>
       ))}
@@ -1042,9 +1472,7 @@ function Pool({ config }: { config: PoolConfig }) {
           l={l}
           floorY={BASIN_FLOOR + 0.012}
           lightEnabled={config.lighting.enabled}
-          lightMode={config.lighting.mode}
           lightColor={config.lighting.color}
-          lightColor2={config.lighting.color2}
         />
       )}
 
@@ -1090,18 +1518,14 @@ function Pool({ config }: { config: PoolConfig }) {
           l={l}
           waterY={waterY}
           lightEnabled={config.lighting.enabled}
-          lightMode={config.lighting.mode}
           lightColor={config.lighting.color}
-          lightColor2={config.lighting.color2}
         />
       )}
 
       {/* Pool lighting — three-layer glow with optional RGB animation */}
       {config.lighting.enabled && (
         <PoolLighting
-          mode={config.lighting.mode}
           color={config.lighting.color}
-          color2={config.lighting.color2}
           w={w}
           l={l}
           waterY={waterY}
@@ -1110,7 +1534,7 @@ function Pool({ config }: { config: PoolConfig }) {
 
       {/* LED accent strips — top + bottom perimeter inside the pool */}
       {config.lighting.enabled && (
-        <LedStrips color={config.lighting.color} color2={config.lighting.color2} mode={config.lighting.mode} w={w} l={l} top={top} />
+        <LedStrips color={config.lighting.color} w={w} l={l} top={top} />
       )}
 
       {/* Stainless steel waterfall feature (optional) */}
@@ -1551,17 +1975,13 @@ function CinematicWater({
   l,
   waterY,
   lightEnabled,
-  lightMode,
   lightColor,
-  lightColor2,
 }: {
   w: number;
   l: number;
   waterY: number;
   lightEnabled: boolean;
-  lightMode: 'single' | 'dual';
   lightColor: LightColor;
-  lightColor2: LightColor;
 }) {
   const uniforms = useMemo(
     () => ({
@@ -1587,7 +2007,7 @@ function CinematicWater({
     if (lightEnabled) {
       uniforms.uEmissiveStrength.value = 0.4;
       uniforms.uEmissive.value.copy(
-        animatedColor(lightMode, lightColor, lightColor2, state.clock.elapsedTime)
+        animatedColor(lightColor, state.clock.elapsedTime)
       );
       // Night sky reflection — dark blue
       uniforms.uSkyColor.value.set('#10182e');
@@ -1671,17 +2091,13 @@ function PoolCaustics({
   l,
   floorY,
   lightEnabled,
-  lightMode,
   lightColor,
-  lightColor2,
 }: {
   w: number;
   l: number;
   floorY: number;
   lightEnabled: boolean;
-  lightMode: 'single' | 'dual';
   lightColor: LightColor;
-  lightColor2: LightColor;
 }) {
   const uniforms = useMemo(
     () => ({
@@ -1696,7 +2112,7 @@ function PoolCaustics({
     uniforms.uTime.value = state.clock.elapsedTime;
     if (lightEnabled) {
       uniforms.uColor.value.copy(
-        animatedColor(lightMode, lightColor, lightColor2, state.clock.elapsedTime)
+        animatedColor(lightColor, state.clock.elapsedTime)
       );
       uniforms.uIntensity.value = 1.1;
     } else {
@@ -1726,15 +2142,11 @@ function PoolCaustics({
 
 function LedStrips({
   color,
-  color2,
-  mode,
   w,
   l,
   top,
 }: {
   color: LightColor;
-  color2: LightColor;
-  mode: 'single' | 'dual';
   w: number;
   l: number;
   top: number;
@@ -1742,8 +2154,8 @@ function LedStrips({
   const refs = useRef<Array<THREE.Mesh | null>>([]);
 
   useFrame((state) => {
-    if (mode === 'single' && color !== 'rgb' && color !== 'blue_purple') return;
-    const c = animatedColor(mode, color, color2, state.clock.elapsedTime);
+    if (color !== 'rgb' && color !== 'blue_purple') return;
+    const c = animatedColor(color, state.clock.elapsedTime);
     refs.current.forEach((mesh) => {
       if (!mesh) return;
       const mat = mesh.material as THREE.MeshStandardMaterial;
@@ -1807,16 +2219,12 @@ function LedStrips({
 }
 
 function PoolLighting({
-  mode,
   color,
-  color2,
   w,
   l,
   waterY,
 }: {
-  mode: 'single' | 'dual';
   color: LightColor;
-  color2: LightColor;
   w: number;
   l: number;
   waterY: number;
@@ -1824,8 +2232,8 @@ function PoolLighting({
   const refs = useRef<Array<THREE.PointLight | null>>([null, null, null]);
 
   useFrame((state) => {
-    if (mode === 'single' && color !== 'rgb' && color !== 'blue_purple') return;
-    const c = animatedColor(mode, color, color2, state.clock.elapsedTime);
+    if (color !== 'rgb' && color !== 'blue_purple') return;
+    const c = animatedColor(color, state.clock.elapsedTime);
     refs.current.forEach((light) => {
       if (light) light.color.copy(c);
     });
@@ -3231,16 +3639,7 @@ function frameColorHex(c: FrameColor): string {
   }
 }
 
-function animatedColor(
-  mode: 'single' | 'dual',
-  color: LightColor,
-  color2: LightColor,
-  t: number
-): THREE.Color {
-  if (mode === 'dual') {
-    const blend = Math.sin(t * 0.7) * 0.5 + 0.5;
-    return new THREE.Color(lightColorHex(color)).lerp(new THREE.Color(lightColorHex(color2)), blend);
-  }
+function animatedColor(color: LightColor, t: number): THREE.Color {
   if (color === 'rgb') return new THREE.Color().setHSL((t * 0.08) % 1, 0.9, 0.45);
   if (color === 'blue_purple') {
     return new THREE.Color().setHSL(0.61 + (Math.sin(t * 0.6) * 0.5 + 0.5) * 0.17, 1.0, 0.48);
@@ -3252,7 +3651,13 @@ function lightColorHex(c: LightColor): string {
   switch (c) {
     case 'blue':        return '#3b82f6';
     case 'white':       return '#ffffff';
+    case 'warm_white':  return '#fde68a';
     case 'green':       return '#22c55e';
+    case 'cyan':        return '#06b6d4';
+    case 'turquoise':   return '#14b8a6';
+    case 'red':         return '#ef4444';
+    case 'orange':      return '#f97316';
+    case 'pink':        return '#ec4899';
     case 'purple':      return '#a855f7';
     case 'rgb':         return '#ff3b3b';
     case 'blue_purple': return '#6a3cf7';

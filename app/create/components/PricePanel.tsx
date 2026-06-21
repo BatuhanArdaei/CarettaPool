@@ -267,7 +267,14 @@ function PriceLine({ label, value }: { label: string; value: number }) {
 }
 
 function frameLabel(c: string) { return { anthracite: 'Antrasit', blue: 'Mavi', white: 'Beyaz' }[c] ?? c; }
-function lightLabel(c: string)  { return { blue: 'Mavi', white: 'Beyaz', green: 'Yeşil', purple: 'Mor', rgb: 'RGB' }[c] ?? c; }
+function lightLabel(c: string)  {
+  return ({
+    blue: 'Mavi', white: 'Beyaz', warm_white: 'Sıcak Beyaz',
+    green: 'Yeşil', cyan: 'Açık Mavi', turquoise: 'Turkuaz',
+    red: 'Kırmızı', orange: 'Turuncu', pink: 'Pembe',
+    purple: 'Mor', rgb: 'Gökkuşağı', blue_purple: 'Mavi-Mor',
+  } as Record<string, string>)[c] ?? c;
+}
 function groundLabel(g: string) { return { gravel: 'Çakıl', wood: 'Tahta Deck', grass: 'Çimen', concrete: 'Beton' }[g] ?? g; }
 function claddingLabel(c: string) {
   return { white: 'Beyaz', blue_mosaic: 'Mavi Mozaik', gray_stone: 'Gri Taş', turquoise: 'Turkuaz' }[c] ?? (c.startsWith('texture') ? `Özel Desen ${c.slice(-1)}` : c);

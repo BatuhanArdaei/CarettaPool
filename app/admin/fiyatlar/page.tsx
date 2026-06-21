@@ -47,8 +47,7 @@ const PRICE_GROUPS = [
     label: 'Işıklandırma',
     icon: '💡',
     items: [
-      { key: 'lighting'      as PriceKey, label: 'Işıklandırma (tek renk)', unit: 'TL' },
-      { key: 'lighting_dual' as PriceKey, label: 'Çift Renk Ek Ücret',     unit: 'TL' },
+      { key: 'lighting' as PriceKey, label: 'Işıklandırma', unit: 'TL' },
     ],
   },
   {

@@ -18,7 +18,6 @@ export const DEFAULT_PRICES = {
   cladding_turquoise:    14000,
   cladding_texture:      32000,
   lighting:              9000,
-  lighting_dual:         0,
   waterfall:             25000,
   platform:              35000,
   platform_extension:    0,
@@ -86,10 +85,7 @@ export function calculateBasePrice(
     pr(customPrices, 'platform') +
     (config.platformExtension ? pr(customPrices, 'platform_extension') : 0);
 
-  const lighting = config.lighting.enabled
-    ? pr(customPrices, 'lighting') +
-      (config.lighting.mode === 'dual' ? pr(customPrices, 'lighting_dual') : 0)
-    : 0;
+  const lighting = config.lighting.enabled ? pr(customPrices, 'lighting') : 0;
 
   const waterfall = config.waterfall ? pr(customPrices, 'waterfall') : 0;
 

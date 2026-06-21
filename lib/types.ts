@@ -1,6 +1,8 @@
 export type FrameColor = 'anthracite' | 'blue' | 'white';
 export type PanelType = 'glass' | 'closed';
-export type LightColor = 'blue' | 'white' | 'green' | 'purple' | 'rgb' | 'blue_purple';
+export type LightColor =
+  | 'blue' | 'white' | 'warm_white' | 'green' | 'cyan' | 'turquoise'
+  | 'red' | 'orange' | 'pink' | 'purple' | 'rgb' | 'blue_purple';
 export type GroundType = 'gravel' | 'wood' | 'grass' | 'concrete';
 export type CladdingType =
   | 'white'
@@ -22,9 +24,7 @@ export interface PoolConfig {
   panelOverrides: Record<string, PanelType>; // key: `${side}-${index}`
   lighting: {
     enabled: boolean;
-    mode: 'single' | 'dual';
     color: LightColor;
-    color2: LightColor;
   };
   ground: GroundType;
   cladding: CladdingType;
@@ -45,7 +45,7 @@ export const defaultPoolConfig: PoolConfig = {
   frameColor: 'anthracite',
   panel: 'glass',
   panelOverrides: {},
-  lighting: { enabled: false, mode: 'single', color: 'blue', color2: 'purple' },
+  lighting: { enabled: false, color: 'blue' },
   ground: 'grass',
   cladding: 'white',
   platformDirection: 'east',

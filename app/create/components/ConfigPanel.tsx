@@ -441,8 +441,10 @@ function LightingStep({
 }) {
   const { t } = useLanguage();
   const disabled = !config.lighting.enabled;
-  const isDual = config.lighting.mode === 'dual';
-  const ALL_COLORS: LightColor[] = ['blue', 'white', 'green', 'purple', 'rgb', 'blue_purple'];
+  const ALL_COLORS: LightColor[] = [
+    'blue', 'white', 'warm_white', 'green', 'cyan', 'turquoise',
+    'red', 'orange', 'pink', 'purple', 'rgb', 'blue_purple',
+  ];
 
   return (
     <div className="space-y-4">
@@ -456,22 +458,9 @@ function LightingStep({
         onChange={(v) => set('lighting', { ...config.lighting, enabled: v === 'on' })}
       />
 
-      {/* Single / Dual mode */}
+      {/* Color */}
       <div>
-        <Toggle
-          options={[
-            { value: 'single', label: t('configurator.single_color') },
-            { value: 'dual',   label: t('configurator.dual_color') },
-          ]}
-          value={config.lighting.mode}
-          onChange={(v) => set('lighting', { ...config.lighting, mode: v as 'single' | 'dual' })}
-          disabled={disabled}
-        />
-      </div>
-
-      {/* Color 1 */}
-      <div>
-        <p className="label">{isDual ? t('configurator.color_1') : t('configurator.color_label')}</p>
+        <p className="label">{t('configurator.color_label')}</p>
         <div className="flex flex-wrap gap-2">
           {ALL_COLORS.map((c) => (
             <button
@@ -485,35 +474,12 @@ function LightingStep({
                   : 'ring-1 ring-slate-200 hover:scale-105 hover:ring-brand-400'
               } ${disabled ? 'opacity-40' : ''}`}
               style={{ background: lightCssColor(c) }}
-              aria-label={c}
+              title={lightColorName(c)}
+              aria-label={lightColorName(c)}
             />
           ))}
         </div>
       </div>
-
-      {/* Color 2 — only visible in dual mode */}
-      {isDual && (
-        <div>
-          <p className="label">{t('configurator.color_2')}</p>
-          <div className="flex flex-wrap gap-2">
-            {ALL_COLORS.map((c) => (
-              <button
-                key={c}
-                type="button"
-                disabled={disabled}
-                onClick={() => set('lighting', { ...config.lighting, color2: c })}
-                className={`h-9 w-9 rounded-full border border-white shadow-sm transition-all duration-200 ${
-                  config.lighting.color2 === c
-                    ? 'scale-110 ring-2 ring-brand-600 ring-offset-2'
-                    : 'ring-1 ring-slate-200 hover:scale-105 hover:ring-brand-400'
-                } ${disabled ? 'opacity-40' : ''}`}
-                style={{ background: lightCssColor(c) }}
-                aria-label={c}
-              />
-            ))}
-          </div>
-        </div>
-      )}
 
       <p className="text-xs text-slate-500">{t('configurator.lighting_note')}</p>
     </div>
@@ -812,13 +778,29 @@ function SelectGrid<T extends string>({
 
 function lightCssColor(c: LightColor): string {
   switch (c) {
-    case 'blue':   return '#3b82f6';
-    case 'white':  return '#f8fafc';
-    case 'green':  return '#22c55e';
-    case 'purple': return '#a855f7';
+    case 'blue':        return '#3b82f6';
+    case 'white':       return '#f8fafc';
+    case 'warm_white':  return '#fde68a';
+    case 'green':       return '#22c55e';
+    case 'cyan':        return '#06b6d4';
+    case 'turquoise':   return '#14b8a6';
+    case 'red':         return '#ef4444';
+    case 'orange':      return '#f97316';
+    case 'pink':        return '#ec4899';
+    case 'purple':      return '#a855f7';
     case 'rgb':         return 'conic-gradient(from 0deg, #ef4444, #f59e0b, #84cc16, #06b6d4, #6366f1, #ec4899, #ef4444)';
     case 'blue_purple': return 'linear-gradient(135deg, #3b82f6 0%, #a855f7 100%)';
   }
+}
+
+function lightColorName(c: LightColor): string {
+  const names: Record<LightColor, string> = {
+    blue: 'Mavi', white: 'Beyaz', warm_white: 'Sıcak Beyaz',
+    green: 'Yeşil', cyan: 'Açık Mavi', turquoise: 'Turkuaz',
+    red: 'Kırmızı', orange: 'Turuncu', pink: 'Pembe',
+    purple: 'Mor', rgb: 'Gökkuşağı', blue_purple: 'Mavi-Mor',
+  };
+  return names[c] ?? c;
 }
 
 /* ─── Preview ─────────────────────────────────────────────────────── */
