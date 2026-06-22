@@ -4,8 +4,6 @@ import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'rea
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import {
   Environment,
-  GizmoHelper,
-  GizmoViewcube,
   OrbitControls,
   Sky,
   Stars,
@@ -164,8 +162,7 @@ function CameraButtons({ active, onSelect, isMobile }: { active: CamPreset | nul
   return (
     <div style={{
       position: 'absolute',
-      bottom: isMobile ? undefined : 16,
-      top:    isMobile ? 8 : undefined,
+      bottom: 16,
       right: isMobile ? 8 : 16,
       display: 'flex',
       flexDirection: 'column',
@@ -567,6 +564,7 @@ function useGroundTex(type: GroundType, isNight: boolean): THREE.Texture {
 
   // Load real photo texture — repeat tuned per material
   const REPEAT: Record<GroundType, number> = { grass: 20, wood: 12, gravel: 18, concrete: 10 };
+  const invalidate = useThree((s) => s.invalidate);
   const [photoTex, setPhotoTex] = useState<THREE.Texture | null>(null);
   useEffect(() => {
     setPhotoTex(null);
@@ -578,14 +576,16 @@ function useGroundTex(type: GroundType, isNight: boolean): THREE.Texture {
       t.repeat.set(r, r);
       t.anisotropy = 8;
       setPhotoTex(t);
+      invalidate();
     });
     return () => { active = false; };
-  }, [type]);
+  }, [type, invalidate]);
 
   return photoTex ?? canvasTex;
 }
 
 function useGroundNormalTex(type: GroundType): THREE.Texture | null {
+  const invalidate = useThree((s) => s.invalidate);
   const [normalTex, setNormalTex] = useState<THREE.Texture | null>(null);
   useEffect(() => {
     const url = GROUND_NORMAL_IMG[type];
@@ -597,9 +597,10 @@ function useGroundNormalTex(type: GroundType): THREE.Texture | null {
       t.repeat.set(20, 20);
       t.anisotropy = 8;
       setNormalTex(t);
+      invalidate();
     });
     return () => { active = false; };
-  }, [type]);
+  }, [type, invalidate]);
   return normalTex;
 }
 
@@ -1933,28 +1934,31 @@ function SidePanels({
   const innerL = halfL * 2 - FRAME_T * 2;
   const segGap = 0.02;
 
-  // Map of side → wall geometry parameters
-  // axis === 'x' means the wall extends along X axis (north/south walls)
-  // axis === 'z' means the wall extends along Z axis (east/west walls)
+  // axis === 'x' → wall spans X (north/south); axis === 'z' → wall spans Z (east/west)
+  // innerYRot: Y-axis rotation so a +Z-facing plane faces the pool interior
   const sides: {
     name: PoolSide;
     axis: 'x' | 'z';
-    wallCoord: number;       // fixed coord (z for north/south, x for east/west)
-    spanInner: number;       // length along the axis
-    panelDepth: number;      // PANEL_T (thickness perpendicular to the wall)
+    wallCoord: number;
+    spanInner: number;
+    panelDepth: number;
+    innerYRot: number;
   }[] = [
-    { name: 'south', axis: 'x', wallCoord: halfL - PANEL_T / 2, spanInner: innerW, panelDepth: PANEL_T },
-    { name: 'north', axis: 'x', wallCoord: -halfL + PANEL_T / 2, spanInner: innerW, panelDepth: PANEL_T },
-    { name: 'east', axis: 'z', wallCoord: halfW - PANEL_T / 2, spanInner: innerL, panelDepth: PANEL_T },
-    { name: 'west', axis: 'z', wallCoord: -halfW + PANEL_T / 2, spanInner: innerL, panelDepth: PANEL_T },
+    { name: 'south', axis: 'x', wallCoord:  halfL - PANEL_T / 2, spanInner: innerW, panelDepth: PANEL_T, innerYRot: Math.PI },
+    { name: 'north', axis: 'x', wallCoord: -halfL + PANEL_T / 2, spanInner: innerW, panelDepth: PANEL_T, innerYRot: 0 },
+    { name: 'east',  axis: 'z', wallCoord:  halfW - PANEL_T / 2, spanInner: innerL, panelDepth: PANEL_T, innerYRot: -Math.PI / 2 },
+    { name: 'west',  axis: 'z', wallCoord: -halfW + PANEL_T / 2, spanInner: innerL, panelDepth: PANEL_T, innerYRot:  Math.PI / 2 },
   ];
 
   return (
     <group>
       {sides.flatMap((side) => {
-        // Number of panels per side: fixed 2.40 m panel width
         const segments = Math.max(1, Math.round(side.spanInner / PANEL_W));
         const segLen = side.spanInner / segments;
+        const sign = Math.sign(side.wallCoord);
+        // Inner face position: panel center ± half thickness toward pool center
+        const innerCoord = side.wallCoord - sign * (PANEL_T / 2 + 0.003);
+
         return Array.from({ length: segments }, (_, i) => {
           const type = getPanelType(config, side.name, i);
           const center = -side.spanInner / 2 + segLen * (i + 0.5);
@@ -1971,34 +1975,50 @@ function SidePanels({
               ? [center, yMid, side.wallCoord]
               : [side.wallCoord, yMid, center];
 
+          const innerPos: [number, number, number] =
+            side.axis === 'x'
+              ? [center, yMid, innerCoord]
+              : [innerCoord, yMid, center];
+
           return (
-            <mesh
-              key={`${side.name}-${i}`}
-              position={position}
-              castShadow
-              receiveShadow
-              renderOrder={2}
-            >
-              <boxGeometry args={args} />
-              {isGlass ? (
-                <meshStandardMaterial
-                  color="#d8eef6"
-                  transparent
-                  opacity={0.16}
-                  roughness={0.04}
-                  metalness={0.0}
-                  envMapIntensity={1.6}
-                  depthWrite={false}
-                  side={THREE.DoubleSide}
-                />
-              ) : (
-                <meshStandardMaterial
-                  color={frame}
-                  roughness={0.65}
-                  metalness={0.05}
-                />
+            <group key={`${side.name}-${i}`}>
+              {/* Panel box */}
+              <mesh position={position} castShadow receiveShadow renderOrder={2}>
+                <boxGeometry args={args} />
+                {isGlass ? (
+                  <meshStandardMaterial
+                    color="#d8eef6"
+                    transparent
+                    opacity={0.16}
+                    roughness={0.04}
+                    metalness={0.0}
+                    envMapIntensity={1.6}
+                    depthWrite={false}
+                    side={THREE.DoubleSide}
+                  />
+                ) : (
+                  <meshStandardMaterial color={frame} roughness={0.65} metalness={0.05} />
+                )}
+              </mesh>
+
+              {/* Inner cladding face — only on closed (non-glass) panels */}
+              {!isGlass && (
+                <mesh
+                  position={innerPos}
+                  rotation={[0, side.innerYRot, 0]}
+                  renderOrder={3}
+                  receiveShadow
+                >
+                  <planeGeometry args={[sizeAlong, panelHeight]} />
+                  <meshStandardMaterial
+                    color={claddingTex ? '#ffffff' : inner}
+                    map={claddingTex ?? undefined}
+                    roughness={0.8}
+                    metalness={0.01}
+                  />
+                </mesh>
               )}
-            </mesh>
+            </group>
           );
         });
       })}
@@ -3800,10 +3820,10 @@ function claddingColor(c: CladdingType): string {
 }
 
 function useCladdingTexture(cladding: CladdingType): THREE.Texture | null {
+  const invalidate = useThree((s) => s.invalidate);
   const [tex, setTex] = useState<THREE.Texture | null>(null);
 
   useEffect(() => {
-    // Accepts: 'texture1'…'texture5' (legacy) OR '/textures/filename.jpg' (new)
     const isLegacy = /^texture\d$/.test(cladding);
     const isPath   = cladding.startsWith('/textures/');
     if (!isLegacy && !isPath) { setTex(null); return; }
@@ -3811,8 +3831,17 @@ function useCladdingTexture(cladding: CladdingType): THREE.Texture | null {
     const loader = new THREE.TextureLoader();
     let cancelled = false;
 
+    const applyTex = (t: THREE.Texture) => {
+      if (cancelled) return;
+      t.wrapS = t.wrapT = THREE.RepeatWrapping;
+      t.repeat.set(2, 2);
+      t.colorSpace = THREE.SRGBColorSpace;
+      setTex(t);
+      invalidate(); // frameloop="demand" — force redraw after async load
+    };
+
     if (isPath) {
-      loader.load(cladding, (t) => { if (!cancelled) { t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(4, 4); setTex(t); } }, undefined, () => setTex(null));
+      loader.load(cladding, applyTex, undefined, () => { if (!cancelled) { setTex(null); invalidate(); } });
       return () => { cancelled = true; };
     }
 
@@ -3825,28 +3854,13 @@ function useCladdingTexture(cladding: CladdingType): THREE.Texture | null {
     (async () => {
       let loaded: THREE.Texture | null = null;
       for (const ext of ['jpeg', 'jpg', 'png']) {
-        try {
-          loaded = await tryLoad(ext);
-          break;
-        } catch {
-          /* try next ext */
-        }
+        try { loaded = await tryLoad(ext); break; } catch { /* try next ext */ }
       }
-      if (cancelled) return;
-      if (loaded) {
-        loaded.colorSpace = THREE.SRGBColorSpace;
-        loaded.wrapS = loaded.wrapT = THREE.RepeatWrapping;
-        loaded.repeat.set(2, 3);
-        setTex(loaded);
-      } else {
-        setTex(null);
-      }
+      if (loaded) { applyTex(loaded); } else { if (!cancelled) { setTex(null); invalidate(); } }
     })();
 
-    return () => {
-      cancelled = true;
-    };
-  }, [cladding]);
+    return () => { cancelled = true; };
+  }, [cladding, invalidate]);
 
   return tex;
 }

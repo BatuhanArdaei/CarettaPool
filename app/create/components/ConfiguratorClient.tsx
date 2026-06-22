@@ -101,7 +101,7 @@ export default function ConfiguratorClient({ userId, userEmail, role, fullName }
             id="tour-reset"
             type="button"
             onClick={() => controlsRef.current?.reset()}
-            className="absolute top-3 left-3 z-10 rounded-md bg-white/90 px-3 py-1.5 text-xs font-medium text-slate-700 shadow-sm ring-1 ring-slate-200 hover:bg-white"
+            className="absolute top-3 left-3 z-10 rounded-md bg-white/90 px-2 py-1.5 text-xs font-medium text-slate-700 shadow-sm ring-1 ring-slate-200 hover:bg-white max-w-[120px] sm:max-w-none truncate"
           >
             {t('configurator.resetView')}
           </button>

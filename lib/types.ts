@@ -56,7 +56,7 @@ export const defaultPoolConfig: PoolConfig = {
   poolCover: false,
   poolCoverType: 'automatic',
   poolCoverClosed: true,
-  showWater: true,
+  showWater: false,
 };
 
 export function panelKey(side: PoolSide, index: number): string {
