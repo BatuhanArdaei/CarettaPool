@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import {
   Environment,
@@ -34,6 +34,172 @@ const FRAME_T = 0.10;
 const PANEL_T = 0.04;
 const BASIN_FLOOR = 0.06;
 const PLATFORM_DEPTH = 2.0;
+
+// ─── Mobile detection hook ───────────────────────────────────────────────────
+function useIsMobile() {
+  const [isMobile, setIsMobile] = useState(
+    typeof window !== 'undefined' ? window.innerWidth < 768 : false
+  );
+  useEffect(() => {
+    const handler = () => setIsMobile(window.innerWidth < 768);
+    window.addEventListener('resize', handler, { passive: true });
+    return () => window.removeEventListener('resize', handler);
+  }, []);
+  return isMobile;
+}
+
+// ─── Camera preset definitions ───────────────────────────────────────────────
+const CAM_PRESETS = {
+  front: { pos: new THREE.Vector3(0, 3, 14),  target: new THREE.Vector3(0, 1, 0) },
+  top:   { pos: new THREE.Vector3(0, 22, 2),  target: new THREE.Vector3(0, 0, 0) },
+  close: { pos: new THREE.Vector3(7, 5, 7),   target: new THREE.Vector3(0, 1, 0) },
+} as const;
+type CamPreset = keyof typeof CAM_PRESETS;
+
+interface CameraRigProps {
+  preset: CamPreset | null;
+  onTransitionEnd: () => void;
+  orbitControlsRef: React.MutableRefObject<any>;
+  isMobile: boolean;
+}
+
+function CameraRig({ preset, onTransitionEnd, orbitControlsRef, isMobile }: CameraRigProps) {
+  const { camera, invalidate } = useThree();
+  const targetPos  = useRef(new THREE.Vector3());
+  const targetLook = useRef(new THREE.Vector3());
+  const animating  = useRef(false);
+  const idleTimer  = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const isIdle     = useRef(false);
+  const orbitAngle = useRef(0);
+  const ORBIT_R    = 16;
+  const ORBIT_Y    = 6;
+  const idleMs     = useRef(isMobile ? 5000 : 3000);
+  useEffect(() => { idleMs.current = isMobile ? 5000 : 3000; }, [isMobile]);
+
+  // Idle detection — reset timer on any pointer/touch activity
+  useEffect(() => {
+    const resetIdle = () => {
+      isIdle.current = false;
+      if (idleTimer.current) clearTimeout(idleTimer.current);
+      idleTimer.current = setTimeout(() => { isIdle.current = true; }, idleMs.current);
+      invalidate();
+    };
+    window.addEventListener('pointermove', resetIdle, { passive: true });
+    window.addEventListener('pointerdown', resetIdle, { passive: true });
+    window.addEventListener('touchstart',  resetIdle, { passive: true });
+    window.addEventListener('touchend',    resetIdle, { passive: true });
+    resetIdle();
+    return () => {
+      window.removeEventListener('pointermove', resetIdle);
+      window.removeEventListener('pointerdown', resetIdle);
+      window.removeEventListener('touchstart',  resetIdle);
+      window.removeEventListener('touchend',    resetIdle);
+      if (idleTimer.current) clearTimeout(idleTimer.current);
+    };
+  }, [invalidate]);
+
+  // When preset changes, kick off smooth transition
+  useEffect(() => {
+    if (!preset) return;
+    const p = CAM_PRESETS[preset];
+    targetPos.current.copy(p.pos);
+    targetLook.current.copy(p.target);
+    animating.current = true;
+    // Disable OrbitControls during transition
+    if (orbitControlsRef.current) orbitControlsRef.current.enabled = false;
+  }, [preset, orbitControlsRef]);
+
+  useFrame(() => {
+    // ── Smooth preset transition ──────────────────────────────────────────
+    if (animating.current) {
+      camera.position.lerp(targetPos.current, 0.08);
+      if (orbitControlsRef.current) {
+        const ot: THREE.Vector3 = orbitControlsRef.current.target;
+        ot.lerp(targetLook.current, 0.08);
+        orbitControlsRef.current.update();
+      }
+      const distP = camera.position.distanceTo(targetPos.current);
+      const distT = orbitControlsRef.current
+        ? orbitControlsRef.current.target.distanceTo(targetLook.current)
+        : 0;
+      if (distP < 0.05 && distT < 0.05) {
+        camera.position.copy(targetPos.current);
+        if (orbitControlsRef.current) {
+          orbitControlsRef.current.target.copy(targetLook.current);
+          orbitControlsRef.current.enabled = true;
+          orbitControlsRef.current.update();
+        }
+        animating.current = false;
+        onTransitionEnd();
+      }
+      invalidate();
+      return;
+    }
+
+    // ── Auto-orbit when idle ──────────────────────────────────────────────
+    if (isIdle.current && !animating.current) {
+      orbitAngle.current += 0.003;
+      const x = Math.sin(orbitAngle.current) * ORBIT_R;
+      const z = Math.cos(orbitAngle.current) * ORBIT_R;
+      camera.position.set(x, ORBIT_Y, z);
+      camera.lookAt(0, 1, 0);
+      if (orbitControlsRef.current) {
+        orbitControlsRef.current.target.set(0, 1, 0);
+        orbitControlsRef.current.update();
+      }
+      invalidate();
+    }
+  });
+
+  return null;
+}
+
+// ─── Camera preset buttons (React UI overlay) ────────────────────────────────
+function CameraButtons({ active, onSelect, isMobile }: { active: CamPreset | null; onSelect: (p: CamPreset) => void; isMobile: boolean }) {
+  const btns: { key: CamPreset; label: string; mobileLabel: string }[] = [
+    { key: 'front', label: 'Önden',   mobileLabel: 'Ön' },
+    { key: 'top',   label: 'Tepeden', mobileLabel: 'Üst' },
+    { key: 'close', label: 'Yakın',   mobileLabel: 'Yakın' },
+  ];
+  return (
+    <div style={{
+      position: 'absolute',
+      bottom: isMobile ? undefined : 16,
+      top:    isMobile ? 8 : undefined,
+      right: isMobile ? 8 : 16,
+      display: 'flex',
+      flexDirection: 'column',
+      gap: isMobile ? 4 : 6,
+      zIndex: 10,
+      pointerEvents: 'none',
+    }}>
+      {btns.map(({ key, label, mobileLabel }) => (
+        <button
+          key={key}
+          onClick={() => onSelect(key)}
+          style={{
+            pointerEvents: 'all',
+            background: active === key ? 'rgba(14,116,144,0.85)' : 'rgba(0,0,0,0.55)',
+            color: '#fff',
+            border: active === key ? '1.5px solid #22d3ee' : '1.5px solid rgba(255,255,255,0.18)',
+            borderRadius: 8,
+            padding: isMobile ? '10px 14px' : '5px 14px',
+            minHeight: 44,
+            minWidth: 44,
+            fontSize: isMobile ? 13 : 12,
+            fontWeight: 500,
+            cursor: 'pointer',
+            backdropFilter: 'blur(6px)',
+            transition: 'background 0.2s, border 0.2s',
+            letterSpacing: '0.02em',
+          }}
+        >
+          {isMobile ? mobileLabel : label}
+        </button>
+      ))}
+    </div>
+  );
+}
 
 /**
  * Drives the render loop at a capped FPS while something is animating
@@ -82,12 +248,23 @@ export default function PoolScene({
   controlsRef?: React.MutableRefObject<{ reset: () => void } | null>;
 }) {
   const isNight = config.lighting.enabled;
+  const isMobile = useIsMobile();
+  const [activePreset, setActivePreset] = useState<CamPreset | null>(null);
+  const internalControlsRef = useRef<any>(null);
+  const orbitRef = (controlsRef ?? internalControlsRef) as React.MutableRefObject<any>;
+
+  const handlePreset = useCallback((p: CamPreset) => { setActivePreset(p); }, []);
+  const handleTransitionEnd = useCallback(() => { /* preset stays highlighted */ }, []);
+  const shadowMapSize = isMobile ? 1024 : 4096;
+
   return (
-    <Canvas
+    <div style={{ position: 'relative', width: '100%', height: '100%' }}>
+      <CameraButtons active={activePreset} onSelect={handlePreset} isMobile={isMobile} />
+      <Canvas
       frameloop="demand"
       shadows
       camera={{ position: [12, 7.5, 20], fov: 50 }}
-      dpr={[1, 1.5]}
+      dpr={isMobile ? [1, 1] : [1, 1.5]}
       gl={{ antialias: false, powerPreference: 'high-performance' }}
       onCreated={({ gl }) => {
         gl.shadowMap.type = THREE.PCFSoftShadowMap;
@@ -119,8 +296,8 @@ export default function PoolScene({
               intensity={0.85}
               color="#dbe8ff"
               castShadow
-              shadow-mapSize-width={4096}
-              shadow-mapSize-height={4096}
+              shadow-mapSize-width={shadowMapSize}
+              shadow-mapSize-height={shadowMapSize}
               shadow-bias={-0.0004}
               shadow-camera-near={0.5}
               shadow-camera-far={100}
@@ -142,8 +319,8 @@ export default function PoolScene({
               intensity={1.5}
               color="#FFF8F0"
               castShadow
-              shadow-mapSize-width={4096}
-              shadow-mapSize-height={4096}
+              shadow-mapSize-width={shadowMapSize}
+              shadow-mapSize-height={shadowMapSize}
               shadow-bias={-0.0004}
               shadow-camera-near={0.5}
               shadow-camera-far={100}
@@ -179,23 +356,28 @@ export default function PoolScene({
             background={false}
           />
         )}
-        <Garden ground={config.ground} isNight={isNight} />
-        <Trees isNight={isNight} />
-        <ModernVilla isNight={isNight} />
+        <Garden isNight={isNight} />
+        <Trees isNight={isNight} isMobile={isMobile} />
+        <VillaSlot isNight={isNight} />
         <Fence isNight={isNight} />
-        <Pool config={config} />
+        <Pool config={config} isNight={isNight} />
         <OrbitControls
-          ref={controlsRef as React.MutableRefObject<null>}
+          ref={orbitRef}
           enablePan
           enableZoom
           enableRotate
+          enableDamping
+          dampingFactor={0.05}
           minDistance={4}
-          maxDistance={18}
+          maxDistance={28}
           maxPolarAngle={Math.PI / 2.05}
           target={[0, POOL_HEIGHT / 2, 0]}
-          onChange={() => {
-            /* frameloop="demand" — OrbitControls triggers invalidate internally */
-          }}
+        />
+        <CameraRig
+          preset={activePreset}
+          onTransitionEnd={handleTransitionEnd}
+          orbitControlsRef={orbitRef}
+          isMobile={isMobile}
         />
         {/* Enable shadows on ALL scene objects automatically */}
         <EnableAllShadows config={config} />
@@ -213,37 +395,40 @@ export default function PoolScene({
             faces={['Sağ', 'Sol', 'Üst', 'Alt', 'Ön', 'Arka']}
           />
         </GizmoHelper>
-        {/* Post-processing — SSAO + Bloom + SMAA + Vignette for premium look */}
-        <EffectComposer multisampling={0}>
-          <SSAO
-            blendFunction={BlendFunction.MULTIPLY}
-            samples={16}
-            rings={3}
-            luminanceInfluence={0.7}
-            radius={0.05}
-            bias={0.025}
-            intensity={isNight ? 2.5 : 1.2}
-            worldDistanceThreshold={1.0}
-            worldDistanceFalloff={0.1}
-            worldProximityThreshold={0.3}
-            worldProximityFalloff={0.02}
-          />
-          <Bloom
-            intensity={isNight ? 1.2 : 0.45}
-            luminanceThreshold={isNight ? 0.18 : 0.88}
-            luminanceSmoothing={0.2}
-            mipmapBlur
-            kernelSize={KernelSize.MEDIUM}
-          />
-          <Vignette
-            offset={0.3}
-            darkness={isNight ? 0.55 : 0.32}
-            blendFunction={BlendFunction.NORMAL}
-          />
-          <SMAA />
-        </EffectComposer>
+        {/* Post-processing — disabled on mobile for performance */}
+        {!isMobile && (
+          <EffectComposer multisampling={0}>
+            <SSAO
+              blendFunction={BlendFunction.MULTIPLY}
+              samples={16}
+              rings={3}
+              luminanceInfluence={0.7}
+              radius={0.05}
+              bias={0.025}
+              intensity={isNight ? 2.5 : 1.2}
+              worldDistanceThreshold={1.0}
+              worldDistanceFalloff={0.1}
+              worldProximityThreshold={0.3}
+              worldProximityFalloff={0.02}
+            />
+            <Bloom
+              intensity={isNight ? 1.2 : 0.45}
+              luminanceThreshold={isNight ? 0.18 : 0.88}
+              luminanceSmoothing={0.2}
+              mipmapBlur
+              kernelSize={KernelSize.MEDIUM}
+            />
+            <Vignette
+              offset={0.3}
+              darkness={isNight ? 0.55 : 0.32}
+              blendFunction={BlendFunction.NORMAL}
+            />
+            <SMAA />
+          </EffectComposer>
+        )}
       </Suspense>
     </Canvas>
+    </div>
   );
 }
 
@@ -427,9 +612,10 @@ function useGroundNormalTex(type: GroundType): THREE.Texture | null {
   return normalTex;
 }
 
-function Garden({ ground, isNight }: { ground: GroundType; isNight: boolean }) {
-  const tex = useGroundTex(ground, isNight);
-  const normalTex = useGroundNormalTex(ground);
+function Garden({ isNight }: { isNight: boolean }) {
+  // Garden is always grass — ground selection only affects pool interior cladding
+  const tex = useGroundTex('grass', isNight);
+  const normalTex = useGroundNormalTex('grass');
   return (
     <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, 0]} receiveShadow>
       <planeGeometry args={[120, 120]} />
@@ -438,46 +624,66 @@ function Garden({ ground, isNight }: { ground: GroundType; isNight: boolean }) {
         map={tex}
         normalMap={normalTex ?? undefined}
         normalScale={normalTex ? new THREE.Vector2(0.8, 0.8) : new THREE.Vector2(1, 1)}
-        color={ground === 'grass' ? '#c8e888' : '#ffffff'}
-        roughness={ground === 'concrete' ? 0.75 : ground === 'wood' ? 0.7 : 0.92}
-        metalness={ground === 'concrete' ? 0.02 : 0}
+        color="#c8e888"
+        roughness={0.92}
+        metalness={0}
         envMapIntensity={0.3}
       />
     </mesh>
   );
 }
 
-function PoolDeck({ w, l }: { w: number; l: number }) {
-  const [travTex, setTravTex] = useState<THREE.Texture | null>(null);
-  useEffect(() => {
-    let active = true;
-    new THREE.TextureLoader().load(
-      'https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/travertine_floor/travertine_floor_diff_1k.jpg',
-      (t) => {
-        if (!active) return;
-        t.wrapS = t.wrapT = THREE.RepeatWrapping;
-        t.repeat.set(4, 4);
-        t.anisotropy = 8;
-        setTravTex(t);
-      }
-    );
-    return () => { active = false; };
-  }, []);
+function PoolDeck({ w, l, ground, isNight }: { w: number; l: number; ground: GroundType; isNight: boolean }) {
+  const MARGIN = 2.5;
+  const deckW = w + MARGIN * 2;
+  const deckL = l + MARGIN * 2;
+  const edgeH = 0.025; // 2.5 cm high kerb
+  const edgeT = 0.04;  // 4 cm thick
+  const tex = useGroundTex(ground, isNight);
+  const normalTex = useGroundNormalTex(ground);
 
-  const deckW = w + 8;
-  const deckL = l + 8;
+  const matProps: Record<GroundType, { color: string; roughness: number; metalness: number }> = {
+    grass:    { color: '#c8e888', roughness: 0.92, metalness: 0 },
+    gravel:   { color: '#b8a898', roughness: 0.95, metalness: 0 },
+    concrete: { color: '#d0ccc4', roughness: 0.80, metalness: 0.02 },
+    wood:     { color: '#c8a060', roughness: 0.75, metalness: 0 },
+  };
+  const mat = matProps[ground] ?? matProps.concrete;
 
   return (
-    <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.005, 0]} receiveShadow>
-      <planeGeometry args={[deckW, deckL]} />
-      <meshStandardMaterial
-        map={travTex ?? undefined}
-        color={travTex ? '#ffffff' : '#e8dfc8'}
-        roughness={0.72}
-        metalness={0.01}
-        envMapIntensity={0.4}
-      />
-    </mesh>
+    <group>
+      {/* Deck surface — material follows ground type selection */}
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.01, 0]} receiveShadow>
+        <planeGeometry args={[deckW, deckL]} />
+        <meshStandardMaterial
+          key={tex.uuid}
+          map={tex}
+          normalMap={normalTex ?? undefined}
+          normalScale={normalTex ? new THREE.Vector2(0.8, 0.8) : new THREE.Vector2(1, 1)}
+          color={mat.color}
+          roughness={mat.roughness}
+          metalness={mat.metalness}
+          envMapIntensity={0.3}
+        />
+      </mesh>
+      {/* Edge profiles — dark gray kerb separating deck from grass */}
+      <mesh position={[0, edgeH / 2, deckL / 2 + edgeT / 2]} castShadow receiveShadow>
+        <boxGeometry args={[deckW + edgeT * 2, edgeH, edgeT]} />
+        <meshStandardMaterial color="#3c3c3c" roughness={0.9} />
+      </mesh>
+      <mesh position={[0, edgeH / 2, -(deckL / 2 + edgeT / 2)]} castShadow receiveShadow>
+        <boxGeometry args={[deckW + edgeT * 2, edgeH, edgeT]} />
+        <meshStandardMaterial color="#3c3c3c" roughness={0.9} />
+      </mesh>
+      <mesh position={[deckW / 2 + edgeT / 2, edgeH / 2, 0]} castShadow receiveShadow>
+        <boxGeometry args={[edgeT, edgeH, deckL]} />
+        <meshStandardMaterial color="#3c3c3c" roughness={0.9} />
+      </mesh>
+      <mesh position={[-(deckW / 2 + edgeT / 2), edgeH / 2, 0]} castShadow receiveShadow>
+        <boxGeometry args={[edgeT, edgeH, deckL]} />
+        <meshStandardMaterial color="#3c3c3c" roughness={0.9} />
+      </mesh>
+    </group>
   );
 }
 
@@ -492,22 +698,27 @@ const SPHERE_OFFSETS: [number, number, number, number][] = [
   [-0.3, 2.2,  0.9, 0.68],
 ];
 
-function Trees({ isNight }: { isNight: boolean }) {
+function Trees({ isNight, isMobile }: { isNight: boolean; isMobile: boolean }) {
+  // Villa is at [0,0,-22]. Keep trees at least 13 units away in X when near house Z range.
   const treeData = useMemo<Array<{ pos: [number, number, number]; rot: number; scale: number }>>(() => [
-    // Villa flanks — behind and sides of house
-    { pos: [-9,  0, -19], rot: 0.30,  scale: 1.10 },
-    { pos: [ 11, 0, -18], rot: -0.45, scale: 0.95 },
-    { pos: [-14, 0, -14], rot: 0.70,  scale: 1.20 },
-    { pos: [ 15, 0, -13], rot: -0.25, scale: 1.05 },
-    // Side borders — don't block pool front view
+    // Far left beside house
+    { pos: [-18, 0, -20], rot:  0.30, scale: 1.10 },
+    { pos: [-18, 0, -26], rot: -0.20, scale: 1.00 },
+    // Far right beside house
+    { pos: [ 18, 0, -20], rot: -0.45, scale: 0.95 },
+    { pos: [ 18, 0, -26], rot:  0.60, scale: 1.05 },
+    // Garden sides (in front, well clear of house)
     { pos: [-20, 0, -6],  rot: -0.60, scale: 0.90 },
-    { pos: [ 20, 0, -5],  rot: 0.20,  scale: 1.00 },
-    { pos: [-20, 0,  4],  rot: 0.55,  scale: 0.85 },
+    { pos: [ 20, 0, -5],  rot:  0.20, scale: 1.00 },
+    { pos: [-20, 0,  4],  rot:  0.55, scale: 0.85 },
     { pos: [ 20, 0,  5],  rot: -0.35, scale: 0.95 },
-    // Far background fill
-    { pos: [-16, 0, -19], rot: -0.15, scale: 0.80 },
-    { pos: [  6, 0, -20], rot: 0.90,  scale: 1.08 },
+    // Far background
+    { pos: [-17, 0, -34], rot: -0.15, scale: 0.80 },
+    { pos: [ 17, 0, -34], rot:  0.90, scale: 1.08 },
   ], []);
+
+  // Mobile: show only 4 symmetrical trees to reduce draw calls
+  const visibleTrees = isMobile ? treeData.filter((_, i) => [0, 2, 4, 5].includes(i)) : treeData;
 
   const trunkColor = isNight ? '#1a0e06' : '#4a2f1a';
   const leafPalette = isNight
@@ -516,7 +727,7 @@ function Trees({ isNight }: { isNight: boolean }) {
 
   return (
     <group>
-      {treeData.map(({ pos, rot, scale }, ti) => (
+      {visibleTrees.map(({ pos, rot, scale }, ti) => (
         <group key={ti} position={pos} rotation={[0, rot, 0]} scale={[scale, scale, scale]}>
           {/* Trunk */}
           <mesh castShadow receiveShadow position={[0, 0.9, 0]}>
@@ -1002,14 +1213,24 @@ function Villa({ isNight }: { isNight: boolean }) {
         <boxGeometry args={[W, H2, 0.2]} />
         <meshStandardMaterial color={concrete} roughness={0.85} />
       </mesh>
-      {/* Upper left side */}
+      {/* Upper left side — covers main block depth */}
       <mesh position={[-W / 2, H1 + 0.16 + H2 / 2, 0]} castShadow receiveShadow>
         <boxGeometry args={[0.2, H2, D]} />
         <meshStandardMaterial color={concrete} roughness={0.85} />
       </mesh>
-      {/* Upper right side */}
+      {/* Upper left cantilever side — closes the overhang zone */}
+      <mesh position={[-W / 2, H1 + 0.16 + H2 / 2, D / 2 + cantilever / 2]} castShadow receiveShadow>
+        <boxGeometry args={[0.2, H2, cantilever + 0.1]} />
+        <meshStandardMaterial color={concrete} roughness={0.85} />
+      </mesh>
+      {/* Upper right side — covers main block depth */}
       <mesh position={[W / 2, H1 + 0.16 + H2 / 2, 0]} castShadow receiveShadow>
         <boxGeometry args={[0.2, H2, D]} />
+        <meshStandardMaterial color={concrete} roughness={0.85} />
+      </mesh>
+      {/* Upper right cantilever side — closes the overhang zone */}
+      <mesh position={[W / 2, H1 + 0.16 + H2 / 2, D / 2 + cantilever / 2]} castShadow receiveShadow>
+        <boxGeometry args={[0.2, H2, cantilever + 0.1]} />
         <meshStandardMaterial color={concrete} roughness={0.85} />
       </mesh>
       {/* Upper inner front wall (above entrance, where balcony begins) */}
@@ -1053,12 +1274,17 @@ function Villa({ isNight }: { isNight: boolean }) {
 
       {/* === SIDE WING (single story extending from -X side) === */}
       <group position={[-W / 2 - wingW / 2, 0, -D / 4]}>
-        {/* Wing back/left/front walls */}
+        {/* Wing back/left/right/front walls */}
         <mesh position={[0, wingH / 2, -wingD / 2]} castShadow receiveShadow>
           <boxGeometry args={[wingW, wingH, 0.2]} />
           <meshStandardMaterial color={concrete} roughness={0.85} />
         </mesh>
         <mesh position={[-wingW / 2, wingH / 2, 0]} castShadow receiveShadow>
+          <boxGeometry args={[0.2, wingH, wingD]} />
+          <meshStandardMaterial color={concrete} roughness={0.85} />
+        </mesh>
+        {/* Wing right wall — closes the junction side facing the main block */}
+        <mesh position={[wingW / 2, wingH / 2, 0]} castShadow receiveShadow>
           <boxGeometry args={[0.2, wingH, wingD]} />
           <meshStandardMaterial color={concrete} roughness={0.85} />
         </mesh>
@@ -1434,7 +1660,7 @@ function OuterCladding({
   );
 }
 
-function Pool({ config }: { config: PoolConfig }) {
+function Pool({ config, isNight }: { config: PoolConfig; isNight: boolean }) {
   const w = config.width;
   const l = config.length;
   const halfW = w / 2;
@@ -1449,6 +1675,9 @@ function Pool({ config }: { config: PoolConfig }) {
 
   return (
     <group>
+      {/* Deck platform — çimen seçiliyken gizle, diğer zemin tiplerinde göster */}
+      {config.ground !== 'grass' && <PoolDeck w={w} l={l} ground={config.ground} isNight={isNight} />}
+
       {/* Bottom slab (closed pool floor) */}
       <mesh position={[0, BASIN_FLOOR / 2, 0]} receiveShadow castShadow>
         <boxGeometry args={[w, BASIN_FLOOR, l]} />

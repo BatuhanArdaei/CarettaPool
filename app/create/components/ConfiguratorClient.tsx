@@ -88,10 +88,10 @@ export default function ConfiguratorClient({ userId, userEmail, role, fullName }
   }
 
   return (
-    <div className="mx-auto max-w-[1100px] px-3 py-4">
-      <div className="flex flex-col gap-4 lg:grid lg:grid-cols-[340px_1fr]">
-        {/* 3D scene — sticky on mobile (top), right column on desktop */}
-        <div id="tour-preview" className="card relative overflow-hidden order-1 lg:order-2 sticky top-16 z-30 lg:static lg:z-auto h-[38vh] sm:h-[48vh] lg:h-[75vh] lg:min-h-[480px]">
+    <div className="mx-auto max-w-[1100px] px-0 py-0 sm:px-3 sm:py-4">
+      <div className="flex flex-col lg:gap-4 lg:grid lg:grid-cols-[340px_1fr]">
+        {/* 3D scene — top on mobile (45vh), right column on desktop */}
+        <div id="tour-preview" className="card relative overflow-hidden order-1 lg:order-2 h-[45vh] lg:h-[75vh] lg:min-h-[480px]">
           <PoolScene config={config} controlsRef={controlsRef} />
           {/* Loading overlay — covers only this panel, shown for 3 s after region pick */}
           {modelLoading && (

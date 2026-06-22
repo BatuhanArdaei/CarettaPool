@@ -71,9 +71,9 @@ export default function ConfigPanel({
   const isLast = stepIdx === STEPS.length - 1;
 
   return (
-    <aside className="card flex max-h-[80vh] flex-col">
+    <aside className="card flex max-h-[55vh] lg:max-h-[80vh] flex-col">
       {/* Stepper */}
-      <div id="tour-stepper" className="border-b border-slate-200 px-4 py-3.5">
+      <div id="tour-stepper" className="border-b border-slate-200 px-2 sm:px-4 py-2 sm:py-3.5">
         <div className="relative flex items-center justify-between">
           {/* Connecting track */}
           <div className="pointer-events-none absolute inset-x-[14px] top-1/2 h-1 -translate-y-1/2 rounded-full bg-slate-200" />
@@ -93,10 +93,10 @@ export default function ConfigPanel({
                 title={s.title}
                 aria-label={s.title}
                 aria-current={active ? 'step' : undefined}
-                className="group relative z-10 flex h-7 w-7 items-center justify-center focus:outline-none"
+                className="group relative z-10 flex h-6 w-6 sm:h-7 sm:w-7 items-center justify-center focus:outline-none"
               >
                 <span
-                  className={`flex h-7 w-7 items-center justify-center rounded-full text-xs font-bold transition-all duration-200 ${
+                  className={`flex h-6 w-6 sm:h-7 sm:w-7 items-center justify-center rounded-full text-[10px] sm:text-xs font-bold transition-all duration-200 ${
                     active
                       ? 'scale-110 bg-brand-600 text-white shadow ring-4 ring-brand-100'
                       : done
@@ -127,7 +127,7 @@ export default function ConfigPanel({
       </div>
 
       {/* Step header + tip */}
-      <div className="shrink-0 border-b border-slate-100 px-4 pb-3 pt-3">
+      <div className="shrink-0 border-b border-slate-100 px-3 sm:px-4 pb-2 sm:pb-3 pt-2 sm:pt-3">
         <div className="flex items-center justify-between">
           <h2 className="text-base font-bold text-slate-900">
             <span className="text-brand-600">{stepIdx + 1}.</span> {step.title}
@@ -141,7 +141,7 @@ export default function ConfigPanel({
           </button>
         </div>
         {tipOpen && (
-          <div className="mt-2 rounded-md bg-amber-50 p-2.5 text-xs leading-relaxed text-amber-900 ring-1 ring-amber-200/60">
+          <div className="mt-2 rounded-md bg-amber-50 p-2.5 text-sm leading-relaxed text-amber-900 ring-1 ring-amber-200/60">
             <span className="font-semibold">{t('configurator.tip_prefix')}</span>
             {step.tip}
           </div>
@@ -149,7 +149,7 @@ export default function ConfigPanel({
       </div>
 
       {/* Step content */}
-      <div id="tour-content" className="flex-1 space-y-5 overflow-y-auto p-4">
+      <div id="tour-content" className="flex-1 space-y-4 sm:space-y-5 overflow-y-auto p-3 sm:p-4">
         {step.key === 'size'      && <SizeStep config={config} set={set} region={region} />}
         {step.key === 'frame'     && <FrameStep config={config} set={set} />}
         {step.key === 'panels'    && <PanelsStep config={config} set={set} onChange={onChange} />}
@@ -175,12 +175,12 @@ export default function ConfigPanel({
       </div>
 
       {/* Footer nav */}
-      <div id="tour-nav" className="flex shrink-0 items-center justify-between gap-2 border-t border-slate-200 p-3">
+      <div id="tour-nav" className="flex shrink-0 items-center justify-between gap-2 border-t border-slate-200 p-2 sm:p-3">
         <button
           type="button"
           onClick={() => setStepIdx(Math.max(0, stepIdx - 1))}
           disabled={isFirst}
-          className="btn-outline px-3 py-1.5 text-sm disabled:cursor-not-allowed disabled:opacity-40"
+          className="btn-outline px-4 py-2.5 text-sm min-h-[44px] disabled:cursor-not-allowed disabled:opacity-40"
         >
           ← {t('configurator.prev')}
         </button>
@@ -191,7 +191,7 @@ export default function ConfigPanel({
           type="button"
           onClick={() => setStepIdx(Math.min(STEPS.length - 1, stepIdx + 1))}
           disabled={isLast}
-          className="btn-primary px-3 py-1.5 text-sm disabled:cursor-not-allowed disabled:opacity-40"
+          className="btn-primary px-4 py-2.5 text-sm min-h-[44px] disabled:cursor-not-allowed disabled:opacity-40"
         >
           {t('configurator.next')} →
         </button>
@@ -376,7 +376,7 @@ function WaterfallStep({
           value={config.waterfall ? 'on' : 'off'}
           onChange={(v) => set('waterfall', v === 'on')}
         />
-        <p className="text-xs text-slate-500">{t('configurator.waterfall_note')}</p>
+        <p className="text-sm text-slate-500">{t('configurator.waterfall_note')}</p>
       </div>
 
       <div className="space-y-2">
@@ -396,7 +396,7 @@ function WaterfallStep({
             onChange={(v) => set('poolCoverType', v as PoolCoverType)}
           />
         )}
-        <p className="text-xs text-slate-500">{t('configurator.cover_note')}</p>
+        <p className="text-sm text-slate-500">{t('configurator.cover_note')}</p>
       </div>
 
       <div className="space-y-2">
@@ -406,7 +406,7 @@ function WaterfallStep({
           value={config.platformExtension ? 'on' : 'off'}
           onChange={(v) => set('platformExtension', v === 'on')}
         />
-        <p className="text-xs text-slate-500">{t('configurator.ext_note')}</p>
+        <p className="text-sm text-slate-500">{t('configurator.ext_note')}</p>
       </div>
 
       <div className="space-y-2">
@@ -416,7 +416,7 @@ function WaterfallStep({
           value={config.innerLadder ? 'on' : 'off'}
           onChange={(v) => set('innerLadder', v === 'on')}
         />
-        <p className="text-xs text-slate-500">{t('configurator.ladder_note')}</p>
+        <p className="text-sm text-slate-500">{t('configurator.ladder_note')}</p>
       </div>
 
       <div className="space-y-2">
@@ -426,7 +426,7 @@ function WaterfallStep({
           value={config.railings ? 'on' : 'off'}
           onChange={(v) => set('railings', v === 'on')}
         />
-        <p className="text-xs text-slate-500">{t('configurator.railings_note')}</p>
+        <p className="text-sm text-slate-500">{t('configurator.railings_note')}</p>
       </div>
     </div>
   );
@@ -481,7 +481,7 @@ function LightingStep({
         </div>
       </div>
 
-      <p className="text-xs text-slate-500">{t('configurator.lighting_note')}</p>
+      <p className="text-sm text-slate-500">{t('configurator.lighting_note')}</p>
     </div>
   );
 }
@@ -540,7 +540,7 @@ function GroundStep({
           onChange={(v) => set('ground', v as GroundType)}
         />
       </div>
-      <p className="text-xs text-slate-500">{t('configurator.ground_note')}</p>
+      <p className="text-sm text-slate-500">{t('configurator.ground_note')}</p>
     </div>
   );
 }
@@ -660,7 +660,7 @@ function PanelRow({
               onClick={() => !isEast && onToggle(i)}
               disabled={isEast}
               title={isEast ? t('configurator.closed') : isGlass ? t('configurator.toggle_to_closed') : t('configurator.toggle_to_glass')}
-              className={`h-9 flex-1 rounded border text-[11px] font-medium transition ${
+              className={`h-11 flex-1 rounded border text-[11px] font-medium transition ${
                 isGlass
                   ? 'border-sky-300 bg-sky-100 text-sky-700 hover:bg-sky-200'
                   : isEast
@@ -734,7 +734,7 @@ function Toggle<T extends string>({
           type="button"
           disabled={disabled}
           onClick={() => onChange(o.value)}
-          className={`flex-1 rounded-md px-3 py-2 transition-all duration-200 ${
+          className={`flex-1 rounded-md px-3 py-2 min-h-[44px] transition-all duration-200 ${
             value === o.value
               ? 'bg-white font-semibold text-brand-700 shadow-sm ring-1 ring-slate-200/70'
               : 'text-slate-500 hover:text-slate-700'
@@ -763,7 +763,7 @@ function SelectGrid<T extends string>({
           key={o.value}
           type="button"
           onClick={() => onChange(o.value)}
-          className={`rounded-lg border px-3 py-2 text-sm transition ${
+          className={`rounded-lg border px-3 py-2 text-sm min-h-[44px] transition ${
             value === o.value
               ? 'border-brand-600 bg-brand-50 font-medium text-brand-700'
               : 'border-slate-200 text-slate-600 hover:bg-slate-50'
