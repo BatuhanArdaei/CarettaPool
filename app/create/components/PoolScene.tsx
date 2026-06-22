@@ -385,16 +385,7 @@ export default function PoolScene({
         <ConfigInvalidator config={config} />
         {/* Cap animated rendering to ~30fps while water/lighting animate */}
         <AnimationTicker active={config.showWater || config.lighting.enabled} />
-        {/* Navigation cube — click faces to snap to that view */}
-        <GizmoHelper alignment="bottom-right" margin={[60, 60]}>
-          <GizmoViewcube
-            color="#0e7490"
-            opacity={0.85}
-            strokeColor="#155e75"
-            textColor="#ffffff"
-            faces={['Sağ', 'Sol', 'Üst', 'Alt', 'Ön', 'Arka']}
-          />
-        </GizmoHelper>
+
         {/* Post-processing — disabled on mobile for performance */}
         {!isMobile && (
           <EffectComposer multisampling={0}>
