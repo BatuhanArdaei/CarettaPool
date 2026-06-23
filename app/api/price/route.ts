@@ -18,15 +18,20 @@ export async function POST(request: NextRequest) {
 
   const supabase = createClient();
 
-  // 1. Fetch global site prices from site_settings (admin-configurable defaults)
+  // 1. Fetch global site prices and show_prices toggle from site_settings
   let globalPrices: CustomPrices | null = null;
-  const { data: settingsRows } = await supabase
+  let showPrices = true;
+  const { data: allSettings } = await supabase
     .from('site_settings')
-    .select('value')
-    .eq('key', 'prices')
-    .maybeSingle();
-  if (settingsRows?.value && typeof settingsRows.value === 'object') {
-    globalPrices = settingsRows.value as CustomPrices;
+    .select('key, value')
+    .in('key', ['prices', 'show_prices']);
+  for (const row of allSettings ?? []) {
+    if (row.key === 'prices' && row.value && typeof row.value === 'object') {
+      globalPrices = row.value as CustomPrices;
+    }
+    if (row.key === 'show_prices') {
+      showPrices = row.value !== false;
+    }
   }
 
   // 2. Fetch logged-in user and dealer info
@@ -82,5 +87,6 @@ export async function POST(request: NextRequest) {
     breakdown: finalBreakdown,
     isDealer,
     discountRate: discountType === 'custom' ? 0 : discountRate,
+    showPrices,
   });
 }

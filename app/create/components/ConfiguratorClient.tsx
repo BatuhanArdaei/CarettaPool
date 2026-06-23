@@ -10,6 +10,7 @@ import RegionSelector from './RegionSelector';
 import LoadingScreen from './LoadingScreen';
 import { useLanguage } from '@/contexts/LanguageContext';
 import ConfigTour from './ConfigTour';
+import { CLADDING_TEXTURE_URLS } from '@/lib/claddingTextures';
 
 function PoolSceneLoading() {
   const { t } = useLanguage();
@@ -43,8 +44,22 @@ export default function ConfiguratorClient({ userId, userEmail, role, fullName }
   );
   const [isDealer, setIsDealer] = useState(false);
   const [discountRate, setDiscountRate] = useState(0);
+  const [showPrices, setShowPrices] = useState(true);
   const [priceLoading, setPriceLoading] = useState(false);
   const [priceError, setPriceError] = useState<string | null>(null);
+
+  /* Tarayıcı HTTP önbelleğine texture'ları erkenden yükle.
+     PoolScene'deki Three.js preloader'dan önce çalışır (module yüklenmeden önce).
+     Browser paralel indirip önbelleğe alır; Three.js sonra anında çeker. */
+  useEffect(() => {
+    const timeout = setTimeout(() => {
+      CLADDING_TEXTURE_URLS.forEach(url => {
+        const img = new window.Image();
+        img.src = url;
+      });
+    }, 500);
+    return () => clearTimeout(timeout);
+  }, []);
 
   const debounceKey = useMemo(() => JSON.stringify(config), [config]);
 
@@ -65,6 +80,7 @@ export default function ConfiguratorClient({ userId, userEmail, role, fullName }
         setBreakdown(data.breakdown);
         setIsDealer(Boolean(data.isDealer));
         setDiscountRate(Number(data.discountRate ?? 0));
+        setShowPrices(data.showPrices !== false);
       } catch (err) {
         if ((err as Error).name === 'AbortError') return;
         setPriceError((err as Error).message);
@@ -117,6 +133,7 @@ export default function ConfiguratorClient({ userId, userEmail, role, fullName }
             breakdown={breakdown}
             isDealer={isDealer}
             discountRate={discountRate}
+            showPrices={showPrices}
             loading={priceLoading}
             priceError={priceError}
             userId={userId}

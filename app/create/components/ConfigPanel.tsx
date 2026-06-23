@@ -23,6 +23,7 @@ import { countPanels } from '@/lib/types';
 import type { Region } from '@/lib/regions';
 import { useLanguage } from '@/contexts/LanguageContext';
 import CountryPhoneInput from '@/components/CountryPhoneInput';
+import { CLADDING_TEXTURES } from '@/lib/claddingTextures';
 
 interface Props {
   config: PoolConfig;
@@ -31,6 +32,7 @@ interface Props {
   breakdown: PriceBreakdown;
   isDealer: boolean;
   discountRate: number;
+  showPrices?: boolean;
   loading: boolean;
   priceError: string | null;
   userId: string;
@@ -44,7 +46,7 @@ type StepKey = 'size' | 'frame' | 'panels' | 'waterfall' | 'lighting' | 'ground'
 export default function ConfigPanel({
   config, onChange,
   region,
-  breakdown, isDealer, discountRate, loading, priceError,
+  breakdown, isDealer, discountRate, showPrices: showPricesSetting, loading, priceError,
   userId, userEmail, fullName, role,
 }: Props) {
   const { t } = useLanguage();
@@ -164,6 +166,7 @@ export default function ConfigPanel({
             breakdown={breakdown}
             isDealer={isDealer}
             discountRate={discountRate}
+            showPrices={showPricesSetting ?? true}
             loading={loading}
             priceError={priceError}
             userId={userId}
@@ -486,34 +489,6 @@ function LightingStep({
   );
 }
 
-const CLADDING_TEXTURES: { file: string; name: string }[] = [
-  { file: 'BELIZE MIX 60x120.webp',              name: 'Belize Mix' },
-  { file: 'BEST CEPPO BONE 60x120.webp',         name: 'Best Ceppo Bone' },
-  { file: 'BEST CEPPO CREAM.webp',               name: 'Best Ceppo Cream' },
-  { file: 'BEST CEPPO PEARL 60x120.webp',        name: 'Best Ceppo Pearl' },
-  { file: 'BEST CEPPO TARMAC 60x120_.webp',      name: 'Best Ceppo Tarmac' },
-  { file: 'BEST SILENCE Pearl 60x120.webp',      name: 'Best Silence Pearl' },
-  { file: 'Best Silence Whale 60x120.webp',      name: 'Best Silence Whale' },
-  { file: 'BEST STONE TARMAC 60x120.webp',       name: 'Best Stone Tarmac' },
-  { file: 'FLORIDA TURKUAZ 60X120.webp',         name: 'Florida Turkuaz' },
-  { file: 'KARYA MAVi 60x120.webp',              name: 'Karya Mavi' },
-  { file: 'MERIDYEN YESIL 60x120.webp',          name: 'Meridyen Yeşil' },
-  { file: 'Meridyen Yesil Bookmatch 60x120.webp',name: 'Meridyen Yeşil Bookmatch' },
-  { file: 'Oceon Mavi 30x60.webp',               name: 'Oceon Mavi' },
-  { file: 'Oceon Turkuaz 30x60.webp',            name: 'Oceon Turkuaz' },
-  { file: 'Onice Moon 60x120.webp',              name: 'Onice Moon' },
-  { file: 'Oxide Antrasit 60x120.webp',          name: 'Oxide Antrasit' },
-  { file: 'Oxide Cobalt 60X120.webp',            name: 'Oxide Cobalt' },
-  { file: 'oxide sky 60x120.webp',               name: 'Oxide Sky' },
-  { file: 'OXSiDE TURKUAZ  60x120.webp',         name: 'Oxide Turkuaz' },
-  { file: 'PARADISE QARYY MAVI_F1.webp',         name: 'Paradise Qaryy Mavi F1' },
-  { file: 'PARADISE QARYY MAVI_F2.webp',         name: 'Paradise Qaryy Mavi F2' },
-  { file: 'Paradise Amazon 60x120.webp',         name: 'Paradise Amazon' },
-  { file: 'Paradise Ametist 60x120.webp',        name: 'Paradise Ametist' },
-  { file: 'Paradise Rain Forest 60x120.webp',    name: 'Paradise Rain Forest' },
-  { file: 'Paradise Turkuaz 60x120.webp',        name: 'Paradise Turkuaz' },
-  { file: 'SALDA MAVI IC 30x60.webp',            name: 'Salda Mavi' },
-];
 
 const PAGE = 5;
 
@@ -845,10 +820,11 @@ function PreviewStep({
 
 /* ─── Summary & Quote ─────────────────────────────────────────────── */
 function SummaryStep({
-  config, breakdown, isDealer, discountRate, loading, priceError,
+  config, breakdown, isDealer, discountRate, showPrices: showPricesSetting, loading, priceError,
   userId, userEmail, fullName, role,
 }: {
   config: PoolConfig; breakdown: PriceBreakdown; isDealer: boolean; discountRate: number;
+  showPrices?: boolean;
   loading: boolean; priceError: string | null; userId: string; userEmail: string;
   fullName: string; role: 'customer' | 'dealer' | 'admin';
 }) {
@@ -868,7 +844,7 @@ function SummaryStep({
   const [contact, setContact] = useStateR({ name: '', email: '', phone: '', dialCode: LANG_DIAL[lang] ?? '+90' });
 
   const isGuest = !userId;
-  const showPrices = role === 'dealer' || role === 'admin';
+  const showPrices = role === 'dealer' || role === 'admin' || (showPricesSetting ?? true);
 
   async function submitRequest(contactInfo?: { name: string; email: string; phone: string }) {
     setSaving(true); setSaveError(null); setSaved(false);

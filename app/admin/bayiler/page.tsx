@@ -4,23 +4,85 @@ import { useEffect, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { DEFAULT_PRICES } from '@/lib/pricing';
 
-/* ─── Per-dealer overrideable price items ───────────────────────── */
-const PRICE_ITEMS = [
-  { key: 'base_per_sqm',         label: 'Taban Fiyat (m²)',              default: DEFAULT_PRICES.base_per_sqm },
-  { key: 'frame_blue',           label: 'Çerçeve – Mavi',                default: DEFAULT_PRICES.frame_blue },
-  { key: 'frame_white',          label: 'Çerçeve – Beyaz',               default: DEFAULT_PRICES.frame_white },
-  { key: 'panel_glass',          label: 'Cam Panel (segment başı)',       default: DEFAULT_PRICES.panel_glass },
-  { key: 'ground_wood',          label: 'Zemin – Tahta Deck',            default: DEFAULT_PRICES.ground_wood },
-  { key: 'ground_grass',         label: 'Zemin – Çimen',                 default: DEFAULT_PRICES.ground_grass },
-  { key: 'ground_concrete',      label: 'Zemin – Beton',                 default: DEFAULT_PRICES.ground_concrete },
-  { key: 'cladding_blue_mosaic', label: 'Kaplama – Mavi Mozaik',         default: DEFAULT_PRICES.cladding_blue_mosaic },
-  { key: 'cladding_gray_stone',  label: 'Kaplama – Gri Taş',             default: DEFAULT_PRICES.cladding_gray_stone },
-  { key: 'cladding_turquoise',   label: 'Kaplama – Turkuaz',             default: DEFAULT_PRICES.cladding_turquoise },
-  { key: 'cladding_texture',     label: 'Kaplama – Doku (tüm desenler)', default: DEFAULT_PRICES.cladding_texture },
-  { key: 'lighting',             label: 'Işıklandırma',                  default: DEFAULT_PRICES.lighting },
-  { key: 'waterfall',            label: 'Şelale',                        default: DEFAULT_PRICES.waterfall },
-  { key: 'platform',             label: 'Yan Platform',                   default: DEFAULT_PRICES.platform },
+type PriceItem = { key: string; label: string; default: number };
+type PriceGroup = { label: string; icon: string; items: PriceItem[] };
+
+/* ─── Per-dealer overrideable price items — grouped ────────────── */
+const PRICE_GROUPS: PriceGroup[] = [
+  {
+    label: 'Taban & Panel',
+    icon: '📐',
+    items: [
+      { key: 'base_per_sqm', label: 'Taban Fiyat (m² başına)', default: DEFAULT_PRICES.base_per_sqm },
+      { key: 'panel_glass',  label: 'Cam Panel (segment başı)', default: DEFAULT_PRICES.panel_glass },
+    ],
+  },
+  {
+    label: 'Çerçeve',
+    icon: '🔩',
+    items: [
+      { key: 'frame_blue',       label: 'Çerçeve – Mavi',     default: DEFAULT_PRICES.frame_blue },
+      { key: 'frame_white',      label: 'Çerçeve – Beyaz',    default: DEFAULT_PRICES.frame_white },
+      { key: 'frame_anthracite', label: 'Çerçeve – Antrasit', default: DEFAULT_PRICES.frame_anthracite },
+    ],
+  },
+  {
+    label: 'Zemin',
+    icon: '🪨',
+    items: [
+      { key: 'ground_wood',     label: 'Zemin – Tahta Deck', default: DEFAULT_PRICES.ground_wood },
+      { key: 'ground_grass',    label: 'Zemin – Çimen',      default: DEFAULT_PRICES.ground_grass },
+      { key: 'ground_concrete', label: 'Zemin – Beton',      default: DEFAULT_PRICES.ground_concrete },
+      { key: 'ground_gravel',   label: 'Zemin – Çakıl',      default: DEFAULT_PRICES.ground_gravel },
+    ],
+  },
+  {
+    label: 'Kaplama',
+    icon: '🎨',
+    items: [
+      { key: 'cladding_blue_mosaic', label: 'Kaplama – Mavi Mozaik',        default: DEFAULT_PRICES.cladding_blue_mosaic },
+      { key: 'cladding_gray_stone',  label: 'Kaplama – Gri Taş',            default: DEFAULT_PRICES.cladding_gray_stone },
+      { key: 'cladding_turquoise',   label: 'Kaplama – Turkuaz',             default: DEFAULT_PRICES.cladding_turquoise },
+      { key: 'cladding_texture',     label: 'Kaplama – Doku (tüm desenler)', default: DEFAULT_PRICES.cladding_texture },
+      { key: 'cladding_white',       label: 'Kaplama – Beyaz (standart)',    default: DEFAULT_PRICES.cladding_white },
+    ],
+  },
+  {
+    label: 'Işıklandırma',
+    icon: '💡',
+    items: [
+      { key: 'lighting', label: 'Işıklandırma', default: DEFAULT_PRICES.lighting },
+    ],
+  },
+  {
+    label: 'Platform & Ekstralar',
+    icon: '🏗️',
+    items: [
+      { key: 'platform',           label: 'Yan Platform (standart)', default: DEFAULT_PRICES.platform },
+      { key: 'platform_extension', label: 'Platform Genişletme',     default: DEFAULT_PRICES.platform_extension },
+      { key: 'waterfall',          label: 'Şelale',                  default: DEFAULT_PRICES.waterfall },
+    ],
+  },
+  {
+    label: 'Üst Kapak',
+    icon: '🔲',
+    items: [
+      { key: 'pool_cover_manual',    label: 'Üst Kapak – Manuel',    default: DEFAULT_PRICES.pool_cover_manual },
+      { key: 'pool_cover_automatic', label: 'Üst Kapak – Otomatik',  default: DEFAULT_PRICES.pool_cover_automatic },
+    ],
+  },
+  {
+    label: 'Aksesuarlar',
+    icon: '🪜',
+    items: [
+      { key: 'railings', label: 'Korkuluk',    default: DEFAULT_PRICES.railings },
+      { key: 'ladder',   label: 'İç Merdiven', default: DEFAULT_PRICES.ladder },
+    ],
+  },
 ];
+
+/* Flat list derived from groups (used for initialising price state) */
+const PRICE_ITEMS = PRICE_GROUPS.flatMap(g => g.items);
 
 interface Dealer {
   id: string;
@@ -58,39 +120,50 @@ function CustomPriceEditor({
   }
 
   return (
-    <div>
-      <p className="mb-3 text-sm font-medium text-slate-700">
+    <div className="space-y-4">
+      <p className="text-sm font-medium text-slate-700">
         Kalem bazında özel fiyat — düzenledikten sonra <strong>Uygula</strong>'ya basın.
       </p>
-      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-        {PRICE_ITEMS.map(item => (
-          <div key={item.key} className="flex items-center gap-2 rounded-lg bg-slate-50 p-3">
-            <div className="flex-1 min-w-0">
-              <p className="text-xs font-medium text-slate-700 truncate">{item.label}</p>
-              <p className="text-[11px] text-slate-400">
-                Standart: {item.default.toLocaleString('tr-TR')} TL
-              </p>
-            </div>
-            <div className="flex shrink-0 items-center gap-1">
-              <input
-                type="number" inputMode="decimal"
-                min={0}
-                step={100}
-                value={prices[item.key]}
-                onChange={e => setPrices(p => ({ ...p, [item.key]: Number(e.target.value) }))}
-                className="input w-24 text-sm"
-              />
-              <span className="text-xs text-slate-500">TL</span>
-            </div>
+      {PRICE_GROUPS.map(group => (
+        <div key={group.label} className="rounded-xl bg-white ring-1 ring-slate-200">
+          <div className="flex items-center gap-2 border-b border-slate-100 px-4 py-2.5">
+            <span>{group.icon}</span>
+            <h3 className="text-sm font-semibold text-slate-700">{group.label}</h3>
           </div>
-        ))}
-      </div>
-      <div className="mt-4 flex items-center gap-3">
-        <button
-          onClick={apply}
-          disabled={saving}
-          className="btn-primary px-6"
-        >
+          <div className="grid gap-2 p-4 sm:grid-cols-2 lg:grid-cols-3">
+            {group.items.map(item => {
+              const isModified = prices[item.key] !== item.default;
+              return (
+                <div
+                  key={item.key}
+                  className={`flex items-center gap-2 rounded-lg p-3 ring-1 transition ${
+                    isModified ? 'bg-brand-50 ring-brand-300' : 'bg-slate-50 ring-slate-200'
+                  }`}
+                >
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-medium text-slate-700 truncate">{item.label}</p>
+                    <p className="text-[11px] text-slate-400">
+                      Standart: {item.default.toLocaleString('tr-TR')} TL
+                    </p>
+                  </div>
+                  <div className="flex shrink-0 items-center gap-1">
+                    <input
+                      type="number" inputMode="decimal"
+                      min={0} step={100}
+                      value={prices[item.key]}
+                      onChange={e => setPrices(p => ({ ...p, [item.key]: Number(e.target.value) }))}
+                      className="input w-24 text-sm text-right"
+                    />
+                    <span className="text-xs text-slate-500">TL</span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      ))}
+      <div className="flex items-center gap-3">
+        <button onClick={apply} disabled={saving} className="btn-primary px-6">
           {saving ? 'Kaydediliyor…' : 'Uygula'}
         </button>
         {saved && <span className="text-sm text-green-600">✓ Kaydedildi</span>}
@@ -241,25 +314,41 @@ export default function AdminBayiler() {
             )}
 
             {form.discount_type === 'custom' && (
-              <div>
-                <p className="mb-3 text-sm text-slate-600">Özel fiyatları girin (boş bırakırsan standart uygulanır):</p>
-                <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-                  {PRICE_ITEMS.map(item => (
-                    <div key={item.key} className="flex items-center gap-2 rounded-lg bg-slate-50 p-3">
-                      <div className="flex-1 min-w-0">
-                        <p className="text-xs font-medium text-slate-700 truncate">{item.label}</p>
-                        <p className="text-[11px] text-slate-400">Standart: {item.default.toLocaleString('tr-TR')} TL</p>
-                      </div>
-                      <div className="flex shrink-0 items-center gap-1">
-                        <input type="number" inputMode="decimal" min={0} step={100}
-                          value={formCustomPrices[item.key] ?? item.default}
-                          onChange={e => setFormCustomPrices(p => ({ ...p, [item.key]: Number(e.target.value) }))}
-                          className="input w-24 text-sm" />
-                        <span className="text-xs text-slate-500">TL</span>
-                      </div>
+              <div className="space-y-4">
+                <p className="text-sm text-slate-600">Özel fiyatları girin (standart değerler önceden dolu):</p>
+                {PRICE_GROUPS.map(group => (
+                  <div key={group.label} className="rounded-xl bg-slate-50 ring-1 ring-slate-200">
+                    <div className="flex items-center gap-2 border-b border-slate-100 px-4 py-2.5">
+                      <span>{group.icon}</span>
+                      <h3 className="text-sm font-semibold text-slate-700">{group.label}</h3>
                     </div>
-                  ))}
-                </div>
+                    <div className="grid gap-2 p-4 sm:grid-cols-2 lg:grid-cols-3">
+                      {group.items.map(item => {
+                        const isModified = (formCustomPrices[item.key] ?? item.default) !== item.default;
+                        return (
+                          <div
+                            key={item.key}
+                            className={`flex items-center gap-2 rounded-lg p-3 ring-1 transition ${
+                              isModified ? 'bg-brand-50 ring-brand-300' : 'bg-white ring-slate-200'
+                            }`}
+                          >
+                            <div className="flex-1 min-w-0">
+                              <p className="text-xs font-medium text-slate-700 truncate">{item.label}</p>
+                              <p className="text-[11px] text-slate-400">Standart: {item.default.toLocaleString('tr-TR')} TL</p>
+                            </div>
+                            <div className="flex shrink-0 items-center gap-1">
+                              <input type="number" inputMode="decimal" min={0} step={100}
+                                value={formCustomPrices[item.key] ?? item.default}
+                                onChange={e => setFormCustomPrices(p => ({ ...p, [item.key]: Number(e.target.value) }))}
+                                className="input w-24 text-sm text-right" />
+                              <span className="text-xs text-slate-500">TL</span>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))}
               </div>
             )}
 

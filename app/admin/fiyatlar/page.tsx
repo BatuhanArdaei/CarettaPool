@@ -86,29 +86,33 @@ export default function AdminFiyatlar() {
     PRICE_GROUPS.forEach(g => g.items.forEach(i => { init[i.key] = DEFAULT_PRICES[i.key]; }));
     return init;
   });
+  const [showPricesEnabled, setShowPricesEnabled] = useState<boolean>(true);
   const [status, setStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
-    supabase
-      .from('site_settings')
-      .select('value')
-      .eq('key', 'prices')
-      .maybeSingle()
-      .then(({ data }) => {
-        if (data?.value && typeof data.value === 'object') {
-          const stored = data.value as Prices;
-          setPrices(prev => ({ ...prev, ...stored }));
-        }
-        setLoaded(true);
-      });
+    Promise.all([
+      supabase.from('site_settings').select('value').eq('key', 'prices').maybeSingle(),
+      supabase.from('site_settings').select('value').eq('key', 'show_prices').maybeSingle(),
+    ]).then(([pricesRes, showRes]) => {
+      if (pricesRes.data?.value && typeof pricesRes.data.value === 'object') {
+        const stored = pricesRes.data.value as Prices;
+        setPrices(prev => ({ ...prev, ...stored }));
+      }
+      if (showRes.data !== null && showRes.data?.value !== undefined) {
+        setShowPricesEnabled(Boolean(showRes.data.value));
+      }
+      setLoaded(true);
+    });
   }, []);
 
   async function save() {
     setStatus('saving');
-    const { error } = await supabase
-      .from('site_settings')
-      .upsert({ key: 'prices', value: prices }, { onConflict: 'key' });
+    const [r1, r2] = await Promise.all([
+      supabase.from('site_settings').upsert({ key: 'prices', value: prices }, { onConflict: 'key' }),
+      supabase.from('site_settings').upsert({ key: 'show_prices', value: showPricesEnabled }, { onConflict: 'key' }),
+    ]);
+    const error = r1.error || r2.error;
     setStatus(error ? 'error' : 'saved');
     if (!error) setTimeout(() => setStatus('idle'), 2500);
   }
@@ -129,6 +133,44 @@ export default function AdminFiyatlar() {
 
   return (
     <div className="space-y-6">
+      {/* Fiyat Görünürlük Toggleı */}
+      <div className={`rounded-xl p-5 ring-2 transition ${showPricesEnabled ? 'bg-emerald-50 ring-emerald-300' : 'bg-slate-50 ring-slate-200'}`}>
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div>
+            <p className="font-semibold text-slate-900">Fiyatlar Gözüksün Mü?</p>
+            <p className="mt-0.5 text-sm text-slate-500">
+              {showPricesEnabled
+                ? 'Fiyatlar tüm kullanıcılara (müşteri dahil) gösterilmektedir.'
+                : 'Fiyatlar gizli — sadece bayi ve admin hesapları görebilir.'}
+            </p>
+          </div>
+          <div className="flex rounded-lg bg-white p-1 shadow-sm ring-1 ring-slate-200">
+            <button
+              type="button"
+              onClick={() => setShowPricesEnabled(true)}
+              className={`rounded-md px-5 py-2 text-sm font-semibold transition ${
+                showPricesEnabled
+                  ? 'bg-emerald-500 text-white shadow'
+                  : 'text-slate-500 hover:text-slate-800'
+              }`}
+            >
+              Evet
+            </button>
+            <button
+              type="button"
+              onClick={() => setShowPricesEnabled(false)}
+              className={`rounded-md px-5 py-2 text-sm font-semibold transition ${
+                !showPricesEnabled
+                  ? 'bg-slate-700 text-white shadow'
+                  : 'text-slate-500 hover:text-slate-800'
+              }`}
+            >
+              Hayır
+            </button>
+          </div>
+        </div>
+      </div>
+
       {/* Header */}
       <div className="flex items-start justify-between gap-4">
         <div>
@@ -159,7 +201,7 @@ export default function AdminFiyatlar() {
 
       {status === 'saved' && (
         <div className="rounded-lg bg-green-50 p-3 text-sm font-medium text-green-700 ring-1 ring-green-200">
-          ✓ Fiyatlar kaydedildi. Tüm hesaplamalar artık bu değerleri kullanacak.
+          ✓ Ayarlar kaydedildi. Tüm hesaplamalar artık bu değerleri kullanacak.
         </div>
       )}
       {status === 'error' && (
@@ -178,51 +220,59 @@ export default function AdminFiyatlar() {
         </ol>
       </div>
 
-      {/* Price groups */}
-      <div className="space-y-5">
-        {PRICE_GROUPS.map(group => (
-          <div key={group.label} className="rounded-xl bg-white ring-1 ring-slate-200">
-            <div className="flex items-center gap-2 border-b border-slate-100 px-5 py-3">
-              <span className="text-lg">{group.icon}</span>
-              <h2 className="font-semibold text-slate-800">{group.label}</h2>
-            </div>
-            <div className="grid gap-3 p-5 sm:grid-cols-2 lg:grid-cols-3">
-              {group.items.map(item => {
-                const isDefault = prices[item.key] === DEFAULT_PRICES[item.key];
-                return (
-                  <div
-                    key={item.key}
-                    className={`flex items-center justify-between gap-3 rounded-lg p-3 ring-1 transition ${
-                      isDefault ? 'bg-slate-50 ring-slate-200' : 'bg-brand-50 ring-brand-300'
-                    }`}
-                  >
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-medium text-slate-800">{item.label}</p>
-                      <p className="text-[11px] text-slate-400">
-                        Kod varsayılanı: {DEFAULT_PRICES[item.key].toLocaleString('tr-TR')} {item.unit}
-                      </p>
+      {/* Price groups — sadece showPricesEnabled açıksa göster */}
+      {showPricesEnabled && (
+        <div className="space-y-5">
+          {PRICE_GROUPS.map(group => (
+            <div key={group.label} className="rounded-xl bg-white ring-1 ring-slate-200">
+              <div className="flex items-center gap-2 border-b border-slate-100 px-5 py-3">
+                <span className="text-lg">{group.icon}</span>
+                <h2 className="font-semibold text-slate-800">{group.label}</h2>
+              </div>
+              <div className="grid gap-3 p-5 sm:grid-cols-2 lg:grid-cols-3">
+                {group.items.map(item => {
+                  const isDefault = prices[item.key] === DEFAULT_PRICES[item.key];
+                  return (
+                    <div
+                      key={item.key}
+                      className={`flex items-center justify-between gap-3 rounded-lg p-3 ring-1 transition ${
+                        isDefault ? 'bg-slate-50 ring-slate-200' : 'bg-brand-50 ring-brand-300'
+                      }`}
+                    >
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-medium text-slate-800">{item.label}</p>
+                        <p className="text-[11px] text-slate-400">
+                          Kod varsayılanı: {DEFAULT_PRICES[item.key].toLocaleString('tr-TR')} {item.unit}
+                        </p>
+                      </div>
+                      <div className="flex shrink-0 items-center gap-1.5">
+                        <input
+                          type="number"
+                          inputMode="decimal"
+                          min={0}
+                          step={100}
+                          value={prices[item.key]}
+                          onChange={e =>
+                            setPrices(p => ({ ...p, [item.key]: Math.max(0, Number(e.target.value)) }))
+                          }
+                          className="input w-28 text-right text-sm"
+                        />
+                        <span className="text-xs text-slate-500">{item.unit}</span>
+                      </div>
                     </div>
-                    <div className="flex shrink-0 items-center gap-1.5">
-                      <input
-                        type="number"
-                        inputMode="decimal"
-                        min={0}
-                        step={100}
-                        value={prices[item.key]}
-                        onChange={e =>
-                          setPrices(p => ({ ...p, [item.key]: Math.max(0, Number(e.target.value)) }))
-                        }
-                        className="input w-28 text-right text-sm"
-                      />
-                      <span className="text-xs text-slate-500">{item.unit}</span>
-                    </div>
-                  </div>
-                );
-              })}
+                  );
+                })}
+              </div>
             </div>
-          </div>
-        ))}
-      </div>
+          ))}
+        </div>
+      )}
+
+      {!showPricesEnabled && (
+        <div className="rounded-xl bg-white p-8 text-center ring-1 ring-slate-200">
+          <p className="text-slate-400 text-sm">Fiyat paneli gizli — fiyatları göstermek için yukarıdaki toggleı "Evet" yapın.</p>
+        </div>
+      )}
 
       {/* Save bar (sticky bottom) */}
       <div className="sticky bottom-4 z-10 flex justify-end">
@@ -232,7 +282,7 @@ export default function AdminFiyatlar() {
           disabled={status === 'saving'}
           className="btn-primary px-8 py-3 shadow-lg"
         >
-          {status === 'saving' ? 'Kaydediliyor…' : '✓ Fiyatları Kaydet'}
+          {status === 'saving' ? 'Kaydediliyor…' : '✓ Kaydet'}
         </button>
       </div>
     </div>

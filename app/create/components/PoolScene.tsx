@@ -22,6 +22,7 @@ import {
   type PoolSide,
   type PlatformDirection,
 } from '@/lib/types';
+import { CLADDING_TEXTURE_URLS } from '@/lib/claddingTextures';
 
 const POOL_HEIGHT = 1.5;
 const COPING_T = 0.10;
@@ -3819,33 +3820,95 @@ function claddingColor(c: CladdingType): string {
   }
 }
 
+/* ─── Modül-seviyesi texture cache + deduplication ─────────────────
+   claddingTextureCache : tamamlanmış THREE.Texture nesneleri
+   claddingLoadInFlight : devam eden Promise'lar — aynı URL için
+                          ikinci istek yeni download başlatmaz       */
+const claddingTextureCache  = new Map<string, THREE.Texture>();
+const claddingLoadInFlight  = new Map<string, Promise<THREE.Texture | null>>();
+
+function prepareTexture(t: THREE.Texture): THREE.Texture {
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  t.repeat.set(2, 2);
+  t.colorSpace = THREE.SRGBColorSpace;
+  return t;
+}
+
+/* Tek bir yükleme fonksiyonu — hem preloader hem hook bunu kullanır.
+   Aynı URL iki kez çağrılırsa tek download yapılır. */
+function loadCladdingUrl(url: string): Promise<THREE.Texture | null> {
+  const hit = claddingTextureCache.get(url);
+  if (hit) return Promise.resolve(hit);
+
+  const inflight = claddingLoadInFlight.get(url);
+  if (inflight) return inflight;
+
+  const p = new Promise<THREE.Texture | null>((resolve) => {
+    new THREE.TextureLoader().load(
+      url,
+      (t) => {
+        prepareTexture(t);
+        claddingTextureCache.set(url, t);
+        claddingLoadInFlight.delete(url);
+        resolve(t);
+      },
+      undefined,
+      () => { claddingLoadInFlight.delete(url); resolve(null); },
+    );
+  });
+  claddingLoadInFlight.set(url, p);
+  return p;
+}
+
+/* Arka plan preloader — 3 paralel akış, 0.8s sonra başlar.
+   Önceki: tek akış, 2.5s gecikme, 150ms ara.
+   Şimdi:  3 akış, 0.8-1.0s gecikme, 100ms ara → ~3× daha hızlı. */
+if (typeof window !== 'undefined') {
+  const startStream = (delayMs: number, offset: number) => {
+    let i = offset;
+    const next = async () => {
+      while (i < CLADDING_TEXTURE_URLS.length) {
+        const url = CLADDING_TEXTURE_URLS[i];
+        i += 3; // 3 akış olduğu için 3'er atlıyor
+        await loadCladdingUrl(url);
+        await new Promise<void>(r => setTimeout(r, 100));
+      }
+    };
+    setTimeout(next, delayMs);
+  };
+  startStream(800,  0); // akış 0: index 0,3,6,9…
+  startStream(900,  1); // akış 1: index 1,4,7,10…
+  startStream(1000, 2); // akış 2: index 2,5,8,11…
+}
+
 function useCladdingTexture(cladding: CladdingType): THREE.Texture | null {
   const invalidate = useThree((s) => s.invalidate);
-  const [tex, setTex] = useState<THREE.Texture | null>(null);
+
+  /* Önbellekte varsa senkron başlat — gecikmesiz */
+  const [tex, setTex] = useState<THREE.Texture | null>(() =>
+    claddingTextureCache.get(cladding) ?? null
+  );
 
   useEffect(() => {
-    const isLegacy = /^texture\d$/.test(cladding);
-    const isPath   = cladding.startsWith('/textures/');
-    if (!isLegacy && !isPath) { setTex(null); return; }
+    const cached = claddingTextureCache.get(cladding);
+    if (cached) { setTex(cached); invalidate(); return; }
 
-    const loader = new THREE.TextureLoader();
+    const isPath   = cladding.startsWith('/textures/');
+    const isLegacy = /^texture\d$/.test(cladding);
+    if (!isPath && !isLegacy) { setTex(null); return; }
+
     let cancelled = false;
 
-    const applyTex = (t: THREE.Texture) => {
-      if (cancelled) return;
-      t.wrapS = t.wrapT = THREE.RepeatWrapping;
-      t.repeat.set(2, 2);
-      t.colorSpace = THREE.SRGBColorSpace;
-      setTex(t);
-      invalidate(); // frameloop="demand" — force redraw after async load
-    };
-
     if (isPath) {
-      loader.load(cladding, applyTex, undefined, () => { if (!cancelled) { setTex(null); invalidate(); } });
+      /* Paylaşımlı yükleyici: preloader zaten indiriyorsa aynı Promise'a bağlanır */
+      loadCladdingUrl(cladding).then(t => {
+        if (!cancelled) { setTex(t); invalidate(); }
+      });
       return () => { cancelled = true; };
     }
 
     // Legacy texture1…texture5
+    const loader = new THREE.TextureLoader();
     const tryLoad = (ext: string) =>
       new Promise<THREE.Texture>((resolve, reject) => {
         loader.load(`/textures/${cladding}.${ext}`, resolve, undefined, reject);
@@ -3854,9 +3917,13 @@ function useCladdingTexture(cladding: CladdingType): THREE.Texture | null {
     (async () => {
       let loaded: THREE.Texture | null = null;
       for (const ext of ['jpeg', 'jpg', 'png']) {
-        try { loaded = await tryLoad(ext); break; } catch { /* try next ext */ }
+        try { loaded = await tryLoad(ext); break; } catch { /* dene */ }
       }
-      if (loaded) { applyTex(loaded); } else { if (!cancelled) { setTex(null); invalidate(); } }
+      if (!cancelled) {
+        if (loaded) { prepareTexture(loaded); claddingTextureCache.set(cladding, loaded); setTex(loaded); }
+        else { setTex(null); }
+        invalidate();
+      }
     })();
 
     return () => { cancelled = true; };
