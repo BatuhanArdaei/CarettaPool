@@ -59,7 +59,7 @@ export default function PricePanel({
           name: contactInfo.name,
           email: contactInfo.email,
           phone: contactInfo.phone || null,
-          message: `Havuz Teklif Talebi — ${config.width.toFixed(1)}×${config.length.toFixed(1)} m, ${formatTRY(breakdown.total)}`,
+          message: `Havuz Teklif Talebi — ${config.length.toFixed(1)}×${config.width.toFixed(1)} m, ${formatTRY(breakdown.total)}`,
         });
       }
 
@@ -93,7 +93,7 @@ export default function PricePanel({
         </div>
 
         <ul className="space-y-1.5 text-sm">
-          <SummaryItem label="Boyut" value={`${config.width.toFixed(1)} × ${config.length.toFixed(1)} m`} />
+          <SummaryItem label="Boyut" value={`${config.length.toFixed(1)} × ${config.width.toFixed(1)} m`} />
           <SummaryItem label="Çerçeve" value={frameLabel(config.frameColor)} />
           <SummaryItem
             label="Panel"
@@ -189,7 +189,7 @@ export default function PricePanel({
             {/* Summary pill */}
             <div className="mb-5 flex items-center justify-between rounded-xl bg-brand-50 px-4 py-3">
               <span className="text-sm text-slate-600">
-                {config.width.toFixed(1)} × {config.length.toFixed(1)} m
+                {config.length.toFixed(1)} × {config.width.toFixed(1)} m
               </span>
               <span className="text-lg font-bold text-brand-700">{formatTRY(breakdown.total)}</span>
             </div>

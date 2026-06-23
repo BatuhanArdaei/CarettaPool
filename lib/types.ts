@@ -80,7 +80,6 @@ export const PANEL_W = 2.40;
  * The inner span for the short sides (north/south) is config.width minus
  * two frame thicknesses, and for the long sides (east/west) it is
  * config.length minus two frame thicknesses.
- * We approximate inner span as the outer dimension for this purpose.
  */
 export function segmentsForSide(side: PoolSide, config: PoolConfig): number {
   const span = side === 'north' || side === 'south' ? config.width : config.length;

@@ -2016,6 +2016,7 @@ function SidePanels({
                     map={claddingTex ?? undefined}
                     roughness={0.8}
                     metalness={0.01}
+                    side={THREE.DoubleSide}
                   />
                 </mesh>
               )}
@@ -3860,25 +3861,10 @@ function loadCladdingUrl(url: string): Promise<THREE.Texture | null> {
   return p;
 }
 
-/* Arka plan preloader — 3 paralel akış, 0.8s sonra başlar.
-   Önceki: tek akış, 2.5s gecikme, 150ms ara.
-   Şimdi:  3 akış, 0.8-1.0s gecikme, 100ms ara → ~3× daha hızlı. */
+/* Arka plan preloader — tüm texture'lar hemen ve paralel yüklenir.
+   Tarayıcı zaten ~6 eş zamanlı bağlantı yönetiyor; biz sıra bekletmiyoruz. */
 if (typeof window !== 'undefined') {
-  const startStream = (delayMs: number, offset: number) => {
-    let i = offset;
-    const next = async () => {
-      while (i < CLADDING_TEXTURE_URLS.length) {
-        const url = CLADDING_TEXTURE_URLS[i];
-        i += 3; // 3 akış olduğu için 3'er atlıyor
-        await loadCladdingUrl(url);
-        await new Promise<void>(r => setTimeout(r, 100));
-      }
-    };
-    setTimeout(next, delayMs);
-  };
-  startStream(800,  0); // akış 0: index 0,3,6,9…
-  startStream(900,  1); // akış 1: index 1,4,7,10…
-  startStream(1000, 2); // akış 2: index 2,5,8,11…
+  CLADDING_TEXTURE_URLS.forEach(url => loadCladdingUrl(url));
 }
 
 function useCladdingTexture(cladding: CladdingType): THREE.Texture | null {

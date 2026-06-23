@@ -48,17 +48,14 @@ export default function ConfiguratorClient({ userId, userEmail, role, fullName }
   const [priceLoading, setPriceLoading] = useState(false);
   const [priceError, setPriceError] = useState<string | null>(null);
 
-  /* Tarayıcı HTTP önbelleğine texture'ları erkenden yükle.
-     PoolScene'deki Three.js preloader'dan önce çalışır (module yüklenmeden önce).
-     Browser paralel indirip önbelleğe alır; Three.js sonra anında çeker. */
+  /* Sayfa açılır açılmaz tarayıcı HTTP önbelleğine texture'ları yükle.
+     Three.js modülünden önce çalışır; sonraki TextureLoader istekleri
+     önbellekten anında yanıt alır. */
   useEffect(() => {
-    const timeout = setTimeout(() => {
-      CLADDING_TEXTURE_URLS.forEach(url => {
-        const img = new window.Image();
-        img.src = url;
-      });
-    }, 500);
-    return () => clearTimeout(timeout);
+    CLADDING_TEXTURE_URLS.forEach(url => {
+      const img = new window.Image();
+      img.src = url;
+    });
   }, []);
 
   const debounceKey = useMemo(() => JSON.stringify(config), [config]);

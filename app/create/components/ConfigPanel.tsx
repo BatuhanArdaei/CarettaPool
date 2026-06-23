@@ -230,16 +230,6 @@ function SizeStep({
       </div>
 
       <RangeRow
-        label={t('configurator.width_label')}
-        value={config.width}
-        min={region.minWidth}
-        max={region.maxWidth}
-        step={0.1}
-        unit="m"
-        onChange={(v) => set('width', Math.min(v, region.maxWidth))}
-      />
-
-      <RangeRow
         label={t('configurator.length_label')}
         value={config.length}
         min={region.minLength}
@@ -247,6 +237,16 @@ function SizeStep({
         step={0.1}
         unit="m"
         onChange={(v) => set('length', Math.min(v, region.maxLength))}
+      />
+
+      <RangeRow
+        label={t('configurator.width_label')}
+        value={config.width}
+        min={region.minWidth}
+        max={region.maxWidth}
+        step={0.1}
+        unit="m"
+        onChange={(v) => set('width', Math.min(v, region.maxWidth))}
       />
 
       <div className="rounded-md bg-slate-50 p-3 text-xs text-slate-600">
@@ -857,7 +857,7 @@ function SummaryStep({
       if (isGuest && contactInfo) {
         await supabase.from('contact_requests').insert({
           name: contactInfo.name, email: contactInfo.email, phone: contactInfo.phone || null,
-          message: `Havuz Teklif Talebi — ${config.width.toFixed(1)}×${config.length.toFixed(1)} m, ${formatTRY(breakdown.total)}`,
+          message: `Havuz Teklif Talebi — ${config.length.toFixed(1)}×${config.width.toFixed(1)} m, ${formatTRY(breakdown.total)}`,
         });
       }
       setSaved(true); setShowPopup(false); router.refresh();
@@ -886,7 +886,7 @@ function SummaryStep({
   };
 
   const rows: [string, string][] = [
-    [t('configurator.row_size'),      `${config.width.toFixed(1)} × ${config.length.toFixed(1)} m`],
+    [t('configurator.row_size'),      `${config.length.toFixed(1)} × ${config.width.toFixed(1)} m`],
     [t('configurator.row_frame'),     frameLabel[config.frameColor] ?? config.frameColor],
     [t('configurator.row_panel'),     t('configurator.panel_glass_count').replace('{glass}', String(panels.glass)).replace('{closed}', String(panels.closed))],
     [t('configurator.row_lighting'),  config.lighting.enabled ? t('configurator.light_on_status').replace('{color}', config.lighting.color.toUpperCase()) : t('configurator.none')],
@@ -980,7 +980,7 @@ function SummaryStep({
             <p className="mt-1 text-sm text-slate-500">{t('configurator.quote_subtitle')}</p>
             <div className="mt-5 rounded-xl bg-brand-50 px-4 py-3">
               <span className="text-sm text-slate-600">
-                {config.width.toFixed(1)} × {config.length.toFixed(1)} m havuz konfigürasyonu
+                {config.length.toFixed(1)} × {config.width.toFixed(1)} m havuz konfigürasyonu
               </span>
             </div>
             <div className="mt-4 space-y-3">
