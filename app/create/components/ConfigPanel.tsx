@@ -230,23 +230,23 @@ function SizeStep({
       </div>
 
       <RangeRow
-        label={t('configurator.length_label')}
-        value={config.length}
-        min={region.minLength}
-        max={region.maxLength}
-        step={0.1}
-        unit="m"
-        onChange={(v) => set('length', Math.min(v, region.maxLength))}
-      />
-
-      <RangeRow
         label={t('configurator.width_label')}
-        value={config.width}
+        value={config.length}
         min={region.minWidth}
         max={region.maxWidth}
         step={0.1}
         unit="m"
-        onChange={(v) => set('width', Math.min(v, region.maxWidth))}
+        onChange={(v) => set('length', Math.min(v, region.maxWidth))}
+      />
+
+      <RangeRow
+        label={t('configurator.length_label')}
+        value={config.width}
+        min={region.minLength}
+        max={region.maxLength}
+        step={0.1}
+        unit="m"
+        onChange={(v) => set('width', Math.min(v, region.maxLength))}
       />
 
       <div className="rounded-md bg-slate-50 p-3 text-xs text-slate-600">

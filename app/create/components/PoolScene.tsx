@@ -1684,7 +1684,14 @@ function Pool({ config, isNight }: { config: PoolConfig; isNight: boolean }) {
         receiveShadow
       >
         <planeGeometry args={[w - PANEL_T * 2 - 0.02, l - PANEL_T * 2 - 0.02]} />
-        <meshStandardMaterial color={claddingTex ? '#ffffff' : inner} map={claddingTex} />
+        <meshStandardMaterial
+          key={claddingTex?.uuid ?? 'floor-no-tex'}
+          color={inner}
+          map={claddingTex ?? undefined}
+          roughness={0.85}
+          metalness={0.0}
+          envMapIntensity={0}
+        />
       </mesh>
 
       {/* Animated caustics overlay on the pool floor — only when water is present */}
@@ -2019,6 +2026,7 @@ function SidePanels({
                 >
                   <planeGeometry args={[sizeAlong, panelHeight]} />
                   <meshStandardMaterial
+                    key={claddingTex?.uuid ?? 'panel-no-tex'}
                     color={claddingTex ? '#ffffff' : inner}
                     map={claddingTex ?? undefined}
                     roughness={0.8}
@@ -2061,19 +2069,19 @@ function InnerRim({
     <group>
       <mesh position={[0, yMid, halfL]} rotation={[0, Math.PI, 0]}>
         <planeGeometry args={[w - inset * 2, rimHeight]} />
-        <meshStandardMaterial color={claddingTex ? '#ffffff' : color} map={claddingTex} side={THREE.FrontSide} />
+        <meshStandardMaterial key={claddingTex?.uuid ?? 'rim-s-no-tex'} color={claddingTex ? '#ffffff' : color} map={claddingTex ?? undefined} roughness={0.85} metalness={0.0} envMapIntensity={0} side={THREE.FrontSide} />
       </mesh>
       <mesh position={[0, yMid, -halfL]}>
         <planeGeometry args={[w - inset * 2, rimHeight]} />
-        <meshStandardMaterial color={claddingTex ? '#ffffff' : color} map={claddingTex} side={THREE.FrontSide} />
+        <meshStandardMaterial key={claddingTex?.uuid ?? 'rim-n-no-tex'} color={claddingTex ? '#ffffff' : color} map={claddingTex ?? undefined} roughness={0.85} metalness={0.0} envMapIntensity={0} side={THREE.FrontSide} />
       </mesh>
       <mesh position={[halfW, yMid, 0]} rotation={[0, -Math.PI / 2, 0]}>
         <planeGeometry args={[l - inset * 2, rimHeight]} />
-        <meshStandardMaterial color={claddingTex ? '#ffffff' : color} map={claddingTex} side={THREE.FrontSide} />
+        <meshStandardMaterial key={claddingTex?.uuid ?? 'rim-e-no-tex'} color={claddingTex ? '#ffffff' : color} map={claddingTex ?? undefined} roughness={0.85} metalness={0.0} envMapIntensity={0} side={THREE.FrontSide} />
       </mesh>
       <mesh position={[-halfW, yMid, 0]} rotation={[0, Math.PI / 2, 0]}>
         <planeGeometry args={[l - inset * 2, rimHeight]} />
-        <meshStandardMaterial color={claddingTex ? '#ffffff' : color} map={claddingTex} side={THREE.FrontSide} />
+        <meshStandardMaterial key={claddingTex?.uuid ?? 'rim-w-no-tex'} color={claddingTex ? '#ffffff' : color} map={claddingTex ?? undefined} roughness={0.85} metalness={0.0} envMapIntensity={0} side={THREE.FrontSide} />
       </mesh>
     </group>
   );
@@ -3839,6 +3847,7 @@ function prepareTexture(t: THREE.Texture): THREE.Texture {
   t.wrapS = t.wrapT = THREE.RepeatWrapping;
   t.repeat.set(2, 2);
   t.colorSpace = THREE.SRGBColorSpace;
+  t.needsUpdate = true;
   return t;
 }
 
@@ -3882,9 +3891,16 @@ function useCladdingTexture(cladding: CladdingType): THREE.Texture | null {
     claddingTextureCache.get(cladding) ?? null
   );
 
+  /* tex state commit'inden SONRA sahneyi yeniden çiz.
+     setTex + invalidate() aynı anda çağrılınca R3F frame'i React commit'inden
+     önce ateşlenip eski material ile çizebiliyor; bu effect bu race'i önler. */
+  useEffect(() => {
+    invalidate();
+  }, [tex, invalidate]);
+
   useEffect(() => {
     const cached = claddingTextureCache.get(cladding);
-    if (cached) { setTex(cached); invalidate(); return; }
+    if (cached) { setTex(cached); return; }
 
     const isPath   = cladding.startsWith('/textures/');
     const isLegacy = /^texture\d$/.test(cladding);
@@ -3895,7 +3911,7 @@ function useCladdingTexture(cladding: CladdingType): THREE.Texture | null {
     if (isPath) {
       /* Paylaşımlı yükleyici: preloader zaten indiriyorsa aynı Promise'a bağlanır */
       loadCladdingUrl(cladding).then(t => {
-        if (!cancelled) { setTex(t); invalidate(); }
+        if (!cancelled) { setTex(t); }
       });
       return () => { cancelled = true; };
     }
@@ -3915,7 +3931,6 @@ function useCladdingTexture(cladding: CladdingType): THREE.Texture | null {
       if (!cancelled) {
         if (loaded) { prepareTexture(loaded); claddingTextureCache.set(cladding, loaded); setTex(loaded); }
         else { setTex(null); }
-        invalidate();
       }
     })();
 
