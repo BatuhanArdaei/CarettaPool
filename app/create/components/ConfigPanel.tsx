@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   POOL_SIDES,
   getPanelType,
@@ -520,6 +520,7 @@ function GroundStep({
 }
 
 const COLOR_PRESETS = ['white', 'blue_mosaic', 'gray_stone', 'turquoise'] as const;
+const MOBILE_INIT = 6; // İlk yüklenen texture sayısı (mobil)
 
 function FinishStep({
   config,
@@ -530,12 +531,20 @@ function FinishStep({
 }) {
   const { t } = useLanguage();
 
+  // Mobil: 6'dan başla, +1 ile yükle. Masaüstü: hepsini göster.
+  const [visible, setVisible] = useStateR(MOBILE_INIT);
+  useEffect(() => {
+    if (window.innerWidth >= 768) setVisible(CLADDING_TEXTURES.length);
+  }, []);
+
   const colorLabels: Record<string, string> = {
     white:       t('configurator.white_cladding'),
     blue_mosaic: t('configurator.blue_mosaic'),
     gray_stone:  t('configurator.gray_stone'),
     turquoise:   t('configurator.turquoise_cladding'),
   };
+
+  const remaining = CLADDING_TEXTURES.length - visible;
 
   return (
     <div className="space-y-2">
@@ -557,9 +566,9 @@ function FinishStep({
         ))}
       </div>
 
-      {/* Texture grid — 6 sütun, etiket yok */}
+      {/* Texture grid — 6 sütun, yalnızca visible kadar render edilir */}
       <div className="grid grid-cols-6 gap-1">
-        {CLADDING_TEXTURES.map((tex) => {
+        {CLADDING_TEXTURES.slice(0, visible).map((tex) => {
           const val = `/textures/${tex.file}`;
           const selected = config.cladding === val;
           return (
@@ -579,7 +588,7 @@ function FinishStep({
                 src={val}
                 alt={tex.name}
                 className="absolute inset-0 h-full w-full object-cover"
-                loading="lazy"
+                loading="eager"
                 decoding="async"
               />
               {selected && (
@@ -590,6 +599,18 @@ function FinishStep({
             </button>
           );
         })}
+
+        {/* +1 butonu — visible'dan sonraki hücreye otur */}
+        {remaining > 0 && (
+          <button
+            type="button"
+            onClick={() => setVisible((v) => Math.min(v + 1, CLADDING_TEXTURES.length))}
+            className="relative h-10 overflow-hidden rounded-md border-2 border-dashed border-slate-300 bg-slate-50 flex items-center justify-center text-slate-500 hover:border-slate-400 hover:bg-slate-100 transition text-xs font-semibold"
+            title={`${remaining} kaplama daha`}
+          >
+            +1
+          </button>
+        )}
       </div>
     </div>
   );
