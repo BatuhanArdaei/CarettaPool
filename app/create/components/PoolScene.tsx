@@ -1702,6 +1702,9 @@ function Pool({ config, isNight }: { config: PoolConfig; isNight: boolean }) {
       {/* Water volume — the body of water inside the pool, visible through glass */}
       {config.showWater && <WaterVolume w={w} l={l} waterY={waterY} />}
 
+      {/* Inner wall cladding strip visible above the waterline */}
+      <InnerRim w={w} l={l} waterY={waterY} top={top} color={inner} claddingTex={claddingTex} />
+
       {/* Side panels — one mesh per (side, segment) so each can be glass/closed */}
       <SidePanels
         halfW={halfW}
@@ -1844,12 +1847,12 @@ function Mullions({
   color: string;
   config: PoolConfig;
 }) {
-  const panelHeight = PANEL_H;
-  const yMid = BASIN_FLOOR + PANEL_H / 2;
+  const panelHeight = top - COPING_T - BASIN_FLOOR;
+  const yMid = BASIN_FLOOR + panelHeight / 2;
   const mullionT = 0.07;
   const mullionD = 0.09; // depth into the wall (slightly more than panel)
-  const innerW = halfW * 2 - FRAME_T * 2;
-  const innerL = halfL * 2 - FRAME_T * 2;
+  const innerW = halfW * 2 - FRAME_T;
+  const innerL = halfL * 2 - FRAME_T;
   const segsX = Math.max(1, Math.round(innerW / PANEL_W)); // north/south walls
   const segsZ = Math.max(1, Math.round(innerL / PANEL_W)); // east/west walls
 
@@ -1867,10 +1870,10 @@ function Mullions({
   const offsetsX: number[] = [];
   const offsetsZ: number[] = [];
   for (let i = 1; i < segsX; i++) {
-    offsetsX.push(-halfW + FRAME_T + (i / segsX) * innerW);
+    offsetsX.push(-halfW + FRAME_T / 2 + (i / segsX) * innerW);
   }
   for (let i = 1; i < segsZ; i++) {
-    offsetsZ.push(-halfL + FRAME_T + (i / segsZ) * innerL);
+    offsetsZ.push(-halfL + FRAME_T / 2 + (i / segsZ) * innerL);
   }
 
   return (
@@ -1916,7 +1919,7 @@ function Mullions({
 function SidePanels({
   halfW,
   halfL,
-  top: _top,
+  top,
   config,
   frame,
   claddingTex = null,
@@ -1929,10 +1932,10 @@ function SidePanels({
   claddingTex?: THREE.Texture | null;
 }) {
   const inner = claddingColor(config.cladding);
-  const panelHeight = PANEL_H;
-  const yMid = BASIN_FLOOR + PANEL_H / 2;
-  const innerW = halfW * 2 - FRAME_T * 2;
-  const innerL = halfL * 2 - FRAME_T * 2;
+  const panelHeight = top - COPING_T - BASIN_FLOOR;
+  const yMid = BASIN_FLOOR + panelHeight / 2;
+  const innerW = halfW * 2 - FRAME_T;
+  const innerL = halfL * 2 - FRAME_T;
   const segGap = 0.02;
 
   // axis === 'x' → wall spans X (north/south); axis === 'z' → wall spans Z (east/west)
@@ -1962,10 +1965,14 @@ function SidePanels({
 
         return Array.from({ length: segments }, (_, i) => {
           const type = getPanelType(config, side.name, i);
-          const center = -side.spanInner / 2 + segLen * (i + 0.5);
           const isGlass = type === 'glass';
 
-          const sizeAlong = segLen - segGap;
+          const isFirst = i === 0;
+          const isLast  = i === segments - 1;
+          const leftGap  = isFirst ? 0 : segGap / 2;
+          const rightGap = isLast  ? 0 : segGap / 2;
+          const sizeAlong = segLen - leftGap - rightGap;
+          const center = -side.spanInner / 2 + segLen * (i + 0.5) + (leftGap - rightGap) / 2;
           const args: [number, number, number] =
             side.axis === 'x'
               ? [sizeAlong, panelHeight, side.panelDepth]
