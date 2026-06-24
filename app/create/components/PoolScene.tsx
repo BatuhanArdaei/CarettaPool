@@ -1684,12 +1684,13 @@ function Pool({ config, isNight }: { config: PoolConfig; isNight: boolean }) {
         receiveShadow
       >
         <planeGeometry args={[w - PANEL_T * 2 - 0.02, l - PANEL_T * 2 - 0.02]} />
-        <meshStandardMaterial
-          key={claddingTex?.uuid ?? 'floor-no-tex'}
+        <CladdingMat
+          tex={claddingTex}
           color={inner}
-          map={claddingTex ?? undefined}
+          sw={w - PANEL_T * 2 - 0.02}
+          sh={l - PANEL_T * 2 - 0.02}
           roughness={0.85}
-          metalness={0.0}
+          metalness={0}
           envMapIntensity={0}
         />
       </mesh>
@@ -2025,10 +2026,11 @@ function SidePanels({
                   receiveShadow
                 >
                   <planeGeometry args={[sizeAlong, panelHeight]} />
-                  <meshStandardMaterial
-                    key={claddingTex?.uuid ?? 'panel-no-tex'}
-                    color={claddingTex ? '#ffffff' : inner}
-                    map={claddingTex ?? undefined}
+                  <CladdingMat
+                    tex={claddingTex}
+                    color={inner}
+                    sw={sizeAlong}
+                    sh={panelHeight}
                     roughness={0.8}
                     metalness={0.01}
                     side={THREE.DoubleSide}
@@ -2069,19 +2071,19 @@ function InnerRim({
     <group>
       <mesh position={[0, yMid, halfL]} rotation={[0, Math.PI, 0]}>
         <planeGeometry args={[w - inset * 2, rimHeight]} />
-        <meshStandardMaterial key={claddingTex?.uuid ?? 'rim-s-no-tex'} color={claddingTex ? '#ffffff' : color} map={claddingTex ?? undefined} roughness={0.85} metalness={0.0} envMapIntensity={0} side={THREE.FrontSide} />
+        <CladdingMat tex={claddingTex} color={color} sw={w - inset * 2} sh={rimHeight} roughness={0.85} metalness={0} envMapIntensity={0} side={THREE.FrontSide} />
       </mesh>
       <mesh position={[0, yMid, -halfL]}>
         <planeGeometry args={[w - inset * 2, rimHeight]} />
-        <meshStandardMaterial key={claddingTex?.uuid ?? 'rim-n-no-tex'} color={claddingTex ? '#ffffff' : color} map={claddingTex ?? undefined} roughness={0.85} metalness={0.0} envMapIntensity={0} side={THREE.FrontSide} />
+        <CladdingMat tex={claddingTex} color={color} sw={w - inset * 2} sh={rimHeight} roughness={0.85} metalness={0} envMapIntensity={0} side={THREE.FrontSide} />
       </mesh>
       <mesh position={[halfW, yMid, 0]} rotation={[0, -Math.PI / 2, 0]}>
         <planeGeometry args={[l - inset * 2, rimHeight]} />
-        <meshStandardMaterial key={claddingTex?.uuid ?? 'rim-e-no-tex'} color={claddingTex ? '#ffffff' : color} map={claddingTex ?? undefined} roughness={0.85} metalness={0.0} envMapIntensity={0} side={THREE.FrontSide} />
+        <CladdingMat tex={claddingTex} color={color} sw={l - inset * 2} sh={rimHeight} roughness={0.85} metalness={0} envMapIntensity={0} side={THREE.FrontSide} />
       </mesh>
       <mesh position={[-halfW, yMid, 0]} rotation={[0, Math.PI / 2, 0]}>
         <planeGeometry args={[l - inset * 2, rimHeight]} />
-        <meshStandardMaterial key={claddingTex?.uuid ?? 'rim-w-no-tex'} color={claddingTex ? '#ffffff' : color} map={claddingTex ?? undefined} roughness={0.85} metalness={0.0} envMapIntensity={0} side={THREE.FrontSide} />
+        <CladdingMat tex={claddingTex} color={color} sw={l - inset * 2} sh={rimHeight} roughness={0.85} metalness={0} envMapIntensity={0} side={THREE.FrontSide} />
       </mesh>
     </group>
   );
@@ -3843,12 +3845,61 @@ function claddingColor(c: CladdingType): string {
 const claddingTextureCache  = new Map<string, THREE.Texture>();
 const claddingLoadInFlight  = new Map<string, Promise<THREE.Texture | null>>();
 
+const CLADDING_TILE = 0.6; // 60 cm per tile repeat unit
+
 function prepareTexture(t: THREE.Texture): THREE.Texture {
   t.wrapS = t.wrapT = THREE.RepeatWrapping;
-  t.repeat.set(2, 2);
   t.colorSpace = THREE.SRGBColorSpace;
   t.needsUpdate = true;
   return t;
+}
+
+/* Yüzey boyutuna göre texture'ı klonlayıp doğru repeat'i set eden bileşen.
+   clone() aynı GPU texture'ı paylaşır — sadece JS Texture nesnesi yeni oluşur. */
+function CladdingMat({
+  tex,
+  color,
+  sw,
+  sh,
+  roughness = 0.85,
+  metalness = 0,
+  envMapIntensity = 0,
+  side,
+}: {
+  tex: THREE.Texture | null;
+  color: string;
+  sw: number; // yüzey genişliği (metre)
+  sh: number; // yüzey yüksekliği (metre)
+  roughness?: number;
+  metalness?: number;
+  envMapIntensity?: number;
+  side?: THREE.Side;
+}) {
+  const scaled = useMemo(() => {
+    if (!tex) return null;
+    const t = tex.clone();
+    t.wrapS = t.wrapT = THREE.RepeatWrapping;
+    t.repeat.set(
+      Math.max(1, Math.round(sw / CLADDING_TILE)),
+      Math.max(1, Math.round(sh / CLADDING_TILE)),
+    );
+    t.needsUpdate = true;
+    return t;
+  }, [tex, sw, sh]);
+
+  useEffect(() => () => { scaled?.dispose(); }, [scaled]);
+
+  return (
+    <meshStandardMaterial
+      key={scaled?.uuid ?? `no-tex-${sw}-${sh}`}
+      color={tex ? '#ffffff' : color}
+      map={scaled ?? undefined}
+      roughness={roughness}
+      metalness={metalness}
+      envMapIntensity={envMapIntensity}
+      side={side}
+    />
+  );
 }
 
 /* Tek bir yükleme fonksiyonu — hem preloader hem hook bunu kullanır.
@@ -3877,10 +3928,17 @@ function loadCladdingUrl(url: string): Promise<THREE.Texture | null> {
   return p;
 }
 
-/* Arka plan preloader — tüm texture'lar hemen ve paralel yüklenir.
-   Tarayıcı zaten ~6 eş zamanlı bağlantı yönetiyor; biz sıra bekletmiyoruz. */
+/* Arka plan preloader — max 3 eşzamanlı indirme, 2sn gecikmeyle başlar.
+   27 isteği aynı anda göndermek mobil tarayıcıları ve dev sunucuyu çökertebilir. */
 if (typeof window !== 'undefined') {
-  CLADDING_TEXTURE_URLS.forEach(url => loadCladdingUrl(url));
+  setTimeout(() => {
+    const queue = [...CLADDING_TEXTURE_URLS];
+    const CONCURRENT = typeof window !== 'undefined' && window.innerWidth < 768 ? 1 : 3;
+    const worker = async () => {
+      for (let url; (url = queue.shift());) await loadCladdingUrl(url);
+    };
+    Array.from({ length: CONCURRENT }, worker);
+  }, 2000);
 }
 
 function useCladdingTexture(cladding: CladdingType): THREE.Texture | null {

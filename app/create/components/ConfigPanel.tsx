@@ -490,7 +490,6 @@ function LightingStep({
 }
 
 
-const PAGE = 5;
 
 function GroundStep({
   config,
@@ -520,6 +519,8 @@ function GroundStep({
   );
 }
 
+const COLOR_PRESETS = ['white', 'blue_mosaic', 'gray_stone', 'turquoise'] as const;
+
 function FinishStep({
   config,
   set,
@@ -528,71 +529,67 @@ function FinishStep({
   set: <K extends keyof PoolConfig>(key: K, value: PoolConfig[K]) => void;
 }) {
   const { t } = useLanguage();
-  const [visible, setVisible] = useStateR(PAGE);
+
+  const colorLabels: Record<string, string> = {
+    white:       t('configurator.white_cladding'),
+    blue_mosaic: t('configurator.blue_mosaic'),
+    gray_stone:  t('configurator.gray_stone'),
+    turquoise:   t('configurator.turquoise_cladding'),
+  };
 
   return (
-    <div className="space-y-5">
-      <div>
-        <p className="label">{t('configurator.cladding_label')}</p>
-        <div className="mb-2">
-          <SelectGrid
-            options={[
-              { value: 'white',       label: t('configurator.white_cladding') },
-              { value: 'blue_mosaic', label: t('configurator.blue_mosaic') },
-              { value: 'gray_stone',  label: t('configurator.gray_stone') },
-              { value: 'turquoise',   label: t('configurator.turquoise_cladding') },
-            ]}
-            value={['white','blue_mosaic','gray_stone','turquoise'].includes(config.cladding) ? config.cladding : ''}
-            onChange={(v) => set('cladding', v as CladdingType)}
-          />
-        </div>
-
-        <div className="grid grid-cols-5 gap-1.5">
-          {CLADDING_TEXTURES.slice(0, visible).map((tex) => {
-            const val = `/textures/${tex.file}`;
-            const selected = config.cladding === val;
-            return (
-              <button
-                key={tex.file}
-                type="button"
-                onClick={() => set('cladding', val as CladdingType)}
-                title={tex.name}
-                className={`relative h-16 overflow-hidden rounded-lg border-2 transition-all ${
-                  selected
-                    ? 'border-cyan-400 ring-2 ring-cyan-200'
-                    : 'border-slate-200 hover:border-slate-400'
-                }`}
-              >
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={val}
-                  alt={tex.name}
-                  className="absolute inset-0 h-full w-full object-cover"
-                  loading="lazy"
-                  decoding="async"
-                />
-                {selected && (
-                  <span className="absolute inset-0 flex items-center justify-center bg-cyan-500/25">
-                    <span className="text-xl text-white drop-shadow">✓</span>
-                  </span>
-                )}
-                <span className="absolute bottom-0 left-0 right-0 truncate bg-black/60 px-0.5 py-0.5 text-center text-[9px] font-medium text-white">
-                  {tex.name}
-                </span>
-              </button>
-            );
-          })}
-        </div>
-
-        {visible < CLADDING_TEXTURES.length && (
+    <div className="space-y-2">
+      {/* Renk seçenekleri — tek satır */}
+      <div className="grid grid-cols-4 gap-1.5">
+        {COLOR_PRESETS.map((v) => (
           <button
+            key={v}
             type="button"
-            onClick={() => setVisible((v) => v + PAGE)}
-            className="mt-2 w-full rounded-lg border border-slate-200 py-1.5 text-xs font-medium text-slate-600 hover:border-slate-400 hover:text-slate-800 transition"
+            onClick={() => set('cladding', v as CladdingType)}
+            className={`rounded-lg border px-1 py-2 text-xs min-h-[36px] transition truncate ${
+              config.cladding === v
+                ? 'border-brand-600 bg-brand-50 font-medium text-brand-700'
+                : 'border-slate-200 text-slate-600 hover:bg-slate-50'
+            }`}
           >
-            {t('configurator.more_cladding').replace('{n}', String(CLADDING_TEXTURES.length - visible))}
+            {colorLabels[v]}
           </button>
-        )}
+        ))}
+      </div>
+
+      {/* Texture grid — 6 sütun, etiket yok */}
+      <div className="grid grid-cols-6 gap-1">
+        {CLADDING_TEXTURES.map((tex) => {
+          const val = `/textures/${tex.file}`;
+          const selected = config.cladding === val;
+          return (
+            <button
+              key={tex.file}
+              type="button"
+              onClick={() => set('cladding', val as CladdingType)}
+              title={tex.name}
+              className={`relative h-10 overflow-hidden rounded-md border-2 transition-all ${
+                selected
+                  ? 'border-cyan-400 ring-1 ring-cyan-200'
+                  : 'border-slate-200 hover:border-slate-400'
+              }`}
+            >
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={val}
+                alt={tex.name}
+                className="absolute inset-0 h-full w-full object-cover"
+                loading="lazy"
+                decoding="async"
+              />
+              {selected && (
+                <span className="absolute inset-0 flex items-center justify-center bg-cyan-500/30">
+                  <span className="text-sm text-white drop-shadow">✓</span>
+                </span>
+              )}
+            </button>
+          );
+        })}
       </div>
     </div>
   );
