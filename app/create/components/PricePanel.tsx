@@ -115,6 +115,7 @@ export default function PricePanel({
           {breakdown.panel > 0 && <PriceLine label="Cam paneller" value={breakdown.panel} />}
           <PriceLine label="Yan platform" value={breakdown.platform} />
           {breakdown.ground > 0 && <PriceLine label="Zemin altı" value={breakdown.ground} />}
+          {breakdown.installation > 0 && <PriceLine label="Gömülü kurulum" value={breakdown.installation} />}
           {breakdown.cladding > 0 && <PriceLine label="İç kaplama" value={breakdown.cladding} />}
           {breakdown.lighting > 0 && <PriceLine label="Işıklandırma" value={breakdown.lighting} />}
           {breakdown.waterfall > 0 && <PriceLine label="Şelale" value={breakdown.waterfall} />}

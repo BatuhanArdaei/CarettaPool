@@ -22,7 +22,8 @@ import {
   type PoolSide,
   type PlatformDirection,
 } from '@/lib/types';
-import { CLADDING_TEXTURE_URLS } from '@/lib/claddingTextures';
+import { CLADDING_TEXTURE_URLS, claddingSceneUrl, claddingTileSize } from '@/lib/claddingTextures';
+import { Beam, GlassMaterial, PowderCoatMaterial, WoodMaterial, getTileMaps, groundAntiTile, groundAntiTileKey } from './materials';
 
 const POOL_HEIGHT = 1.5;
 const COPING_T = 0.10;
@@ -33,6 +34,73 @@ const FRAME_T = 0.10;
 const PANEL_T = 0.04;
 const BASIN_FLOOR = 0.06;
 const PLATFORM_DEPTH = 2.0;
+
+/**
+ * 3D Stüdyo ortamı:
+ * - 'studio': sade ürün stüdyosu (sonsuz fon + havuz çevresinde seçilen zemin)
+ * - 'garden': prosedürel bahçe (çim, ağaçlar, villa, çit)
+ */
+const SCENE_STYLE = 'studio' as 'studio' | 'garden';
+const STUDIO_BG = '#e3e7eb';
+const PLINTH_H = 0.08; // stüdyoda zemin örneğinin kaide kalınlığı
+
+/** Kurulum tipine göre havuzun zemin altına indiği derinlik (metre). */
+export function sinkDepth(config: Pick<PoolConfig, 'installation'>): number {
+  if (config.installation === 'partial') return POOL_HEIGHT / 2;
+  if (config.installation === 'sunken') return POOL_HEIGHT - COPING_T; // kenar ahşabı zemine oturur
+  return 0;
+}
+
+export interface FootprintRect { minX: number; maxX: number; minZ: number; maxZ: number }
+
+/** Havuz gövdesi + makine dairesinin zemindeki izdüşümü (havuz yerel koordinatları). */
+export function poolFootprint(config: PoolConfig): FootprintRect {
+  const halfW = config.width / 2;
+  const halfL = config.length / 2;
+  const cabinet = COPING_W - FRAME_T + PLATFORM_DEPTH * 0.6;
+  const r = { minX: -halfW, maxX: halfW, minZ: -halfL, maxZ: halfL };
+  if (config.platformDirection === 'east') r.maxX += cabinet;
+  else if (config.platformDirection === 'west') r.minX -= cabinet;
+  else if (config.platformDirection === 'north') r.minZ -= cabinet;
+  else r.maxZ += cabinet;
+  return r;
+}
+
+/**
+ * Düz zemin geometrisi (XZ düzlemi, normal +Y); gömülü havuz için dikdörtgen delikli.
+ * UV'ler planeGeometry ile aynı (0–1) tutulur, böylece zemin texture tekrarları değişmez.
+ */
+export function groundGeometry(sizeX: number, sizeZ: number, hole: FootprintRect | null): THREE.BufferGeometry {
+  if (!hole) return new THREE.PlaneGeometry(sizeX, sizeZ).rotateX(-Math.PI / 2);
+  const hx = sizeX / 2;
+  const hz = sizeZ / 2;
+  const shape = new THREE.Shape().moveTo(-hx, -hz).lineTo(hx, -hz).lineTo(hx, hz).lineTo(-hx, hz).closePath();
+  // Shape düzlemindeki y ekseni, yatırıldıktan sonra -z olur
+  shape.holes.push(
+    new THREE.Path()
+      .moveTo(hole.minX, -hole.maxZ)
+      .lineTo(hole.minX, -hole.minZ)
+      .lineTo(hole.maxX, -hole.minZ)
+      .lineTo(hole.maxX, -hole.maxZ)
+      .closePath(),
+  );
+  const g = new THREE.ShapeGeometry(shape);
+  const pos = g.attributes.position;
+  const uv = g.attributes.uv;
+  for (let i = 0; i < pos.count; i++) {
+    uv.setXY(i, (pos.getX(i) + hx) / sizeX, (pos.getY(i) + hz) / sizeZ);
+  }
+  return g.rotateX(-Math.PI / 2);
+}
+
+/** Delik ölçüsü değişmedikçe aynı zemin geometrisini kullanır. */
+function useGroundGeometry(sizeX: number, sizeZ: number, hole: FootprintRect | null | undefined) {
+  const key = hole ? [hole.minX, hole.maxX, hole.minZ, hole.maxZ].join(',') : '';
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const geometry = useMemo(() => groundGeometry(sizeX, sizeZ, hole ?? null), [sizeX, sizeZ, key]);
+  useEffect(() => () => geometry.dispose(), [geometry]);
+  return geometry;
+}
 
 // ─── Mobile detection hook ───────────────────────────────────────────────────
 function useIsMobile() {
@@ -47,22 +115,43 @@ function useIsMobile() {
   return isMobile;
 }
 
-// ─── Camera preset definitions ───────────────────────────────────────────────
-const CAM_PRESETS = {
-  front: { pos: new THREE.Vector3(0, 3, 14),  target: new THREE.Vector3(0, 1, 0) },
-  top:   { pos: new THREE.Vector3(0, 22, 2),  target: new THREE.Vector3(0, 0, 0) },
-  close: { pos: new THREE.Vector3(7, 5, 7),   target: new THREE.Vector3(0, 1, 0) },
-} as const;
-type CamPreset = keyof typeof CAM_PRESETS;
+// ─── Camera presets (computed per pool size in useCameraFraming) ────────────
+type CamPreset = 'front' | 'top' | 'close';
+
+type CamView = { pos: THREE.Vector3; target: THREE.Vector3 };
+
+/** Kamera ön ayarları ve boşta dönüş yörüngesi — havuzun ölçüsüne göre yakın kadraj. */
+function useCameraFraming(config: PoolConfig) {
+  return useMemo(() => {
+    const fp = poolFootprint(config);
+    const sink = sinkDepth(config);
+    // Dış merdiven ve çevre için pay
+    const sx = fp.maxX - fp.minX + 1.4;
+    const sz = fp.maxZ - fp.minZ + 1.4;
+    const d = Math.max(sx, sz) * 0.9 + 2.4;
+    const ty = Math.max(0.3, (POOL_HEIGHT - sink) * 0.55);
+    const c = new THREE.Vector3((fp.minX + fp.maxX) / 2, ty, (fp.minZ + fp.maxZ) / 2);
+    const front = sx >= sz ? new THREE.Vector3(0, d * 0.3, d) : new THREE.Vector3(d, d * 0.3, 0);
+    const presets: Record<CamPreset, CamView> = {
+      front: { pos: c.clone().add(front), target: c },
+      top:   { pos: c.clone().add(new THREE.Vector3(0, d * 1.45, 0.01)), target: c },
+      close: { pos: c.clone().add(new THREE.Vector3(d * 0.6, d * 0.42, d * 0.6)), target: c },
+    };
+    return { presets, orbit: { radius: d * 0.95, height: ty + d * 0.4, target: c }, maxDistance: d * 2.2 };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [config.width, config.length, config.platformDirection, config.installation]);
+}
 
 interface CameraRigProps {
   preset: CamPreset | null;
   onTransitionEnd: () => void;
   orbitControlsRef: React.MutableRefObject<any>;
   isMobile: boolean;
+  presets: Record<CamPreset, CamView>;
+  orbit: { radius: number; height: number; target: THREE.Vector3 };
 }
 
-function CameraRig({ preset, onTransitionEnd, orbitControlsRef, isMobile }: CameraRigProps) {
+function CameraRig({ preset, onTransitionEnd, orbitControlsRef, isMobile, presets, orbit }: CameraRigProps) {
   const { camera, invalidate } = useThree();
   const targetPos  = useRef(new THREE.Vector3());
   const targetLook = useRef(new THREE.Vector3());
@@ -70,8 +159,6 @@ function CameraRig({ preset, onTransitionEnd, orbitControlsRef, isMobile }: Came
   const idleTimer  = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isIdle     = useRef(false);
   const orbitAngle = useRef(0);
-  const ORBIT_R    = 16;
-  const ORBIT_Y    = 6;
   const idleMs     = useRef(isMobile ? 5000 : 3000);
   useEffect(() => { idleMs.current = isMobile ? 5000 : 3000; }, [isMobile]);
 
@@ -97,16 +184,16 @@ function CameraRig({ preset, onTransitionEnd, orbitControlsRef, isMobile }: Came
     };
   }, [invalidate]);
 
-  // When preset changes, kick off smooth transition
+  // When preset (or the pool size behind it) changes, kick off smooth transition
   useEffect(() => {
     if (!preset) return;
-    const p = CAM_PRESETS[preset];
+    const p = presets[preset];
     targetPos.current.copy(p.pos);
     targetLook.current.copy(p.target);
     animating.current = true;
     // Disable OrbitControls during transition
     if (orbitControlsRef.current) orbitControlsRef.current.enabled = false;
-  }, [preset, orbitControlsRef]);
+  }, [preset, presets, orbitControlsRef]);
 
   useFrame(() => {
     // ── Smooth preset transition ──────────────────────────────────────────
@@ -138,12 +225,12 @@ function CameraRig({ preset, onTransitionEnd, orbitControlsRef, isMobile }: Came
     // ── Auto-orbit when idle ──────────────────────────────────────────────
     if (isIdle.current && !animating.current) {
       orbitAngle.current += 0.003;
-      const x = Math.sin(orbitAngle.current) * ORBIT_R;
-      const z = Math.cos(orbitAngle.current) * ORBIT_R;
-      camera.position.set(x, ORBIT_Y, z);
-      camera.lookAt(0, 1, 0);
+      const x = orbit.target.x + Math.sin(orbitAngle.current) * orbit.radius;
+      const z = orbit.target.z + Math.cos(orbitAngle.current) * orbit.radius;
+      camera.position.set(x, orbit.height, z);
+      camera.lookAt(orbit.target);
       if (orbitControlsRef.current) {
-        orbitControlsRef.current.target.set(0, 1, 0);
+        orbitControlsRef.current.target.copy(orbit.target);
         orbitControlsRef.current.update();
       }
       invalidate();
@@ -247,13 +334,15 @@ export default function PoolScene({
 }) {
   const isNight = config.lighting.enabled;
   const isMobile = useIsMobile();
-  const [activePreset, setActivePreset] = useState<CamPreset | null>(null);
+  const [activePreset, setActivePreset] = useState<CamPreset | null>('close');
+  const framing = useCameraFraming(config);
   const internalControlsRef = useRef<any>(null);
   const orbitRef = (controlsRef ?? internalControlsRef) as React.MutableRefObject<any>;
 
   const handlePreset = useCallback((p: CamPreset) => { setActivePreset(p); }, []);
   const handleTransitionEnd = useCallback(() => { /* preset stays highlighted */ }, []);
   const shadowMapSize = isMobile ? 1024 : 4096;
+  const gardenHole = sinkDepth(config) > 0 ? poolFootprint(config) : null;
 
   return (
     <div style={{ position: 'relative', width: '100%', height: '100%' }}>
@@ -263,11 +352,12 @@ export default function PoolScene({
       shadows
       camera={{ position: [12, 7.5, 20], fov: 50 }}
       dpr={isMobile ? [1, 1] : [1, 1.5]}
-      gl={{ antialias: false, powerPreference: 'high-performance' }}
+      gl={{ antialias: false, powerPreference: 'high-performance', preserveDrawingBuffer: true }}
       onCreated={({ gl }) => {
         gl.shadowMap.type = THREE.PCFSoftShadowMap;
-        gl.toneMapping = THREE.ACESFilmicToneMapping;
-        gl.toneMappingExposure = 1.08;
+        // PBR Neutral: ürün renklerini (RAL) bozmadan fotoğrafik ton eşleme
+        gl.toneMapping = THREE.NeutralToneMapping;
+        gl.toneMappingExposure = 1;
       }}
     >
       <Suspense fallback={null}>
@@ -309,8 +399,12 @@ export default function PoolScene({
           </>
         ) : (
           <>
-            <Sky sunPosition={[5, 10, 5]} turbidity={1.5} rayleigh={0.8} />
-            <ambientLight color="#87CEEB" intensity={0.4} />
+            {SCENE_STYLE === 'garden' ? (
+              <Sky sunPosition={[5, 10, 5]} turbidity={1.5} rayleigh={0.8} />
+            ) : (
+              <color attach="background" args={[STUDIO_BG]} />
+            )}
+            <ambientLight color="#87CEEB" intensity={0.12} />
             {/* Sun directional light — clear afternoon sun */}
             <directionalLight
               position={[8, 12, 6]}
@@ -328,6 +422,7 @@ export default function PoolScene({
               shadow-camera-bottom={-28}
             />
             {/* Visible sun disk in the sky */}
+            {SCENE_STYLE === 'garden' && (<>
             <mesh position={[50, 100, 50]}>
               <sphereGeometry args={[7, 24, 24]} />
               <meshBasicMaterial color="#fff8d6" toneMapped={false} />
@@ -343,22 +438,29 @@ export default function PoolScene({
                 depthWrite={false}
               />
             </mesh>
+            </>)}
           </>
         )}
         {/* Environment IBL — real HDR for daytime, night preset for night mode */}
         {isNight ? (
-          <Environment preset="night" background={false} />
+          <Environment files="/hdr/dikhololo_night_1k.hdr" background={false} />
         ) : (
           <Environment
-            files="https://dl.polyhaven.org/file/ph-assets/HDRIs/hdr/1k/outdoor_umbrellas_1k.hdr"
+            files="/hdr/outdoor_umbrellas_1k.hdr"
             background={false}
           />
         )}
-        <Garden isNight={isNight} />
-        <Trees isNight={isNight} isMobile={isMobile} />
-        <VillaSlot isNight={isNight} />
-        <Fence isNight={isNight} />
-        <Pool config={config} isNight={isNight} />
+        {SCENE_STYLE === 'garden' ? (
+          <>
+            <Garden isNight={isNight} hole={gardenHole} />
+            <Trees isNight={isNight} isMobile={isMobile} />
+            <VillaSlot isNight={isNight} />
+            <Fence isNight={isNight} />
+          </>
+        ) : (
+          <StudioFloor isNight={isNight} hole={gardenHole} />
+        )}
+        <Pool config={config} isNight={isNight} groundPatch={SCENE_STYLE === 'studio' ? 'plinth' : 'auto'} />
         <OrbitControls
           ref={orbitRef}
           enablePan
@@ -366,16 +468,18 @@ export default function PoolScene({
           enableRotate
           enableDamping
           dampingFactor={0.05}
-          minDistance={4}
-          maxDistance={28}
+          minDistance={2.5}
+          maxDistance={framing.maxDistance}
           maxPolarAngle={Math.PI / 2.05}
-          target={[0, POOL_HEIGHT / 2, 0]}
+          target={framing.orbit.target}
         />
         <CameraRig
           preset={activePreset}
           onTransitionEnd={handleTransitionEnd}
           orbitControlsRef={orbitRef}
           isMobile={isMobile}
+          presets={framing.presets}
+          orbit={framing.orbit}
         />
         {/* Enable shadows on ALL scene objects automatically */}
         <EnableAllShadows config={config} />
@@ -386,7 +490,7 @@ export default function PoolScene({
 
         {/* Post-processing — disabled on mobile for performance */}
         {!isMobile && (
-          <EffectComposer multisampling={0}>
+          <EffectComposer multisampling={0} enableNormalPass>
             <SSAO
               blendFunction={BlendFunction.MULTIPLY}
               samples={16}
@@ -540,83 +644,124 @@ function buildGroundTex(type: GroundType, isNight: boolean): THREE.CanvasTexture
   return tex;
 }
 
-/** Maps ground type → diffuse texture */
+/** Zemin dokuları (yerel) ve gerçek boyutları — tekrar sayısı yüzey boyutundan hesaplanır. */
 const GROUND_IMG: Record<GroundType, string> = {
   gravel:   '/textures/graveltexture.jpg',
-  wood:     '/textures/wooddecktexture.jpg',
-  grass:    'https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/grass_path_2/grass_path_2_diff_1k.jpg',
+  wood:     '/textures/pbr/wood_deck/diff.webp', // kenar/platform ile aynı ahşap
+  grass:    '/textures/pbr/grass/diff.webp',
   concrete: '/textures/concretetexture.jpg',
 };
 
 /** Normal map URLs for ground types that have them */
 const GROUND_NORMAL_IMG: Partial<Record<GroundType, string>> = {
-  grass: 'https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/grass_path_2/grass_path_2_nor_gl_1k.jpg',
+  grass: '/textures/pbr/grass/nor_gl.webp',
+  wood:  '/textures/pbr/wood_deck/nor_gl.webp',
 };
 
-function useGroundTex(type: GroundType, isNight: boolean): THREE.Texture {
-  // useMemo → synchronous, always correct type, never stale from previous selection
+/** Bir doku tekrarının gerçek dünyadaki boyutu (metre) */
+const GROUND_TILE_M: Record<GroundType, number> = { grass: 1, wood: 1.8, gravel: 1.2, concrete: 3 };
+
+/* İndirilen zemin dokuları bir kez yüklenir; her kullanım yalnızca klonlanır (GPU belleği paylaşılır). */
+const groundTexCache = new Map<string, THREE.Texture>();
+const groundTexLoading = new Map<string, Promise<THREE.Texture>>();
+
+function loadGroundTexture(url: string, srgb: boolean): Promise<THREE.Texture> {
+  const hit = groundTexCache.get(url);
+  if (hit) return Promise.resolve(hit);
+  let p = groundTexLoading.get(url);
+  if (!p) {
+    p = new THREE.TextureLoader().loadAsync(url).then((t) => {
+      t.wrapS = t.wrapT = THREE.RepeatWrapping;
+      t.anisotropy = 8;
+      t.colorSpace = srgb ? THREE.SRGBColorSpace : THREE.NoColorSpace;
+      groundTexCache.set(url, t);
+      groundTexLoading.delete(url);
+      return t;
+    });
+    groundTexLoading.set(url, p);
+  }
+  return p;
+}
+
+/** Yüklenen dokunun, verilen yüzey boyutuna göre ölçeklenmiş klonu. */
+function useScaledGroundTexture(
+  url: string | undefined,
+  srgb: boolean,
+  type: GroundType,
+  sizeX: number,
+  sizeZ: number,
+): THREE.Texture | null {
+  const invalidate = useThree((s) => s.invalidate);
+  const [base, setBase] = useState<THREE.Texture | null>(() => (url ? groundTexCache.get(url) ?? null : null));
+
+  useEffect(() => {
+    if (!url) { setBase(null); return; }
+    const hit = groundTexCache.get(url);
+    if (hit) { setBase(hit); return; }
+    let active = true;
+    loadGroundTexture(url, srgb).then((t) => { if (active) setBase(t); });
+    return () => { active = false; };
+  }, [url, srgb]);
+
+  const scaled = useMemo(() => {
+    if (!base) return null;
+    const t = base.clone();
+    t.repeat.set(sizeX / GROUND_TILE_M[type], sizeZ / GROUND_TILE_M[type]);
+    t.needsUpdate = true;
+    return t;
+  }, [base, type, sizeX, sizeZ]);
+
+  useEffect(() => { invalidate(); return () => scaled?.dispose(); }, [scaled, invalidate]);
+  return scaled;
+}
+
+function useGroundTex(type: GroundType, isNight: boolean, sizeX: number, sizeZ: number): THREE.Texture {
+  // Fotoğraf dokusu ilk kez inerken gösterilen prosedürel yedek
   const canvasTex = useMemo(() => {
     if (typeof document === 'undefined') return new THREE.Texture();
     const ct = buildGroundTex(type, isNight);
     ct.wrapS = ct.wrapT = THREE.RepeatWrapping;
-    ct.repeat.set(36, 36); // ~3.3 m per tile across 120 m ground
+    ct.colorSpace = THREE.SRGBColorSpace;
+    ct.repeat.set(sizeX / 3.3, sizeZ / 3.3);
     return ct;
-  }, [type, isNight]);
+  }, [type, isNight, sizeX, sizeZ]);
+  useEffect(() => () => canvasTex.dispose(), [canvasTex]);
 
-  // Load real photo texture — repeat tuned per material
-  const REPEAT: Record<GroundType, number> = { grass: 20, wood: 12, gravel: 18, concrete: 10 };
-  const invalidate = useThree((s) => s.invalidate);
-  const [photoTex, setPhotoTex] = useState<THREE.Texture | null>(null);
-  useEffect(() => {
-    setPhotoTex(null);
-    let active = true;
-    new THREE.TextureLoader().load(GROUND_IMG[type], (t) => {
-      if (!active) return;
-      t.wrapS = t.wrapT = THREE.RepeatWrapping;
-      const r = REPEAT[type];
-      t.repeat.set(r, r);
-      t.anisotropy = 8;
-      setPhotoTex(t);
-      invalidate();
-    });
-    return () => { active = false; };
-  }, [type, invalidate]);
-
+  const photoTex = useScaledGroundTexture(GROUND_IMG[type], true, type, sizeX, sizeZ);
   return photoTex ?? canvasTex;
 }
 
-function useGroundNormalTex(type: GroundType): THREE.Texture | null {
-  const invalidate = useThree((s) => s.invalidate);
-  const [normalTex, setNormalTex] = useState<THREE.Texture | null>(null);
-  useEffect(() => {
-    const url = GROUND_NORMAL_IMG[type];
-    if (!url) { setNormalTex(null); return; }
-    let active = true;
-    new THREE.TextureLoader().load(url, (t) => {
-      if (!active) return;
-      t.wrapS = t.wrapT = THREE.RepeatWrapping;
-      t.repeat.set(20, 20);
-      t.anisotropy = 8;
-      setNormalTex(t);
-      invalidate();
-    });
-    return () => { active = false; };
-  }, [type, invalidate]);
-  return normalTex;
+function useGroundNormalTex(type: GroundType, sizeX: number, sizeZ: number): THREE.Texture | null {
+  return useScaledGroundTexture(GROUND_NORMAL_IMG[type], false, type, sizeX, sizeZ);
 }
 
-function Garden({ isNight }: { isNight: boolean }) {
-  // Garden is always grass — ground selection only affects pool interior cladding
-  const tex = useGroundTex('grass', isNight);
-  const normalTex = useGroundNormalTex('grass');
+/**
+ * Sonsuz stüdyo fonu: zemin görünmezdir, yalnızca gölgeleri gösterir.
+ * Arka plan düz renk olduğu için ufuk çizgisi oluşmaz (ürün stüdyosu).
+ */
+function StudioFloor({ isNight, hole }: { isNight: boolean; hole?: FootprintRect | null }) {
+  const geometry = useGroundGeometry(200, 200, hole);
   return (
-    <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, 0]} receiveShadow>
-      <planeGeometry args={[120, 120]} />
+    <mesh geometry={geometry} position={[0, -PLINTH_H, 0]} receiveShadow>
+      <shadowMaterial opacity={isNight ? 0.5 : 0.22} />
+    </mesh>
+  );
+}
+
+function Garden({ isNight, hole }: { isNight: boolean; hole?: FootprintRect | null }) {
+  // Garden is always grass — ground selection only affects pool interior cladding
+  const tex = useGroundTex('grass', isNight, 120, 120);
+  const normalTex = useGroundNormalTex('grass', 120, 120);
+  const geometry = useGroundGeometry(120, 120, hole);
+  return (
+    <mesh geometry={geometry} receiveShadow>
       <meshStandardMaterial
         key={tex.uuid}
         map={tex}
         normalMap={normalTex ?? undefined}
         normalScale={normalTex ? new THREE.Vector2(0.8, 0.8) : new THREE.Vector2(1, 1)}
+          onBeforeCompile={groundAntiTile}
+          customProgramCacheKey={groundAntiTileKey}
         color="#c8e888"
         roughness={0.92}
         metalness={0}
@@ -626,33 +771,58 @@ function Garden({ isNight }: { isNight: boolean }) {
   );
 }
 
-function PoolDeck({ w, l, ground, isNight }: { w: number; l: number; ground: GroundType; isNight: boolean }) {
-  const MARGIN = 2.5;
-  const deckW = w + MARGIN * 2;
-  const deckL = l + MARGIN * 2;
+function PoolDeck({
+  footprint,
+  ground,
+  isNight,
+  hole,
+  soft = false,
+  margin = 2.5,
+}: {
+  /** Havuz + makine dairesi izdüşümü; döşeme bunun her yanına `margin` kadar taşar */
+  footprint: FootprintRect;
+  ground: GroundType;
+  isNight: boolean;
+  hole?: FootprintRect | null;
+  /** Stüdyo ortamı: kenar profili yerine koyu renkli kaide (maket tabanı gibi) */
+  soft?: boolean;
+  /** Havuzun çevresindeki döşeme genişliği (metre) */
+  margin?: number;
+}) {
+  // Döşeme izdüşüme göre ortalanır: delik her zaman döşemenin içinde kalır
+  const deckW = footprint.maxX - footprint.minX + margin * 2;
+  const deckL = footprint.maxZ - footprint.minZ + margin * 2;
+  const cx = (footprint.minX + footprint.maxX) / 2;
+  const cz = (footprint.minZ + footprint.maxZ) / 2;
+  const localHole = useMemo(
+    () => (hole ? { minX: hole.minX - cx, maxX: hole.maxX - cx, minZ: hole.minZ - cz, maxZ: hole.maxZ - cz } : null),
+    [hole, cx, cz],
+  );
   const edgeH = 0.025; // 2.5 cm high kerb
   const edgeT = 0.04;  // 4 cm thick
-  const tex = useGroundTex(ground, isNight);
-  const normalTex = useGroundNormalTex(ground);
+  const tex = useGroundTex(ground, isNight, deckW, deckL);
+  const normalTex = useGroundNormalTex(ground, deckW, deckL);
 
   const matProps: Record<GroundType, { color: string; roughness: number; metalness: number }> = {
-    grass:    { color: '#c8e888', roughness: 0.92, metalness: 0 },
+    grass:    { color: '#b7cc92', roughness: 0.95, metalness: 0 },
     gravel:   { color: '#b8a898', roughness: 0.95, metalness: 0 },
     concrete: { color: '#d0ccc4', roughness: 0.80, metalness: 0.02 },
-    wood:     { color: '#c8a060', roughness: 0.75, metalness: 0 },
+    wood:     { color: '#ffffff', roughness: 0.75, metalness: 0 },
   };
   const mat = matProps[ground] ?? matProps.concrete;
+  const geometry = useGroundGeometry(deckW, deckL, localHole);
 
   return (
-    <group>
+    <group position={[cx, 0, cz]}>
       {/* Deck surface — material follows ground type selection */}
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.01, 0]} receiveShadow>
-        <planeGeometry args={[deckW, deckL]} />
+      <mesh geometry={geometry} position={[0, 0.01, 0]} receiveShadow>
         <meshStandardMaterial
           key={tex.uuid}
           map={tex}
           normalMap={normalTex ?? undefined}
           normalScale={normalTex ? new THREE.Vector2(0.8, 0.8) : new THREE.Vector2(1, 1)}
+          onBeforeCompile={groundAntiTile}
+          customProgramCacheKey={groundAntiTileKey}
           color={mat.color}
           roughness={mat.roughness}
           metalness={mat.metalness}
@@ -660,6 +830,7 @@ function PoolDeck({ w, l, ground, isNight }: { w: number; l: number; ground: Gro
         />
       </mesh>
       {/* Edge profiles — dark gray kerb separating deck from grass */}
+      {!soft && (<>
       <mesh position={[0, edgeH / 2, deckL / 2 + edgeT / 2]} castShadow receiveShadow>
         <boxGeometry args={[deckW + edgeT * 2, edgeH, edgeT]} />
         <meshStandardMaterial color="#3c3c3c" roughness={0.9} />
@@ -676,6 +847,18 @@ function PoolDeck({ w, l, ground, isNight }: { w: number; l: number; ground: Gro
         <boxGeometry args={[edgeT, edgeH, deckL]} />
         <meshStandardMaterial color="#3c3c3c" roughness={0.9} />
       </mesh>
+      </>)}
+      {/* Stüdyo kaidesi: zemin örneğinin koyu yan yüzleri (içi boş; gömülü havuz deliğini kapatmaz) */}
+      {soft && ([
+        { args: [deckW, PLINTH_H, 0.04], pos: [0, 0, deckL / 2 - 0.02] },
+        { args: [deckW, PLINTH_H, 0.04], pos: [0, 0, -deckL / 2 + 0.02] },
+        { args: [0.04, PLINTH_H, deckL], pos: [deckW / 2 - 0.02, 0, 0] },
+        { args: [0.04, PLINTH_H, deckL], pos: [-deckW / 2 + 0.02, 0, 0] },
+      ] as { args: [number, number, number]; pos: [number, number, number] }[]).map((side, i) => (
+        <Beam key={i} args={side.args} radius={0.008} position={[side.pos[0], -PLINTH_H / 2 + 0.008, side.pos[2]]} castShadow receiveShadow>
+          <PowderCoatMaterial color={isNight ? '#1b2029' : '#3d434a'} roughness={0.8} metalness={0.05} />
+        </Beam>
+      ))}
     </group>
   );
 }
@@ -1653,7 +1836,23 @@ function OuterCladding({
   );
 }
 
-function Pool({ config, isNight }: { config: PoolConfig; isNight: boolean }) {
+/**
+ * Seçilen zeminin havuz çevresinde gösterimi:
+ * - 'auto':   bahçe — çim zaten bahçenin kendisi; diğer zeminler bordürlü döşeme
+ * - 'kerb':   fotoğraf (Mekânda Gör) — her zemin bordürlü döşeme olarak
+ * - 'plinth': stüdyo — her zemin koyu kenarlı kaide olarak
+ */
+export type GroundPatchStyle = 'auto' | 'kerb' | 'plinth';
+
+export function Pool({
+  config,
+  isNight,
+  groundPatch = 'auto',
+}: {
+  config: PoolConfig;
+  isNight: boolean;
+  groundPatch?: GroundPatchStyle;
+}) {
   const w = config.width;
   const l = config.length;
   const halfW = w / 2;
@@ -1665,11 +1864,26 @@ function Pool({ config, isNight }: { config: PoolConfig; isNight: boolean }) {
   const frame = frameColorHex(config.frameColor);
   const inner = claddingColor(config.cladding);
   const claddingTex = useCladdingTexture(config.cladding);
+  const sink = sinkDepth(config);
+  const hole = sink > 0 ? poolFootprint(config) : null;
 
   return (
     <group>
       {/* Deck platform — çimen seçiliyken gizle, diğer zemin tiplerinde göster */}
-      {config.ground !== 'grass' && <PoolDeck w={w} l={l} ground={config.ground} isNight={isNight} />}
+      {(config.ground !== 'grass' || groundPatch !== 'auto') && (
+        <PoolDeck footprint={poolFootprint(config)} ground={config.ground} isNight={isNight} hole={hole} soft={groundPatch === 'plinth'} margin={groundPatch === 'kerb' ? 1.2 : 2.5} />
+      )}
+
+      {/* Kazı çukurunun toprak duvarları — yalnızca içeriden (camın arkasından) görünür */}
+      {hole && (
+        <mesh position={[(hole.minX + hole.maxX) / 2, -sink / 2, (hole.minZ + hole.maxZ) / 2]}>
+          <boxGeometry args={[hole.maxX - hole.minX + 0.04, sink, hole.maxZ - hole.minZ + 0.04]} />
+          <meshStandardMaterial color={isNight ? '#2a2119' : '#5a4632'} roughness={1} side={THREE.BackSide} />
+        </mesh>
+      )}
+
+      {/* Havuz gövdesi — gömülü kurulumda zemin altına iner */}
+      <group position={[0, -sink, 0]}>
 
       {/* Bottom slab (closed pool floor) */}
       <mesh position={[0, BASIN_FLOOR / 2, 0]} receiveShadow castShadow>
@@ -1807,7 +2021,10 @@ function Pool({ config, isNight }: { config: PoolConfig; isNight: boolean }) {
         showStairs
         showRailings={config.railings}
         extended={config.platformExtension}
+        groundY={sink}
+        blockStairs={config.stairStyle === 'block'}
       />
+      </group>
     </group>
   );
 }
@@ -1833,10 +2050,9 @@ function CornerPosts({
   return (
     <group>
       {corners.map(([x, z], i) => (
-        <mesh key={i} position={[x, postH / 2, z]} castShadow>
-          <boxGeometry args={[FRAME_T, postH, FRAME_T]} />
-          <meshStandardMaterial color={color} metalness={0.4} roughness={0.45} />
-        </mesh>
+        <Beam args={[FRAME_T, postH, FRAME_T]} key={i} position={[x, postH / 2, z]} castShadow>
+          <PowderCoatMaterial color={color} />
+        </Beam>
       ))}
     </group>
   );
@@ -1890,16 +2106,14 @@ function Mullions({
       {offsetsX.map((x, i) => (
         <group key={`x${i}`}>
           {southHasGlass && (
-            <mesh position={[x, yMid, halfL - mullionD / 2]} castShadow>
-              <boxGeometry args={[mullionT, panelHeight, mullionD]} />
-              <meshStandardMaterial color={color} metalness={0.4} roughness={0.45} />
-            </mesh>
+            <Beam args={[mullionT, panelHeight, mullionD]} position={[x, yMid, halfL - mullionD / 2]} castShadow>
+              <PowderCoatMaterial color={color} />
+            </Beam>
           )}
           {northHasGlass && (
-            <mesh position={[x, yMid, -halfL + mullionD / 2]} castShadow>
-              <boxGeometry args={[mullionT, panelHeight, mullionD]} />
-              <meshStandardMaterial color={color} metalness={0.4} roughness={0.45} />
-            </mesh>
+            <Beam args={[mullionT, panelHeight, mullionD]} position={[x, yMid, -halfL + mullionD / 2]} castShadow>
+              <PowderCoatMaterial color={color} />
+            </Beam>
           )}
         </group>
       ))}
@@ -1907,16 +2121,14 @@ function Mullions({
       {offsetsZ.map((z, i) => (
         <group key={`z${i}`}>
           {eastHasGlass && (
-            <mesh position={[halfW - mullionD / 2, yMid, z]} castShadow>
-              <boxGeometry args={[mullionD, panelHeight, mullionT]} />
-              <meshStandardMaterial color={color} metalness={0.4} roughness={0.45} />
-            </mesh>
+            <Beam args={[mullionD, panelHeight, mullionT]} position={[halfW - mullionD / 2, yMid, z]} castShadow>
+              <PowderCoatMaterial color={color} />
+            </Beam>
           )}
           {westHasGlass && (
-            <mesh position={[-halfW + mullionD / 2, yMid, z]} castShadow>
-              <boxGeometry args={[mullionD, panelHeight, mullionT]} />
-              <meshStandardMaterial color={color} metalness={0.4} roughness={0.45} />
-            </mesh>
+            <Beam args={[mullionD, panelHeight, mullionT]} position={[-halfW + mullionD / 2, yMid, z]} castShadow>
+              <PowderCoatMaterial color={color} />
+            </Beam>
           )}
         </group>
       ))}
@@ -1999,23 +2211,9 @@ function SidePanels({
           return (
             <group key={`${side.name}-${i}`}>
               {/* Panel box */}
-              <mesh position={position} castShadow receiveShadow renderOrder={2}>
-                <boxGeometry args={args} />
-                {isGlass ? (
-                  <meshStandardMaterial
-                    color="#d8eef6"
-                    transparent
-                    opacity={0.16}
-                    roughness={0.04}
-                    metalness={0.0}
-                    envMapIntensity={1.6}
-                    depthWrite={false}
-                    side={THREE.DoubleSide}
-                  />
-                ) : (
-                  <meshStandardMaterial color={frame} roughness={0.65} metalness={0.05} />
-                )}
-              </mesh>
+              <Beam args={args} radius={0.004} position={position} castShadow receiveShadow renderOrder={2}>
+                {isGlass ? <GlassMaterial /> : <PowderCoatMaterial color={frame} roughness={0.7} metalness={0.1} />}
+              </Beam>
 
               {/* Inner cladding face — only on closed (non-glass) panels */}
               {!isGlass && (
@@ -2104,13 +2302,13 @@ function WaterVolume({
   const yMid = bottomY + height / 2;
   return (
     <group>
-      {/* Volume of water — dense blue so you don't see through to the other side */}
+      {/* Volume of water — tinted but clear, so the cladding stays visible */}
       <mesh position={[0, yMid, 0]} renderOrder={1}>
         <boxGeometry args={[w - inset * 2, height, l - inset * 2]} />
         <meshStandardMaterial
-          color="#1574a8"
+          color="#2f9fcc"
           transparent
-          opacity={0.94}
+          opacity={0.3}
           roughness={0.3}
           metalness={0.05}
           depthWrite={false}
@@ -2225,7 +2423,9 @@ const WATER_FRAG = /* glsl */ `
       + vec3(0.95, 0.98, 1.0) * foam
       + uEmissive * uEmissiveStrength;
 
-    gl_FragColor = vec4(col, uOpacity);
+    // Gerçek su: dik bakınca dip görünür, yatık açıda gökyüzü yansıması baskınlaşır
+    float alpha = clamp(uOpacity * (0.32 + 0.6 * fresnel) + spec + sparkle + uEmissiveStrength * 0.5, 0.0, 1.0);
+    gl_FragColor = vec4(col, alpha);
   }
 `;
 
@@ -2254,7 +2454,7 @@ function CinematicWater({
       uSunColor: { value: new THREE.Color('#fff5dc') },
       uEmissive: { value: new THREE.Color('#000000') },
       uEmissiveStrength: { value: 0 },
-      uOpacity: { value: 0.9 },
+      uOpacity: { value: 1 },
       uSkyColor: { value: new THREE.Color('#5a9bd4') },
       uHorizonColor: { value: new THREE.Color('#d6ebf7') },
     }),
@@ -2555,39 +2755,31 @@ function FrameBeams({
   return (
     <group>
       {/* Top beams */}
-      <mesh position={[0, beamY, halfL - FRAME_T / 2]} castShadow>
-        <boxGeometry args={[w, beamH, FRAME_T * 0.7]} />
-        <meshStandardMaterial color={color} metalness={0.4} roughness={0.45} />
-      </mesh>
-      <mesh position={[0, beamY, -halfL + FRAME_T / 2]} castShadow>
-        <boxGeometry args={[w, beamH, FRAME_T * 0.7]} />
-        <meshStandardMaterial color={color} metalness={0.4} roughness={0.45} />
-      </mesh>
-      <mesh position={[halfW - FRAME_T / 2, beamY, 0]} castShadow>
-        <boxGeometry args={[FRAME_T * 0.7, beamH, l]} />
-        <meshStandardMaterial color={color} metalness={0.4} roughness={0.45} />
-      </mesh>
-      <mesh position={[-halfW + FRAME_T / 2, beamY, 0]} castShadow>
-        <boxGeometry args={[FRAME_T * 0.7, beamH, l]} />
-        <meshStandardMaterial color={color} metalness={0.4} roughness={0.45} />
-      </mesh>
+      <Beam args={[w, beamH, FRAME_T * 0.7]} position={[0, beamY, halfL - FRAME_T / 2]} castShadow>
+        <PowderCoatMaterial color={color} />
+      </Beam>
+      <Beam args={[w, beamH, FRAME_T * 0.7]} position={[0, beamY, -halfL + FRAME_T / 2]} castShadow>
+        <PowderCoatMaterial color={color} />
+      </Beam>
+      <Beam args={[FRAME_T * 0.7, beamH, l]} position={[halfW - FRAME_T / 2, beamY, 0]} castShadow>
+        <PowderCoatMaterial color={color} />
+      </Beam>
+      <Beam args={[FRAME_T * 0.7, beamH, l]} position={[-halfW + FRAME_T / 2, beamY, 0]} castShadow>
+        <PowderCoatMaterial color={color} />
+      </Beam>
       {/* Bottom skirt beams */}
-      <mesh position={[0, BASIN_FLOOR + 0.05, halfL - FRAME_T / 2]} castShadow>
-        <boxGeometry args={[w, 0.1, FRAME_T * 0.7]} />
-        <meshStandardMaterial color={color} metalness={0.4} roughness={0.45} />
-      </mesh>
-      <mesh position={[0, BASIN_FLOOR + 0.05, -halfL + FRAME_T / 2]} castShadow>
-        <boxGeometry args={[w, 0.1, FRAME_T * 0.7]} />
-        <meshStandardMaterial color={color} metalness={0.4} roughness={0.45} />
-      </mesh>
-      <mesh position={[halfW - FRAME_T / 2, BASIN_FLOOR + 0.05, 0]} castShadow>
-        <boxGeometry args={[FRAME_T * 0.7, 0.1, l]} />
-        <meshStandardMaterial color={color} metalness={0.4} roughness={0.45} />
-      </mesh>
-      <mesh position={[-halfW + FRAME_T / 2, BASIN_FLOOR + 0.05, 0]} castShadow>
-        <boxGeometry args={[FRAME_T * 0.7, 0.1, l]} />
-        <meshStandardMaterial color={color} metalness={0.4} roughness={0.45} />
-      </mesh>
+      <Beam args={[w, 0.1, FRAME_T * 0.7]} position={[0, BASIN_FLOOR + 0.05, halfL - FRAME_T / 2]} castShadow>
+        <PowderCoatMaterial color={color} />
+      </Beam>
+      <Beam args={[w, 0.1, FRAME_T * 0.7]} position={[0, BASIN_FLOOR + 0.05, -halfL + FRAME_T / 2]} castShadow>
+        <PowderCoatMaterial color={color} />
+      </Beam>
+      <Beam args={[FRAME_T * 0.7, 0.1, l]} position={[halfW - FRAME_T / 2, BASIN_FLOOR + 0.05, 0]} castShadow>
+        <PowderCoatMaterial color={color} />
+      </Beam>
+      <Beam args={[FRAME_T * 0.7, 0.1, l]} position={[-halfW + FRAME_T / 2, BASIN_FLOOR + 0.05, 0]} castShadow>
+        <PowderCoatMaterial color={color} />
+      </Beam>
     </group>
   );
 }
@@ -2601,38 +2793,43 @@ function Coping({ w, l, y }: { w: number; l: number; y: number }) {
   // fit between them so corners don't overlap and z-fight.
   const insetPerSide = (COPING_W - out) / 2;
   const xBeamLength = l - 2 * insetPerSide;
-  const woodColor = '#a4753a';
   return (
     <group position={[0, y - COPING_T / 2, 0]}>
       {/* +Z (south) beam — full width including corner overhang */}
-      <mesh position={[0, 0, halfL + out / 2]} castShadow receiveShadow>
-        <boxGeometry args={[totalW, COPING_T, COPING_W]} />
-        <meshStandardMaterial color={woodColor} roughness={0.85} />
-      </mesh>
+      <Beam args={[totalW, COPING_T, COPING_W]} radius={0.012} position={[0, 0, halfL + out / 2]} castShadow receiveShadow>
+        <WoodMaterial />
+      </Beam>
       {/* -Z (north) beam */}
-      <mesh position={[0, 0, -halfL - out / 2]} castShadow receiveShadow>
-        <boxGeometry args={[totalW, COPING_T, COPING_W]} />
-        <meshStandardMaterial color={woodColor} roughness={0.85} />
-      </mesh>
+      <Beam args={[totalW, COPING_T, COPING_W]} radius={0.012} position={[0, 0, -halfL - out / 2]} castShadow receiveShadow>
+        <WoodMaterial />
+      </Beam>
       {/* +X (east) beam — trimmed to fit between +Z and -Z beams */}
-      <mesh position={[halfW + out / 2, 0, 0]} castShadow receiveShadow>
-        <boxGeometry args={[COPING_W, COPING_T, xBeamLength]} />
-        <meshStandardMaterial color={woodColor} roughness={0.85} />
-      </mesh>
+      <Beam args={[xBeamLength, COPING_T, COPING_W]} radius={0.012} position={[halfW + out / 2, 0, 0]} rotation={[0, Math.PI / 2, 0]} castShadow receiveShadow>
+        <WoodMaterial />
+      </Beam>
       {/* -X (west) beam */}
-      <mesh position={[-halfW - out / 2, 0, 0]} castShadow receiveShadow>
-        <boxGeometry args={[COPING_W, COPING_T, xBeamLength]} />
-        <meshStandardMaterial color={woodColor} roughness={0.85} />
-      </mesh>
+      <Beam args={[xBeamLength, COPING_T, COPING_W]} radius={0.012} position={[-halfW - out / 2, 0, 0]} rotation={[0, Math.PI / 2, 0]} castShadow receiveShadow>
+        <WoodMaterial />
+      </Beam>
     </group>
   );
+}
+
+/** Parametrik eğri: t ∈ [0,1] → nokta (yay parçaları için). */
+class FnCurve extends THREE.Curve<THREE.Vector3> {
+  constructor(private fn: (t: number) => THREE.Vector3) {
+    super();
+  }
+  getPoint(t: number, target = new THREE.Vector3()) {
+    return target.copy(this.fn(t));
+  }
 }
 
 function PoolLadder({
   halfW,
   halfL,
   top,
-  waterY,
+  waterY: _waterY,
   platformDirection,
 }: {
   halfW: number;
@@ -2641,113 +2838,80 @@ function PoolLadder({
   waterY: number;
   platformDirection: PlatformDirection;
 }) {
-  // Pool ladder: two parallel rails + horizontal rungs.
-  // Rails curve OVER at the top in an oval and land on the platform deck.
-  const railSpacing = 0.46;
-  const railR = 0.028;
-  const rungR = 0.022;
-  const inset = PANEL_T + 0.28;
-  const railBottomY = waterY - 0.85;
-  const numRungs = 5;
-  const rungYBottom = waterY - 0.5;
-  const rungYTop = top - 0.18;
+  // Havuz merdiveni: kenar ahşabına çıpalı iki boru küpeşte, kenar üstünde yarım daire
+  // yay, havuz içinde dikey inen kolonlar ve aralarında düz basamak plakaları.
+  const railSpacing = 0.5;
+  const railR = 0.021;
+  const anchorU = 0.12;  // kenar ahşabı üstünde, duvarın dışına doğru (m)
+  const innerU = -0.17;  // havuz içinde, duvarın iç yüzünden içeri (m)
+  const riseAbove = 0.5; // küpeştenin kenar üstünden yükselmesi
+  const bottomY = BASIN_FLOOR + 0.35;
+  const color = '#17191c';
 
-  let baseX = 0;
-  let baseZ = 0;
-  let rungAxis: 'x' | 'z' = 'z';
-  // Direction the curl bends OUT toward (the platform side, away from pool wall)
-  let curlOutX = 0;
-  let curlOutZ = 0;
+  const isEW = platformDirection === 'east' || platformDirection === 'west';
+  const sign = platformDirection === 'east' || platformDirection === 'south' ? 1 : -1;
+  const wall = (isEW ? halfW : halfL) - PANEL_T;
 
-  if (platformDirection === 'east') {
-    baseX = halfW - inset;
-    rungAxis = 'z';
-    curlOutX = 1;
-  } else if (platformDirection === 'west') {
-    baseX = -halfW + inset;
-    rungAxis = 'z';
-    curlOutX = -1;
-  } else if (platformDirection === 'north') {
-    baseZ = -halfL + inset;
-    rungAxis = 'x';
-    curlOutZ = -1;
-  } else {
-    baseZ = halfL - inset;
-    rungAxis = 'x';
-    curlOutZ = 1;
-  }
+  const geometries = useMemo(() => {
+    // (u: duvara dik dışa doğru, y, s: duvar boyunca) → havuz koordinatı
+    const at = (u: number, y: number, sAlong: number) =>
+      isEW ? new THREE.Vector3(sign * (wall + u), y, sAlong) : new THREE.Vector3(sAlong, y, sign * (wall + u));
+    const r = (anchorU - innerU) / 2;
+    const cu = (anchorU + innerU) / 2;
+    const yArc = top + riseAbove;
 
-  const offsets = [-railSpacing / 2, railSpacing / 2];
-  const chrome = '#f5f5f5';
+    return [-railSpacing / 2, railSpacing / 2].map((sAlong) => {
+      const path = new THREE.CurvePath<THREE.Vector3>();
+      path.add(new THREE.LineCurve3(at(anchorU, top, sAlong), at(anchorU, yArc, sAlong)));
+      path.add(new FnCurve((t) => {
+        const a = Math.PI * t;
+        return at(cu + r * Math.cos(a), yArc + r * Math.sin(a), sAlong);
+      }));
+      path.add(new THREE.LineCurve3(at(innerU, yArc, sAlong), at(innerU, bottomY, sAlong)));
+      return {
+        tube: new THREE.TubeGeometry(path, 96, railR, 12, false),
+        anchor: at(anchorU, top + 0.006, sAlong),
+        foot: at(innerU, bottomY, sAlong),
+      };
+    });
+  }, [isEW, sign, wall, top, bottomY]);
 
-  // Build a tube geometry per rail: vertical from underwater up, then curls
-  // outward and back down to land on the deck.
-  const railGeos = useMemo(
-    () =>
-      offsets.map((off) => {
-        const x = baseX + (rungAxis === 'z' ? 0 : off);
-        const z = baseZ + (rungAxis === 'z' ? off : 0);
-        const curlR = 0.22; // radius of the curl loop
-        const curlPeakY = top + curlR + 0.05;
+  useEffect(() => () => geometries.forEach((g) => g.tube.dispose()), [geometries]);
 
-        const points = [
-          // Bottom — deep in water
-          new THREE.Vector3(x, railBottomY, z),
-          // Just below water
-          new THREE.Vector3(x, waterY - 0.2, z),
-          // At deck level — start of the curl
-          new THREE.Vector3(x, top + 0.05, z),
-          // Apex of the curl, slightly forward
-          new THREE.Vector3(
-            x + curlOutX * curlR * 0.7,
-            curlPeakY,
-            z + curlOutZ * curlR * 0.7
-          ),
-          // Coming down on the platform side
-          new THREE.Vector3(
-            x + curlOutX * curlR * 1.6,
-            top + curlR * 0.3,
-            z + curlOutZ * curlR * 1.6
-          ),
-          // Landing on the deck
-          new THREE.Vector3(
-            x + curlOutX * curlR * 1.9,
-            top + 0.04,
-            z + curlOutZ * curlR * 1.9
-          ),
-        ];
-
-        const curve = new THREE.CatmullRomCurve3(points, false, 'catmullrom', 0.4);
-        return new THREE.TubeGeometry(curve, 80, railR, 10, false);
-      }),
-    [baseX, baseZ, rungAxis, curlOutX, curlOutZ, railBottomY, top, waterY]
-  );
+  // Basamaklar: kenarın 30 cm altından başlayıp 27 cm arayla
+  const treads: number[] = [];
+  for (let y = top - 0.3; y > bottomY + 0.05; y -= 0.27) treads.push(y);
+  const treadU = innerU + 0.03;
+  const treadPos = (y: number): [number, number, number] =>
+    isEW ? [sign * (wall + treadU), y, 0] : [0, y, sign * (wall + treadU)];
+  const treadArgs: [number, number, number] = isEW
+    ? [0.09, 0.022, railSpacing - 0.02]
+    : [railSpacing - 0.02, 0.022, 0.09];
 
   return (
     <group>
-      {/* Two curved rails (with oval curl at top landing on deck) */}
-      {railGeos.map((geo, i) => (
-        <mesh key={`rail-${i}`} geometry={geo} castShadow>
-          <meshStandardMaterial color={chrome} metalness={0.4} roughness={0.4} />
-        </mesh>
-      ))}
-
-      {/* Horizontal rungs (straight, unchanged) */}
-      {Array.from({ length: numRungs }, (_, i) => {
-        const t = i / (numRungs - 1);
-        const y = rungYBottom + t * (rungYTop - rungYBottom);
-        return (
-          <mesh
-            key={`rung-${i}`}
-            position={[baseX, y, baseZ]}
-            rotation={rungAxis === 'z' ? [Math.PI / 2, 0, 0] : [0, 0, Math.PI / 2]}
-            castShadow
-          >
-            <cylinderGeometry args={[rungR, rungR, railSpacing, 10]} />
-            <meshStandardMaterial color={chrome} metalness={0.4} roughness={0.4} />
+      {geometries.map((g, i) => (
+        <group key={i}>
+          <mesh geometry={g.tube} castShadow>
+            <PowderCoatMaterial color={color} roughness={0.3} metalness={0.45} />
           </mesh>
-        );
-      })}
+          {/* Kenar üstündeki çıpa plakası */}
+          <mesh position={g.anchor} castShadow>
+            <cylinderGeometry args={[0.042, 0.046, 0.012, 20]} />
+            <PowderCoatMaterial color={color} roughness={0.3} metalness={0.45} />
+          </mesh>
+          {/* Boru ucu kapağı */}
+          <mesh position={g.foot}>
+            <sphereGeometry args={[railR, 12, 8]} />
+            <PowderCoatMaterial color={color} roughness={0.3} metalness={0.45} />
+          </mesh>
+        </group>
+      ))}
+      {treads.map((y) => (
+        <Beam key={y} args={treadArgs} radius={0.004} position={treadPos(y)} castShadow receiveShadow>
+          <PowderCoatMaterial color={color} roughness={0.45} metalness={0.4} />
+        </Beam>
+      ))}
     </group>
   );
 }
@@ -2793,49 +2957,6 @@ function WineGlass({ position }: { position: [number, number, number] }) {
         <cylinderGeometry args={[0.025, 0.012, 0.05, 8]} />
         <meshStandardMaterial color="#7a0020" transparent opacity={0.82} roughness={0.3} />
       </mesh>
-    </group>
-  );
-}
-
-function Parasol({
-  position,
-  rotY = 0,
-}: {
-  position: [number, number, number];
-  rotY?: number;
-}) {
-  // Pole leans ~18° in the rotY direction (toward pool) for a holiday beach feel
-  const tilt = 0.32;
-  return (
-    <group position={position} rotation={[0, rotY, 0]}>
-      {/* Base weight */}
-      <mesh position={[0, 0.07, 0]} castShadow>
-        <cylinderGeometry args={[0.22, 0.26, 0.14, 14]} />
-        <meshStandardMaterial color="#555" metalness={0.45} roughness={0.5} />
-      </mesh>
-      {/* Tilted pole group */}
-      <group rotation={[tilt, 0, 0]}>
-        {/* Pole */}
-        <mesh position={[0, 1.3, 0]} castShadow>
-          <cylinderGeometry args={[0.03, 0.03, 2.6, 8]} />
-          <meshStandardMaterial color="#aaa" metalness={0.6} roughness={0.35} />
-        </mesh>
-        {/* Canopy */}
-        <mesh position={[0, 2.64, 0]} castShadow receiveShadow>
-          <coneGeometry args={[1.45, 0.45, 16, 1, true]} />
-          <meshStandardMaterial color="#e07030" side={THREE.DoubleSide} roughness={0.82} metalness={0} />
-        </mesh>
-        {/* Canopy valance (lower ruffle ring) */}
-        <mesh position={[0, 2.42, 0]} castShadow>
-          <coneGeometry args={[1.55, 0.18, 16, 1, true]} />
-          <meshStandardMaterial color="#c85820" side={THREE.DoubleSide} roughness={0.85} metalness={0} />
-        </mesh>
-        {/* Top finial */}
-        <mesh position={[0, 2.88, 0]} castShadow>
-          <sphereGeometry args={[0.07, 8, 8]} />
-          <meshStandardMaterial color="#888" metalness={0.6} roughness={0.3} />
-        </mesh>
-      </group>
     </group>
   );
 }
@@ -3027,16 +3148,12 @@ function PlatformFurniture({
   const d = 0.14;
   const H = Math.PI / 2;
 
-  // Parasol offset: placed between the two chairs, shifted slightly away from pool
-  const po = cs * 0.5; // half-distance between chairs, along the side axis
-
   if (direction === 'east') {
     return (
       <group position={[0, 0, 0]}>
         <LoungeChair position={[0, y, -cs]} rotY={-H + d} />
         <SideTable   position={[0, y,   0]} />
         <LoungeChair position={[0, y,  cs]} rotY={-H - d} />
-        <Parasol     position={[0.55, y, po]} rotY={Math.PI * 0.15} />
       </group>
     );
   }
@@ -3046,7 +3163,6 @@ function PlatformFurniture({
         <LoungeChair position={[0, y, -cs]} rotY={H - d} />
         <SideTable   position={[0, y,   0]} />
         <LoungeChair position={[0, y,  cs]} rotY={H + d} />
-        <Parasol     position={[-0.55, y, po]} rotY={Math.PI * 1.15} />
       </group>
     );
   }
@@ -3056,7 +3172,6 @@ function PlatformFurniture({
         <LoungeChair position={[-cs, y, 0]} rotY={ d} />
         <SideTable   position={[  0, y, 0]} />
         <LoungeChair position={[ cs, y, 0]} rotY={-d} />
-        <Parasol     position={[po, y, -0.55]} rotY={Math.PI * 0.65} />
       </group>
     );
   }
@@ -3066,7 +3181,6 @@ function PlatformFurniture({
       <LoungeChair position={[-cs, y, 0]} rotY={Math.PI - d} />
       <SideTable   position={[  0, y, 0]} />
       <LoungeChair position={[ cs, y, 0]} rotY={Math.PI + d} />
-      <Parasol     position={[po, y, 0.55]} rotY={Math.PI * 1.65} />
     </group>
   );
 }
@@ -3080,6 +3194,8 @@ function Platform({
   showStairs = true,
   showRailings = true,
   extended = true,
+  groundY = 0,
+  blockStairs = false,
 }: {
   halfW: number;
   halfL: number;
@@ -3089,8 +3205,12 @@ function Platform({
   showStairs?: boolean;
   showRailings?: boolean;
   extended?: boolean;
+  blockStairs?: boolean;
+  /** Zeminin platforma göre yüksekliği (gömülü kurulumda > 0) */
+  groundY?: number;
 }) {
-  const wood = '#b8853f';
+  // Tam gömülüde güverte zemin hizasındadır; merdivene gerek kalmaz
+  const hasStairs = showStairs && top - groundY > 0.2;
   const deckThickness = 0.1;
   const deckY = top - deckThickness / 2;
 
@@ -3132,13 +3252,12 @@ function Platform({
       />
 
       {/* Deck floor */}
-      <mesh position={[0, deckY, 0]} castShadow receiveShadow>
-        <boxGeometry args={[pw, deckThickness, pd]} />
-        <meshStandardMaterial color={wood} roughness={0.85} />
-      </mesh>
+      <Beam args={[pw, deckThickness, pd]} radius={0.01} position={[0, deckY, 0]} castShadow receiveShadow>
+        <WoodMaterial />
+      </Beam>
 
       {/* Support legs at outer corners */}
-      <PlatformLegs pw={pw} pd={pd} top={top - deckThickness} color={frameColor} />
+      <PlatformLegs pw={pw} pd={pd} top={top - deckThickness} bottom={groundY} color={frameColor} />
 
       {/* Railings: outer + 1 short side opposite the stairs (optional) */}
       {showRailings && (
@@ -3148,18 +3267,20 @@ function Platform({
           deckTop={top}
           direction={direction}
           color={frameColor}
-          showStairs={showStairs}
+          showStairs={hasStairs}
         />
       )}
 
       {/* Stairs descending from one corner (optional) */}
-      {showStairs && (
+      {hasStairs && (
         <Stairs
           pw={pw}
           pd={pd}
           deckTop={top}
+          groundY={groundY}
           direction={direction}
           frameColor={frameColor}
+          block={blockStairs}
         />
       )}
 
@@ -3245,14 +3366,9 @@ function PlatformBlock({
   return (
     <group>
       {/* Solid cabinet block */}
-      <mesh position={[cabCx, cabH / 2, cabCz]} castShadow receiveShadow>
-        <boxGeometry args={[cabW, cabH, cabD]} />
-        <meshStandardMaterial
-          color={frameColor}
-          roughness={0.6}
-          metalness={0.25}
-        />
-      </mesh>
+      <Beam args={[cabW, cabH, cabD]} radius={0.01} position={[cabCx, cabH / 2, cabCz]} castShadow receiveShadow>
+        <PowderCoatMaterial color={frameColor} roughness={0.6} metalness={0.25} />
+      </Beam>
       {/* Ventilation grille on the outer face */}
       <mesh position={ventPos} rotation={ventRot}>
         <boxGeometry args={[ventW, ventH, 0.02]} />
@@ -3266,11 +3382,13 @@ function PlatformLegs({
   pw,
   pd,
   top,
+  bottom = 0,
   color,
 }: {
   pw: number;
   pd: number;
   top: number;
+  bottom?: number;
   color: string;
 }) {
   const halfPw = pw / 2;
@@ -3284,10 +3402,9 @@ function PlatformLegs({
   return (
     <group>
       {corners.map(([x, z], i) => (
-        <mesh key={i} position={[x, top / 2, z]} castShadow>
-          <boxGeometry args={[FRAME_T, top, FRAME_T]} />
-          <meshStandardMaterial color={color} metalness={0.4} roughness={0.45} />
-        </mesh>
+        <Beam args={[FRAME_T, top - bottom, FRAME_T]} key={i} position={[x, (top + bottom) / 2, z]} castShadow>
+          <PowderCoatMaterial color={color} />
+        </Beam>
       ))}
     </group>
   );
@@ -3437,22 +3554,26 @@ function Stairs({
   pw,
   pd,
   deckTop,
+  groundY = 0,
   direction,
   frameColor,
+  block = false,
 }: {
   pw: number;
   pd: number;
   deckTop: number;
+  groundY?: number;
   direction: PlatformDirection;
   frameColor: string;
+  /** Kapalı blok basamaklar (gövde renginde, üstü ahşap) — açık basamak yerine */
+  block?: boolean;
 }) {
-  // Stairs descend from deck level to ground over ~5 steps.
-  const steps = 5;
-  const totalRise = deckTop;
+  // Stairs descend from deck level to ground, ~30 cm per step (5 steps when above ground).
+  const totalRise = deckTop - groundY;
+  const steps = Math.max(1, Math.round(totalRise / 0.3));
   const stepRise = totalRise / steps;
   const stepRun = 0.32;
   const stairWidth = 0.9;
-  const treadColor = '#b8853f';
 
   const halfPw = pw / 2;
   const halfPd = pd / 2;
@@ -3492,22 +3613,38 @@ function Stairs({
         const offset = stepRun * stepIdx;
         const cx = originX + descendX * offset;
         const cz = originZ + descendZ * offset;
-        const sizeX = alignAlongX ? stepRun : stairWidth;
-        const sizeZ = alignAlongX ? stairWidth : stepRun;
+        const rotY = alignAlongX ? Math.PI / 2 : 0;
+        if (block) {
+          const h = yTop - groundY;
+          if (h < 0.02) return null; // en alt basamak zemindir
+          return (
+            <group key={i}>
+              <Beam args={[stairWidth, h, stepRun]} radius={0.006} position={[cx, groundY + h / 2, cz]} rotation={[0, rotY, 0]} castShadow receiveShadow>
+                <PowderCoatMaterial color={frameColor} roughness={0.6} metalness={0.2} />
+              </Beam>
+              <Beam args={[stairWidth + 0.02, 0.04, stepRun + 0.02]} radius={0.008} position={[cx, yTop + 0.02, cz]} rotation={[0, rotY, 0]} castShadow receiveShadow>
+                <WoodMaterial />
+              </Beam>
+            </group>
+          );
+        }
         return (
-          <mesh
+          <Beam
             key={i}
+            args={[stairWidth, 0.05, stepRun]}
+            radius={0.008}
             position={[cx, yTop + 0.025, cz]}
+            rotation={[0, alignAlongX ? Math.PI / 2 : 0, 0]}
             castShadow
             receiveShadow
           >
-            <boxGeometry args={[sizeX, 0.05, sizeZ]} />
-            <meshStandardMaterial color={treadColor} roughness={0.85} />
-          </mesh>
+            <WoodMaterial />
+          </Beam>
         );
       })}
 
-      {/* Stair handrails on both sides */}
+      {/* Stair handrails on both sides (blok basamakta yok) */}
+      {!block && (<>
       <StairRail
         originX={originX}
         originZ={originZ}
@@ -3517,6 +3654,7 @@ function Stairs({
         stepRun={stepRun}
         stepRise={stepRise}
         deckTop={deckTop}
+        groundY={groundY}
         sideOffset={alignAlongX ? stairWidth / 2 : -stairWidth / 2}
         sideAxis={alignAlongX ? 'z' : 'x'}
         color={frameColor}
@@ -3530,10 +3668,12 @@ function Stairs({
         stepRun={stepRun}
         stepRise={stepRise}
         deckTop={deckTop}
+        groundY={groundY}
         sideOffset={alignAlongX ? -stairWidth / 2 : stairWidth / 2}
         sideAxis={alignAlongX ? 'z' : 'x'}
         color={frameColor}
       />
+      </>)}
     </group>
   );
 }
@@ -3547,6 +3687,7 @@ function StairRail({
   stepRun,
   stepRise,
   deckTop,
+  groundY = 0,
   sideOffset,
   sideAxis,
   color,
@@ -3559,6 +3700,7 @@ function StairRail({
   stepRun: number;
   stepRise: number;
   deckTop: number;
+  groundY?: number;
   sideOffset: number;
   sideAxis: 'x' | 'z';
   color: string;
@@ -3571,7 +3713,7 @@ function StairRail({
 
   const railHeight = 0.95;
   const startY = deckTop + railHeight;
-  const endY = railHeight;
+  const endY = groundY + railHeight;
 
   const midX = (startX + endX) / 2;
   const midZ = (startZ + endZ) / 2;
@@ -3875,17 +4017,31 @@ function CladdingMat({
   envMapIntensity?: number;
   side?: THREE.Side;
 }) {
+  const [tileW, tileH]: [number, number] = tex?.userData.tileM ?? [CLADDING_TILE, CLADDING_TILE];
+  const repeatX = Math.max(1, Math.round(sw / tileW));
+  const repeatY = Math.max(1, Math.round(sh / tileH));
+
+  const grout = useMemo(() => {
+    const maps = getTileMaps();
+    const repeat = [repeatX, repeatY] as const;
+    const normal = maps.normal.clone();
+    const rough = maps.rough.clone();
+    normal.repeat.set(...repeat);
+    rough.repeat.set(...repeat);
+    normal.needsUpdate = rough.needsUpdate = true;
+    return { normal, rough };
+  }, [repeatX, repeatY]);
+
+  useEffect(() => () => { grout.normal.dispose(); grout.rough.dispose(); }, [grout]);
+
   const scaled = useMemo(() => {
     if (!tex) return null;
     const t = tex.clone();
     t.wrapS = t.wrapT = THREE.RepeatWrapping;
-    t.repeat.set(
-      Math.max(1, Math.round(sw / CLADDING_TILE)),
-      Math.max(1, Math.round(sh / CLADDING_TILE)),
-    );
+    t.repeat.set(repeatX, repeatY);
     t.needsUpdate = true;
     return t;
-  }, [tex, sw, sh]);
+  }, [tex, repeatX, repeatY]);
 
   useEffect(() => () => { scaled?.dispose(); }, [scaled]);
 
@@ -3894,6 +4050,8 @@ function CladdingMat({
       key={scaled?.uuid ?? `no-tex-${sw}-${sh}`}
       color={tex ? '#ffffff' : color}
       map={scaled ?? undefined}
+      normalMap={grout.normal}
+      roughnessMap={grout.rough}
       roughness={roughness}
       metalness={metalness}
       envMapIntensity={envMapIntensity}
@@ -3913,9 +4071,11 @@ function loadCladdingUrl(url: string): Promise<THREE.Texture | null> {
 
   const p = new Promise<THREE.Texture | null>((resolve) => {
     new THREE.TextureLoader().load(
-      url,
+      claddingSceneUrl(url),
       (t) => {
         prepareTexture(t);
+        t.anisotropy = 8;
+        t.userData.tileM = claddingTileSize(url);
         claddingTextureCache.set(url, t);
         claddingLoadInFlight.delete(url);
         resolve(t);
