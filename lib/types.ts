@@ -12,6 +12,8 @@ export type CladdingType =
   | (string & {});  // texture file paths like '/textures/BEST CEPPO BONE 60x120.jpg'
 export type PlatformDirection = 'north' | 'south' | 'east' | 'west';
 export type PoolCoverType = 'automatic' | 'manual';
+export type InstallationType = 'ground' | 'partial' | 'sunken';
+export type StairStyle = 'open' | 'block';
 export type PoolSide = 'north' | 'south' | 'east' | 'west';
 
 export const POOL_SIDES: PoolSide[] = ['north', 'south', 'east', 'west'];
@@ -27,10 +29,12 @@ export interface PoolConfig {
     color: LightColor;
   };
   ground: GroundType;
+  installation: InstallationType; // yerüstü / yarı gömülü / tam gömülü
   cladding: CladdingType;
   platformDirection: PlatformDirection;
   platformExtension: boolean;
   railings: boolean;
+  stairStyle: StairStyle; // platform merdiveni: açık basamak / blok basamak
   innerLadder: boolean;
   waterfall: boolean;
   poolCover: boolean;   // optional slatted roller cover over the water
@@ -47,10 +51,12 @@ export const defaultPoolConfig: PoolConfig = {
   panelOverrides: {},
   lighting: { enabled: false, color: 'blue' },
   ground: 'grass',
+  installation: 'ground',
   cladding: 'white',
   platformDirection: 'east',
   platformExtension: false,
   railings: false,
+  stairStyle: 'open',
   innerLadder: true,
   waterfall: false,
   poolCover: false,

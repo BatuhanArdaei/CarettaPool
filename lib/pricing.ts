@@ -21,7 +21,10 @@ export const DEFAULT_PRICES = {
   waterfall:             25000,
   platform:              35000,
   platform_extension:    0,
+  installation_partial:  0,
+  installation_sunken:   0,
   railings:              0,
+  stairs_block:          0,
   ladder:                0,
   pool_cover_manual:     38000,
   pool_cover_automatic:  55000,
@@ -43,6 +46,7 @@ export interface PriceBreakdown {
   frame: number;
   panel: number;
   ground: number;
+  installation: number;
   cladding: number;
   platform: number;
   lighting: number;
@@ -76,6 +80,11 @@ export function calculateBasePrice(
   const groundKey = `ground_${config.ground}` as PriceKey;
   const ground = pr(customPrices, groundKey);
 
+  const installation =
+    config.installation === 'partial' ? pr(customPrices, 'installation_partial')
+    : config.installation === 'sunken' ? pr(customPrices, 'installation_sunken')
+    : 0;
+
   const STD_CLADDINGS = new Set(['white', 'blue_mosaic', 'gray_stone', 'turquoise']);
   const cladding = STD_CLADDINGS.has(config.cladding)
     ? pr(customPrices, `cladding_${config.cladding}` as PriceKey)
@@ -91,16 +100,17 @@ export function calculateBasePrice(
 
   const accessories =
     (config.railings    ? pr(customPrices, 'railings') : 0) +
+    (config.stairStyle === 'block' ? pr(customPrices, 'stairs_block') : 0) +
     (config.innerLadder ? pr(customPrices, 'ladder')   : 0);
 
   const poolCover = config.poolCover
     ? pr(customPrices, config.poolCoverType === 'automatic' ? 'pool_cover_automatic' : 'pool_cover_manual')
     : 0;
 
-  const subtotal = base + frame + panel + ground + cladding + platform + lighting + waterfall + accessories + poolCover;
+  const subtotal = base + frame + panel + ground + installation + cladding + platform + lighting + waterfall + accessories + poolCover;
 
   return {
-    base, frame, panel, ground, cladding, platform,
+    base, frame, panel, ground, installation, cladding, platform,
     lighting, waterfall, accessories, poolCover, subtotal, discount: 0, total: subtotal,
   };
 }

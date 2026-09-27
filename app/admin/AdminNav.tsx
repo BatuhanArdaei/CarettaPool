@@ -11,6 +11,7 @@ const LINKS = [
   { href: '/admin/fiyatlar',    label: 'Fiyat Yönetimi' },
   { href: '/admin/bayiler',     label: 'Bayiler' },
   { href: '/admin/talepler',          label: 'Havuz Talepleri' },
+  { href: '/admin/sablonlar',         label: 'Mekân Şablonları' },
   { href: '/admin/iletisim-talepleri',label: 'İletişim Talepleri' },
   { href: '/admin/bayi-talepleri',    label: 'Bayi Talepleri' },
   { href: '/admin/ayarlar',     label: 'Site Ayarları' },

@@ -9,6 +9,8 @@ import {
   type CladdingType,
   type FrameColor,
   type GroundType,
+  type InstallationType,
+  type StairStyle,
   type LightColor,
   type PanelType,
   type PoolConfig,
@@ -23,7 +25,7 @@ import { countPanels } from '@/lib/types';
 import type { Region } from '@/lib/regions';
 import { useLanguage } from '@/contexts/LanguageContext';
 import CountryPhoneInput from '@/components/CountryPhoneInput';
-import { CLADDING_TEXTURES } from '@/lib/claddingTextures';
+import { CLADDING_TEXTURES, claddingThumbUrl } from '@/lib/claddingTextures';
 
 interface Props {
   config: PoolConfig;
@@ -423,6 +425,19 @@ function WaterfallStep({
       </div>
 
       <div className="space-y-2">
+        <p className="label">{t('configurator.stair_style_label')}</p>
+        <Toggle
+          options={[
+            { value: 'open',  label: t('configurator.stair_open') },
+            { value: 'block', label: t('configurator.stair_block') },
+          ]}
+          value={config.stairStyle ?? 'open'}
+          onChange={(v) => set('stairStyle', v as StairStyle)}
+        />
+        <p className="text-sm text-slate-500">{t('configurator.stair_style_note')}</p>
+      </div>
+
+      <div className="space-y-2">
         <p className="label">{t('configurator.railings_label')}</p>
         <Toggle
           options={[{ value: 'on', label: onLabel }, { value: 'off', label: offLabel }]}
@@ -501,6 +516,19 @@ function GroundStep({
   const { t } = useLanguage();
   return (
     <div className="space-y-4">
+      <div>
+        <p className="label">{t('configurator.installation_label')}</p>
+        <SelectGrid
+          options={[
+            { value: 'ground',  label: t('configurator.install_ground') },
+            { value: 'partial', label: t('configurator.install_partial') },
+            { value: 'sunken',  label: t('configurator.install_sunken') },
+          ]}
+          value={config.installation ?? 'ground'}
+          onChange={(v) => set('installation', v as InstallationType)}
+        />
+        <p className="mt-2 text-sm text-slate-500">{t('configurator.install_note')}</p>
+      </div>
       <div>
         <p className="label">{t('configurator.ground_type')}</p>
         <SelectGrid
@@ -585,7 +613,7 @@ function FinishStep({
             >
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
-                src={val}
+                src={claddingThumbUrl(val)}
                 alt={tex.name}
                 className="absolute inset-0 h-full w-full object-cover"
                 loading="eager"
@@ -890,6 +918,11 @@ function SummaryStep({
     blue:       t('configurator.blue_color'),
     white:      t('configurator.white_color'),
   };
+  const installationLabel: Record<string, string> = {
+    ground:  t('configurator.install_ground'),
+    partial: t('configurator.install_partial'),
+    sunken:  t('configurator.install_sunken'),
+  };
   const groundLabel: Record<string, string> = {
     gravel:   t('configurator.gravel'),
     wood:     t('configurator.wood_deck'),
@@ -910,6 +943,8 @@ function SummaryStep({
     [t('configurator.row_lighting'),  config.lighting.enabled ? t('configurator.light_on_status').replace('{color}', config.lighting.color.toUpperCase()) : t('configurator.none')],
     [t('configurator.row_waterfall'), config.waterfall ? t('configurator.yes') : t('configurator.none')],
     [t('configurator.row_cover'),     config.poolCover ? (config.poolCoverType === 'manual' ? t('configurator.cover_manual') : t('configurator.cover_auto')) : t('configurator.none')],
+    [t('configurator.row_installation'), installationLabel[config.installation ?? 'ground']],
+    [t('configurator.stair_style_label'), config.stairStyle === 'block' ? t('configurator.stair_block') : t('configurator.stair_open')],
     [t('configurator.row_ground'),    groundLabel[config.ground] ?? config.ground],
     [t('configurator.row_cladding'),  claddingLabel[config.cladding] ?? t('configurator.cladding_custom')],
   ];
@@ -943,6 +978,7 @@ function SummaryStep({
             breakdown.panel    > 0 ? [t('configurator.glass_panels_cost'), breakdown.panel]    : null,
             [t('configurator.platform_cost'),       breakdown.platform],
             breakdown.ground   > 0 ? [t('configurator.subfloor_cost'),     breakdown.ground]   : null,
+            breakdown.installation > 0 ? [t('configurator.installation_cost'), breakdown.installation] : null,
             breakdown.cladding > 0 ? [t('configurator.inner_cladding_cost'),breakdown.cladding]: null,
             breakdown.lighting > 0 ? [t('configurator.lighting'),          breakdown.lighting] : null,
             breakdown.waterfall> 0 ? [t('configurator.waterfall'),         breakdown.waterfall]: null,

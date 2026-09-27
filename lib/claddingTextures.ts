@@ -28,3 +28,21 @@ export const CLADDING_TEXTURES: { file: string; name: string }[] = [
 ];
 
 export const CLADDING_TEXTURE_URLS = CLADDING_TEXTURES.map(t => `/textures/${t.file}`);
+
+/*
+ * Kayıtlı değer orijinal yoldur (/textures/X.webp) — eski tasarımlar bozulmasın diye değişmez.
+ * Orijinaller ~9400 px; listede küçük resim, sahnede 2048 px'lik sürüm kullanılır.
+ */
+export function claddingThumbUrl(path: string): string {
+  return path.replace('/textures/', '/textures/cladding/thumb/');
+}
+
+export function claddingSceneUrl(path: string): string {
+  return path.replace('/textures/', '/textures/cladding/scene/');
+}
+
+/** Dosya adındaki ölçüden (örn. "60x120", "30x60") karo boyutu, metre [en, boy]; yoksa 60×120. */
+export function claddingTileSize(path: string): [number, number] {
+  const m = path.match(/(\d{2,3})\s*[xX]\s*(\d{2,3})/);
+  return m ? [Number(m[1]) / 100, Number(m[2]) / 100] : [0.6, 1.2];
+}
