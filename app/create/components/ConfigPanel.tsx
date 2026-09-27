@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
   POOL_SIDES,
   getPanelType,
@@ -71,13 +71,16 @@ export default function ConfigPanel({
     onChange({ ...config, [key]: value });
 
   const step = STEPS[stepIdx];
+  const contentRef = useRef<HTMLDivElement>(null);
+  useEffect(() => { contentRef.current?.scrollTo({ top: 0 }); }, [stepIdx]);
   const isFirst = stepIdx === 0;
   const isLast = stepIdx === STEPS.length - 1;
 
   return (
-    <aside className="card flex max-h-[55vh] lg:max-h-[80vh] flex-col">
+    <aside className="card flex h-[55vh] flex-col overflow-hidden lg:h-[75vh] lg:min-h-[480px]">
+      {/* Sabit yükseklik (önizleme alanıyla aynı): üst bar ve alt butonlar sabit, yalnızca içerik kayar */}
       {/* Stepper */}
-      <div id="tour-stepper" className="border-b border-slate-200 px-2 sm:px-4 py-2 sm:py-3.5">
+      <div id="tour-stepper" className="shrink-0 border-b border-slate-200 px-2 sm:px-4 py-2 sm:py-3.5">
         <div className="relative flex items-center justify-between">
           {/* Connecting track */}
           <div className="pointer-events-none absolute inset-x-[14px] top-1/2 h-1 -translate-y-1/2 rounded-full bg-slate-200" />
@@ -153,7 +156,7 @@ export default function ConfigPanel({
       </div>
 
       {/* Step content */}
-      <div id="tour-content" className="flex-1 space-y-4 sm:space-y-5 overflow-y-auto p-3 sm:p-4">
+      <div id="tour-content" ref={contentRef} className="min-h-0 flex-1 space-y-4 sm:space-y-5 overflow-y-auto overscroll-contain p-3 sm:p-4">
         {step.key === 'size'      && <SizeStep config={config} set={set} region={region} />}
         {step.key === 'frame'     && <FrameStep config={config} set={set} />}
         {step.key === 'panels'    && <PanelsStep config={config} set={set} onChange={onChange} />}
@@ -187,7 +190,7 @@ export default function ConfigPanel({
           disabled={isFirst}
           className="btn-outline px-4 py-2.5 text-sm min-h-[44px] disabled:cursor-not-allowed disabled:opacity-40"
         >
-          ← {t('configurator.prev')}
+          {t('configurator.prev')}
         </button>
         <span className="text-xs font-medium text-slate-500">
           {stepIdx + 1} / {STEPS.length}
@@ -198,7 +201,7 @@ export default function ConfigPanel({
           disabled={isLast}
           className="btn-primary px-4 py-2.5 text-sm min-h-[44px] disabled:cursor-not-allowed disabled:opacity-40"
         >
-          {t('configurator.next')} →
+          {t('configurator.next')}
         </button>
       </div>
     </aside>
