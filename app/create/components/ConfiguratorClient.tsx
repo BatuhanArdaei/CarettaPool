@@ -14,6 +14,8 @@ import { CLADDING_TEXTURE_URLS, claddingThumbUrl } from '@/lib/claddingTextures'
 import { POOL_TEMPLATES, getTemplate } from '@/lib/pool/templates';
 import TemplateView from './TemplateView';
 import VenueSelector from './VenueSelector';
+import PlacementBar, { PlacementButton } from './PlacementBar';
+import { NO_ADJUST, clampAdjust, type PlacementAdjust } from './TemplateScene';
 import PreviewTools, { downloadPreview, usePreviewExpanded } from './PreviewTools';
 
 function PoolSceneLoading() {
@@ -46,6 +48,12 @@ export default function ConfiguratorClient({ userId, userEmail, role, fullName }
   // undefined = henüz seçilmedi, null = mekânsız (3D Stüdyo)
   const [venueId, setVenueId] = useState<string | null | undefined>(undefined);
   const venue = getTemplate(venueId);
+  // Mekânda Gör: kullanıcının havuzu taşıması/döndürmesi (mekân başına ayrı saklanır)
+  const [placing, setPlacing] = useState(false);
+  const [adjusts, setAdjusts] = useState<Record<string, PlacementAdjust>>({});
+  const adjust = adjusts[venue.id] ?? NO_ADJUST;
+  const setAdjust = (a: PlacementAdjust) =>
+    setAdjusts((prev) => ({ ...prev, [venue.id]: clampAdjust(a, venue.placement) }));
   const controlsRef = useRef<{ reset: () => void } | null>(null);
   const previewRef = useRef<HTMLDivElement>(null);
   const preview = usePreviewExpanded(previewRef);
@@ -131,7 +139,19 @@ export default function ConfiguratorClient({ userId, userEmail, role, fullName }
           {viewMode === 'studio' ? (
             <PoolScene config={config} controlsRef={controlsRef} />
           ) : (
-            <TemplateView template={venue} config={config} night={config.lighting.enabled} alt={t(venue.nameKey)}>
+            <TemplateView
+              template={venue}
+              config={config}
+              night={config.lighting.enabled}
+              alt={t(venue.nameKey)}
+              adjust={adjust}
+              onAdjust={placing ? setAdjust : undefined}
+            >
+              {placing ? (
+                <PlacementBar adjust={adjust} onChange={setAdjust} onDone={() => setPlacing(false)} />
+              ) : (
+              <>
+              <PlacementButton onClick={() => setPlacing(true)} />
               {/* Mekân değiştir */}
               <div className="absolute bottom-1.5 left-1/2 z-10 flex -translate-x-1/2 gap-1 rounded-lg bg-white/85 p-1 shadow-sm ring-1 ring-slate-200 backdrop-blur-sm sm:bottom-3 sm:gap-1.5">
                 {POOL_TEMPLATES.map((v) => (
@@ -154,6 +174,8 @@ export default function ConfiguratorClient({ userId, userEmail, role, fullName }
                   </button>
                 ))}
               </div>
+              </>
+              )}
             </TemplateView>
           )}
           {/* Loading overlay — covers only this panel, shown for 3 s after region pick */}

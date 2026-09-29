@@ -5,6 +5,7 @@ import dynamic from 'next/dynamic';
 import { calibrateFromRect, focalFrom35mm, levelCamera, type Vec2 } from '@/lib/pool/calibration';
 import type { PoolTemplate, TemplateCalibration, TemplatePlacement, TemplateSun } from '@/lib/pool/templates';
 import type { PoolConfig } from '@/lib/types';
+import type { PlacementAdjust } from './TemplateScene';
 
 const TemplateScene = dynamic(() => import('./TemplateScene'), { ssr: false });
 
@@ -32,6 +33,8 @@ export default function TemplateView({
   showPool = true,
   fit = 'contain',
   alt,
+  adjust,
+  onAdjust,
   children,
 }: {
   template: PoolTemplate;
@@ -45,6 +48,9 @@ export default function TemplateView({
   /** 'contain': görsel kırpılmadan sığar, boşluğu bulanık kopyası doldurur; 'cover': alanı doldurur */
   fit?: 'contain' | 'cover';
   alt?: string;
+  adjust?: PlacementAdjust;
+  /** Verilirse havuz sürüklenebilir */
+  onAdjust?: (adjust: PlacementAdjust) => void;
   children?: ReactNode;
 }) {
   const solution = useTemplateSolution(template, calibration);
@@ -103,6 +109,8 @@ export default function TemplateView({
             night={night}
             placement={placement}
             sun={sun}
+            adjust={adjust}
+            onAdjust={onAdjust}
           />
         )}
       </div>

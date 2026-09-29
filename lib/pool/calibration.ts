@@ -45,6 +45,20 @@ export function levelCamera(
   };
 }
 
+/** Görüntüdeki (0–1) noktayı zemin düzlemine izdüşürür → düzlem koordinatı (a, b); ufkun üstündeyse null. */
+export function imageToPlane(solution: CameraSolution, aspect: number, uv: Vec2): Vec2 | null {
+  const [pu, pv] = solution.principal ?? [0.5, 0.5];
+  const cx = ((uv[0] - pu) * 1000 * aspect) / solution.focalPx;
+  const cy = (-(uv[1] - pv) * 1000) / solution.focalPx;
+  const { x, y, z } = solution.basis;
+  const dir: Vec3 = [0, 1, 2].map((i) => x[i] * cx + y[i] * cy - z[i]) as Vec3;
+  if (dir[1] >= -1e-6) return null;
+  const t = -solution.position[1] / dir[1];
+  const wx = solution.position[0] + dir[0] * t;
+  const wz = solution.position[2] + dir[2] * t;
+  return [wx, -wz * solution.planeSign];
+}
+
 /** Dünya noktasını görüntüye oranla (0–1) koordinata izdüşürür; kameranın arkasındaysa null. */
 export function projectToImage(solution: CameraSolution, aspect: number, point: Vec3): Vec2 | null {
   const d: Vec3 = [

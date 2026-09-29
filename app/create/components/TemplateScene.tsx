@@ -1,15 +1,32 @@
 'use client';
 
-import { Suspense, useEffect, useMemo, useRef } from 'react';
-import { Canvas, useThree } from '@react-three/fiber';
+import { Suspense, useCallback, useEffect, useMemo, useRef } from 'react';
+import { Canvas, useThree, type ThreeEvent } from '@react-three/fiber';
 import { Environment } from '@react-three/drei';
 import * as THREE from 'three';
 import { Pool, groundGeometry, poolFootprint, sinkDepth } from './PoolScene';
-import { planeToWorld, type CameraSolution } from '@/lib/pool/calibration';
+import { imageToPlane, planeToWorld, projectToImage, type CameraSolution, type Vec2 } from '@/lib/pool/calibration';
 import { DAY_ENVIRONMENT, NIGHT_ENVIRONMENT, type PoolTemplate, type TemplatePlacement, type TemplateSun } from '@/lib/pool/templates';
 import type { PoolConfig } from '@/lib/types';
 
 const v3 = (v: [number, number, number]) => new THREE.Vector3(...v);
+
+/** Kullanıcının şablon yerleşimine yaptığı düzeltme: zeminde kaydırma (metre) ve ek dönüş (derece). */
+export interface PlacementAdjust {
+  dA: number;
+  dB: number;
+  rot: number;
+}
+export const NO_ADJUST: PlacementAdjust = { dA: 0, dB: 0, rot: 0 };
+
+/** Kaydırma sınırları: havuz görselden kaçmasın, kameranın önünde kalsın. */
+export function clampAdjust(adj: PlacementAdjust, base: TemplatePlacement): PlacementAdjust {
+  const dA = Math.max(-12, Math.min(12, adj.dA));
+  const dB = Math.max(Math.max(-12, 6 - base.centerB), Math.min(12, adj.dB));
+  // Yalnızca 4 yön: kenarlar cepheye / zemin derzlerine paralel ya da dik kalır
+  const rot = ((Math.round(adj.rot / 90) * 90) % 360 + 360) % 360;
+  return { dA, dB, rot };
+}
 
 /**
  * Kamerayı kalibrasyondan kurar. Ana nokta merkez dışındaysa (lens kaydırmalı çekim)
@@ -114,7 +131,25 @@ const PLATFORM_DIR: Record<PoolConfig['platformDirection'], [number, number]> = 
  * kameraya açık kalır, platform yanda görünür. Dış merdiven uzak uçta kalıyorsa model
  * aynalanır ve merdiven kameraya yakın uca gelir. `rotation`, şablonun tercih ettiği yönü verir.
  */
-function PlacedPool({ solution, placement, config, night }: { solution: CameraSolution; placement: TemplatePlacement; config: PoolConfig; night: boolean }) {
+function PlacedPool({
+  solution,
+  placement,
+  config,
+  night,
+  userRotation = 0,
+  facade,
+  onDragStart,
+}: {
+  solution: CameraSolution;
+  placement: TemplatePlacement;
+  config: PoolConfig;
+  night: boolean;
+  /** Cephe taban çizgisi (düzlem koordinatı); havuz bunun arkasına geçmez */
+  facade?: [Vec2, Vec2] | null;
+  /** Otomatik yönün üstüne eklenen dönüş (derece), havuz + platform merkezi etrafında */
+  userRotation?: number;
+  onDragStart?: (e: ThreeEvent<PointerEvent>) => void;
+}) {
   const groupRef = useRef<THREE.Group>(null);
   const invalidate = useThree((s) => s.invalidate);
   const longAxisIsX = config.width > config.length;
@@ -165,13 +200,45 @@ function PlacedPool({ solution, placement, config, night }: { solution: CameraSo
       else x = x.clone().negate();
     }
 
+    // 3) Kullanıcı dönüşü (zemin normali etrafında)
+    if (userRotation) {
+      const q = new THREE.Quaternion().setFromAxisAngle(y, THREE.MathUtils.degToRad(-userRotation));
+      x = x.clone().applyQuaternion(q);
+      z = z.clone().applyQuaternion(q);
+    }
+
     // Yerleşim noktası havuzun değil, havuz + platform bütününün merkezi olsun
     const fp = poolFootprint(config);
     const centerOffset = x.clone().multiplyScalar((fp.minX + fp.maxX) / 2).add(z.clone().multiplyScalar((fp.minZ + fp.maxZ) / 2));
 
-    return new THREE.Matrix4().makeBasis(x, y, z).setPosition(origin.sub(centerOffset));
+    const pos = origin.sub(centerOffset);
+
+    // 4) Cephe sınırı: havuz + makine dairesi köşeleri cephe çizgisinin önünde kalsın
+    if (facade) {
+      const [f1, f2] = facade;
+      const toPlane = (w: THREE.Vector3): Vec2 => [w.x, -w.z * solution.planeSign];
+      const cam = toPlane(v3(solution.position));
+      let n: Vec2 = [-(f2[1] - f1[1]), f2[0] - f1[0]];
+      const len = Math.hypot(n[0], n[1]);
+      n = [n[0] / len, n[1] / len];
+      // Normal kameraya baksın
+      if ((cam[0] - f1[0]) * n[0] + (cam[1] - f1[1]) * n[1] < 0) n = [-n[0], -n[1]];
+      const margin = 0.6;
+      let worst = Infinity;
+      for (const lx of [fp.minX, fp.maxX]) {
+        for (const lz of [fp.minZ, fp.maxZ]) {
+          const w = pos.clone().add(x.clone().multiplyScalar(lx)).add(z.clone().multiplyScalar(lz));
+          const p = toPlane(w);
+          worst = Math.min(worst, (p[0] - f1[0]) * n[0] + (p[1] - f1[1]) * n[1] - margin);
+        }
+      }
+      // Yalnızca derinlik yönünde (kameraya doğru) it — yana kaydırma olmasın
+      if (worst < 0 && n[1] < -1e-3) pos.add(v3(planeToWorld(0, worst / -n[1], solution.planeSign)));
+    }
+
+    return new THREE.Matrix4().makeBasis(x, y, z).setPosition(pos);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [solution.planeSign, solution.position, placement.centerA, placement.centerB, placement.rotation, longAxisIsX, config.platformDirection, config.width, config.length]);
+  }, [solution.planeSign, solution.position, placement.centerA, placement.centerB, placement.rotation, longAxisIsX, config.platformDirection, config.width, config.length, userRotation, facade]);
 
   // Havuzun tüm parçaları gölge atsın/alsın (ana sahnedeki EnableAllShadows'un karşılığı)
   useEffect(() => {
@@ -187,7 +254,14 @@ function PlacedPool({ solution, placement, config, night }: { solution: CameraSo
   return (
     <group ref={groupRef} matrix={matrix} matrixAutoUpdate={false}>
       <PhotoGround config={config} shadowOpacity={night ? 0.18 : 0.32} />
-      <Pool config={config} isNight={night} groundPatch="kerb" />
+      {/* Sürükleme yalnızca havuzun kendisinden başlar (dev fotoğraf zemininden değil) */}
+      <group
+        onPointerDown={onDragStart}
+        onPointerOver={onDragStart ? () => (document.body.style.cursor = 'grab') : undefined}
+        onPointerOut={onDragStart ? () => (document.body.style.cursor = '') : undefined}
+      >
+        <Pool config={config} isNight={night} groundPatch="kerb" />
+      </group>
     </group>
   );
 }
@@ -232,6 +306,83 @@ function Invalidator({ deps, animate }: { deps: unknown[]; animate: boolean }) {
   return null;
 }
 
+/**
+ * Havuzu zemin düzleminde sürükler: imleç kameradan zemine (y = 0) ışınla izdüşürülür,
+ * böylece havuz fotoğrafın perspektifinde kayar. Tutulan nokta ile merkez arasındaki fark korunur.
+ */
+function DragController({
+  solution,
+  aspect,
+  base,
+  adjust,
+  onAdjust,
+  startRef,
+}: {
+  solution: CameraSolution;
+  aspect: number;
+  base: TemplatePlacement;
+  adjust: PlacementAdjust;
+  onAdjust?: (adjust: PlacementAdjust) => void;
+  startRef: React.MutableRefObject<((e: ThreeEvent<PointerEvent>) => void) | null>;
+}) {
+  const camera = useThree((s) => s.camera);
+  const gl = useThree((s) => s.gl);
+  const latest = useRef({ adjust, onAdjust, base });
+  latest.current = { adjust, onAdjust, base };
+
+  const groundAt = useCallback(
+    (clientX: number, clientY: number) => {
+      const rect = gl.domElement.getBoundingClientRect();
+      const ndc = new THREE.Vector2(
+        ((clientX - rect.left) / rect.width) * 2 - 1,
+        -((clientY - rect.top) / rect.height) * 2 + 1,
+      );
+      const ray = new THREE.Raycaster();
+      ray.setFromCamera(ndc, camera);
+      const hit = ray.ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0, 1, 0), 0), new THREE.Vector3());
+      // Dünya (x, z) → düzlem (a, b)
+      return hit ? { a: hit.x, b: -hit.z * solution.planeSign } : null;
+    },
+    [camera, gl, solution.planeSign],
+  );
+
+  useEffect(() => {
+    startRef.current = (e) => {
+      const { onAdjust: cb } = latest.current;
+      if (!cb) return;
+      e.stopPropagation();
+      const start = groundAt(e.nativeEvent.clientX, e.nativeEvent.clientY);
+      if (!start) return;
+      const from = latest.current.adjust;
+      document.body.style.cursor = 'grabbing';
+      const move = (ev: PointerEvent) => {
+        const p = groundAt(ev.clientX, ev.clientY);
+        const { onAdjust: cb2, base: b } = latest.current;
+        if (!p || !cb2) return;
+        const next = clampAdjust({ dA: from.dA + p.a - start.a, dB: from.dB + p.b - start.b, rot: from.rot }, b);
+        // Havuz merkezi görselin görünür alanında kalsın (kenardan taşmasın)
+        const c = projectToImage(solution, aspect, planeToWorld(b.centerA + next.dA, b.centerB + next.dB, solution.planeSign));
+        if (!c || c[0] < 0.12 || c[0] > 0.88 || c[1] < 0.4 || c[1] > 0.84) return;
+        cb2(next);
+      };
+      const up = () => {
+        document.body.style.cursor = '';
+        window.removeEventListener('pointermove', move);
+        window.removeEventListener('pointerup', up);
+        window.removeEventListener('pointercancel', up);
+      };
+      window.addEventListener('pointermove', move);
+      window.addEventListener('pointerup', up);
+      window.addEventListener('pointercancel', up);
+    };
+    return () => {
+      startRef.current = null;
+    };
+  }, [groundAt, startRef, solution, aspect]);
+
+  return null;
+}
+
 export default function TemplateScene({
   template,
   solution,
@@ -240,6 +391,8 @@ export default function TemplateScene({
   placement,
   sun,
   fit = 'cover',
+  adjust = NO_ADJUST,
+  onAdjust,
 }: {
   template: PoolTemplate;
   solution: CameraSolution;
@@ -248,10 +401,25 @@ export default function TemplateScene({
   fit?: 'contain' | 'cover';
   placement?: TemplatePlacement;
   sun?: TemplateSun;
+  /** Kullanıcı düzeltmesi (kaydırma + dönüş) */
+  adjust?: PlacementAdjust;
+  /** Verilirse havuz sürüklenebilir */
+  onAdjust?: (adjust: PlacementAdjust) => void;
 }) {
-  const place = placement ?? template.placement;
+  const basePlace = placement ?? template.placement;
+  const place = useMemo(
+    () => ({ ...basePlace, centerA: basePlace.centerA + adjust.dA, centerB: basePlace.centerB + adjust.dB }),
+    [basePlace, adjust.dA, adjust.dB],
+  );
   const daySun = sun ?? template.sun;
   // Gece: ay ışığı (soğuk, zayıf) + görseldeki sıcak aydınlatmaya uyan dolgu ışığı
+  const dragStartRef = useRef<((e: ThreeEvent<PointerEvent>) => void) | null>(null);
+  const facade = useMemo(() => {
+    if (!template.facade) return null;
+    const a = imageToPlane(solution, template.aspect, template.facade[0]);
+    const b = imageToPlane(solution, template.aspect, template.facade[1]);
+    return a && b ? ([a, b] as [Vec2, Vec2]) : null;
+  }, [solution, template.aspect, template.facade]);
   const light: TemplateSun = night
     ? { azimuth: daySun.azimuth, elevation: 50, intensity: 0.35, color: '#b4c4ff' }
     : daySun;
@@ -271,8 +439,16 @@ export default function TemplateScene({
         gl.toneMapping = THREE.NeutralToneMapping;
         gl.toneMappingExposure = 1;
       }}
-      style={{ position: 'absolute', inset: 0 }}
+      style={{ position: 'absolute', inset: 0, touchAction: onAdjust ? 'none' : undefined }}
     >
+      <DragController
+        solution={solution}
+        aspect={template.aspect}
+        base={basePlace}
+        adjust={adjust}
+        onAdjust={onAdjust}
+        startRef={dragStartRef}
+      />
       <CalibratedCamera solution={solution} aspect={template.aspect} focusX={template.focusX} fit={fit} />
       <ambientLight intensity={night ? 0.22 : 0.35} color={night ? '#ffd3a1' : '#dfeeff'} />
       <Sun solution={solution} sun={light} target={target} />
@@ -282,9 +458,17 @@ export default function TemplateScene({
           background={false}
           environmentIntensity={night ? 0.7 : 1}
         />
-        <PlacedPool solution={solution} placement={place} config={config} night={night} />
+        <PlacedPool
+          solution={solution}
+          placement={place}
+          config={config}
+          night={night}
+          userRotation={adjust.rot}
+          facade={facade}
+          onDragStart={onAdjust ? (e) => dragStartRef.current?.(e) : undefined}
+        />
       </Suspense>
-      <Invalidator deps={[config, place, light, solution, night]} animate={config.showWater || config.lighting.enabled} />
+      <Invalidator deps={[config, place, light, solution, night, adjust.rot]} animate={config.showWater || config.lighting.enabled} />
     </Canvas>
   );
 }

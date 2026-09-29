@@ -58,6 +58,8 @@ export interface PoolTemplate {
   calibration: TemplateCalibration;
   sun: TemplateSun;
   placement: TemplatePlacement;
+  /** Cephe taban çizgisi (görüntüye oranla iki nokta). Havuz bu çizginin arkasına geçemez. */
+  facade?: [Vec2, Vec2];
 }
 
 export const DAY_ENVIRONMENT = '/hdr/kloofendal_48d_partly_cloudy_puresky_1k.hdr';
@@ -71,11 +73,10 @@ const asset = (id: string) => ({
 });
 
 /*
- * Başlangıç kalibrasyonları görsellerden ölçüldü: kaçış noktası zemin çizgilerinden,
- * kamera yüksekliği zemin–kapı üst kenarı oranından (yerden tavana kapı ≈ 2,8 m).
- * Yerleşim: havuz cepheden ~3,5 m önde, görüntünün yatay ortasında. `rotation`, cephe taban
- * çizgisinin zemindeki açısıdır (villalar kameraya göre ~10° dönük); havuz cepheye paralel durur. Lens promptta
- * istenen 24 mm. İnce ayar: Admin → Mekân Şablonları (zemin ızgarası ile).
+ * Görseller: ~10 m yükseklikten, villaya tam karşıdan drone çekimi (villa önünde ≥22×22 m boş alan;
+ * 13 m havuz iki yönde de sığar). Kalibrasyon ölçümle: kaçış noktası zemin derzlerinden (derz yoksa
+ * alan kenar bordürlerinden), kamera yüksekliği zemin kat cam yüksekliğinden (≈2,9 m), lens 24 mm.
+ * `facade`: evin zemine oturduğu çizgi; havuz bunun arkasına geçmez. İnce ayar: Admin → Mekân Şablonları.
  */
 export const POOL_TEMPLATES: PoolTemplate[] = [
   {
@@ -84,9 +85,10 @@ export const POOL_TEMPLATES: PoolTemplate[] = [
     ...asset('mekan-1'),
     aspect: 1672 / 941,
     focusX: 0.5,
-    calibration: { mode: 'level', vp: [0.677, 0.182], focal35: 24, height: 5.2 },
-    sun: { azimuth: 60, elevation: 35, intensity: 2.2, color: '#fff1dc' },
-    placement: { centerA: -3.05, centerB: 11.6, rotation: -10.5 },
+    calibration: { mode: 'level', vp: [0.503, -0.038], focal35: 24, height: 10.5 },
+    sun: { azimuth: -135, elevation: 40, intensity: 2.2, color: '#fff1dc' },
+    placement: { centerA: -0.1, centerB: 22.5, rotation: 0 },
+    facade: [[0.3, 0.405], [0.7, 0.405]],
   },
   {
     id: 'mekan-2',
@@ -94,9 +96,10 @@ export const POOL_TEMPLATES: PoolTemplate[] = [
     ...asset('mekan-2'),
     aspect: 1672 / 941,
     focusX: 0.5,
-    calibration: { mode: 'level', vp: [0.677, 0.341], focal35: 24, height: 3.1 },
-    sun: { azimuth: 70, elevation: 28, intensity: 2.2, color: '#ffe2b8' },
-    placement: { centerA: -3.25, centerB: 12.3, rotation: -10 },
+    calibration: { mode: 'level', vp: [0.507, -0.014], focal35: 24, height: 9.1 },
+    sun: { azimuth: -130, elevation: 30, intensity: 2.2, color: '#ffe2b8' },
+    placement: { centerA: -0.2, centerB: 20.5, rotation: 0 },
+    facade: [[0.3, 0.415], [0.7, 0.415]],
   },
   {
     id: 'mekan-3',
@@ -104,9 +107,10 @@ export const POOL_TEMPLATES: PoolTemplate[] = [
     ...asset('mekan-3'),
     aspect: 1672 / 941,
     focusX: 0.5,
-    calibration: { mode: 'level', vp: [0.718, 0.242], focal35: 24, height: 4.65 },
-    sun: { azimuth: 20, elevation: 40, intensity: 1.3, color: '#fff4e6' },
-    placement: { centerA: -4.15, centerB: 12.7, rotation: -9.5 },
+    calibration: { mode: 'level', vp: [0.505, 0.055], focal35: 24, height: 8.6 },
+    sun: { azimuth: 30, elevation: 40, intensity: 1.3, color: '#fff4e6' },
+    placement: { centerA: -0.15, centerB: 22, rotation: 0 },
+    facade: [[0.3, 0.405], [0.7, 0.405]],
   },
   {
     id: 'mekan-4',
@@ -114,9 +118,10 @@ export const POOL_TEMPLATES: PoolTemplate[] = [
     ...asset('mekan-4'),
     aspect: 1672 / 941,
     focusX: 0.5,
-    calibration: { mode: 'level', vp: [0.664, 0.249], focal35: 24, height: 4.3 },
-    sun: { azimuth: 40, elevation: 55, intensity: 2.4, color: '#fff6e8' },
-    placement: { centerA: -2.6, centerB: 10.5, rotation: -8.5 },
+    calibration: { mode: 'level', vp: [0.509, 0.005], focal35: 24, height: 8.7 },
+    sun: { azimuth: 135, elevation: 45, intensity: 2.4, color: '#fff6e8' },
+    placement: { centerA: -0.25, centerB: 20.5, rotation: 0 },
+    facade: [[0.3, 0.4], [0.7, 0.4]],
   },
 ];
 
