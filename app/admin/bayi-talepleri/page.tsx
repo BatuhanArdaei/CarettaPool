@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
+import { formatPrice, type Currency } from '@/lib/regionalPricing';
 
 interface Row {
   id: string;
@@ -12,8 +13,9 @@ interface Row {
   dealer_name?: string;
 }
 
-const fmt = (n: number) =>
-  new Intl.NumberFormat('tr-TR', { style: 'currency', currency: 'TRY', maximumFractionDigits: 0 }).format(n);
+/** Teklif, hesaplandığı bölgenin para birimiyle gösterilir (eski kayıtlar TL) */
+const fmt = (n: number, config?: Record<string, unknown>) =>
+  formatPrice(n, ((config?.currency as Currency | undefined) ?? 'TRY'));
 
 export default function BayiTalepleriPage() {
   const supabase = createClient();
@@ -71,7 +73,7 @@ export default function BayiTalepleriPage() {
                       <td className="px-5 py-3 font-medium text-slate-900">{r.dealer_name}</td>
                       <td className="px-5 py-3 text-slate-600">{new Date(r.created_at).toLocaleString('tr-TR')}</td>
                       <td className="px-5 py-3">{w} × {l} m</td>
-                      <td className="px-5 py-3 text-right font-bold text-brand-700">{fmt(r.total_price)}</td>
+                      <td className="px-5 py-3 text-right font-bold text-brand-700">{fmt(r.total_price, r.config)}</td>
                       <td className="px-5 py-3 text-right">
                         <button onClick={() => setOpen(open === r.id ? null : r.id)}
                           className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50">

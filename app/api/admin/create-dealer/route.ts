@@ -22,7 +22,7 @@ export async function POST(req: NextRequest) {
     const { data: callerProfile } = await callerClient.from('profiles').select('role').eq('id', caller.id).single();
     if (callerProfile?.role !== 'admin') return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
-    const { company_name, email, password, full_name, discount_rate, discount_type, custom_prices } = await req.json();
+    const { company_name, email, password, full_name, discount_rate, discount_type, custom_prices, region } = await req.json();
 
     if (!company_name || !email || !password)
       return NextResponse.json({ error: 'Eksik alan' }, { status: 400 });
@@ -48,14 +48,19 @@ export async function POST(req: NextRequest) {
     });
 
     // 3. Create dealer record
-    const { error: dealerErr } = await supabase.from('dealers').insert({
+    const dealerRow = {
       user_id: userId,
       company_name,
       discount_rate: discount_rate ?? 0,
       discount_type: discount_type ?? 'percentage',
       custom_prices: custom_prices ?? {},
       is_active: true,
-    });
+    };
+    let { error: dealerErr } = await supabase.from('dealers').insert({ ...dealerRow, ...(region ? { region } : {}) });
+    // "region" kolonu henüz eklenmemişse (supabase/dealer-region.sql) bölgesiz kaydet
+    if (dealerErr && region && /region/.test(dealerErr.message)) {
+      ({ error: dealerErr } = await supabase.from('dealers').insert(dealerRow));
+    }
     if (dealerErr) return NextResponse.json({ error: dealerErr.message }, { status: 400 });
 
     return NextResponse.json({ success: true, user_id: userId });

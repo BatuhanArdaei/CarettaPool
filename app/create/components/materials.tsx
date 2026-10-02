@@ -296,3 +296,63 @@ export function getTileMaps() {
   };
   return tileMaps;
 }
+
+/* ── Güneş paneli ───────────────────────────────────────────────────────── */
+
+let solarTexture: THREE.Texture | null = null;
+
+/** Tek panel: 6 × 10 monokristal hücre, ince bara çizgileri, koyu arka levha (dikey yönlü). */
+export function getSolarTexture() {
+  if (solarTexture) return solarTexture;
+  const cols = 6;
+  const rows = 10;
+  const W = 384;
+  const H = 640;
+  const canvas = document.createElement('canvas');
+  canvas.width = W;
+  canvas.height = H;
+  const ctx = canvas.getContext('2d')!;
+  ctx.fillStyle = '#d9dde2'; // hücre arası beyaz arka levha
+  ctx.fillRect(0, 0, W, H);
+  const gap = 4;
+  const cw = (W - gap * (cols + 1)) / cols;
+  const ch = (H - gap * (rows + 1)) / rows;
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      const x = gap + c * (cw + gap);
+      const yy = gap + r * (ch + gap);
+      const g = ctx.createLinearGradient(x, yy, x + cw, yy + ch);
+      g.addColorStop(0, '#16233f');
+      g.addColorStop(1, '#0b1428');
+      ctx.fillStyle = g;
+      // köşeleri pahlı monokristal hücre
+      const k = 5;
+      ctx.beginPath();
+      ctx.moveTo(x + k, yy);
+      ctx.lineTo(x + cw - k, yy);
+      ctx.lineTo(x + cw, yy + k);
+      ctx.lineTo(x + cw, yy + ch - k);
+      ctx.lineTo(x + cw - k, yy + ch);
+      ctx.lineTo(x + k, yy + ch);
+      ctx.lineTo(x, yy + ch - k);
+      ctx.lineTo(x, yy + k);
+      ctx.closePath();
+      ctx.fill();
+      // bara çizgileri
+      ctx.strokeStyle = 'rgba(190,198,210,0.55)';
+      ctx.lineWidth = 1;
+      for (let b = 1; b <= 4; b++) {
+        const bx = x + (cw * b) / 5;
+        ctx.beginPath();
+        ctx.moveTo(bx, yy + 2);
+        ctx.lineTo(bx, yy + ch - 2);
+        ctx.stroke();
+      }
+    }
+  }
+  const t = new THREE.CanvasTexture(canvas);
+  t.colorSpace = THREE.SRGBColorSpace;
+  t.anisotropy = 8;
+  solarTexture = t;
+  return t;
+}

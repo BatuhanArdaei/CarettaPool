@@ -1,16 +1,7 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
-import { createAdminClient, createClient } from '@/lib/supabase/server';
-
-async function assertAdmin() {
-  const supabase = createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) throw new Error('Yetki yok');
-  const { data: p } = await supabase.from('profiles').select('role').eq('id', user.id).single();
-  if (p?.role !== 'admin') throw new Error('Yetki yok');
-  return createAdminClient();
-}
+import { assertAdmin } from '@/lib/supabase/adminGuard';
 
 export async function saveSettings(formData: FormData) {
   const supabase = await assertAdmin();
@@ -43,6 +34,30 @@ export async function saveSettings(formData: FormData) {
     .from('site_settings')
     .upsert({ key: section, value, updated_at: new Date().toISOString() }, { onConflict: 'key' });
 
+  revalidatePath('/admin/ayarlar');
+  revalidatePath('/iletisim');
+}
+
+const SECTION_FIELDS = {
+  contact: ['email', 'address', 'maps_url'],
+  social: ['instagram', 'facebook', 'linkedin', 'youtube', 'tiktok'],
+} as const;
+
+/** Admin ayarlar sayfası: yalnızca bilinen alanlar, metin olarak kaydedilir. */
+export async function saveSiteSection(section: 'contact' | 'social', input: Record<string, unknown>) {
+  const supabase = await assertAdmin();
+  const fields = SECTION_FIELDS[section];
+  if (!fields) throw new Error('Bilinmeyen bölüm');
+  const value: Record<string, unknown> = {};
+  for (const f of fields) value[f] = String(input?.[f] ?? '').trim().slice(0, 500);
+  if (section === 'contact') {
+    const phones = Array.isArray(input?.phones) ? input.phones : [];
+    value.phones = phones.map((p) => String(p ?? '').trim().slice(0, 40)).slice(0, 4);
+  }
+  const { error } = await supabase
+    .from('site_settings')
+    .upsert({ key: section, value, updated_at: new Date().toISOString() }, { onConflict: 'key' });
+  if (error) throw new Error(error.message);
   revalidatePath('/admin/ayarlar');
   revalidatePath('/iletisim');
 }

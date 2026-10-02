@@ -3,11 +3,12 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
+import { formatPrice, type Currency } from '@/lib/regionalPricing';
 
 export default function AdminPage() {
   const supabase = createClient();
   const [stats, setStats] = useState({ gallery: 0, catalogs: 0, faqs: 0, dealers: 0, requests: 0, contact: 0 });
-  const [requests, setRequests] = useState<{ id: string; total_price: number; created_at: string }[]>([]);
+  const [requests, setRequests] = useState<{ id: string; total_price: number; created_at: string; currency?: string | null }[]>([]);
 
   useEffect(() => {
     (async () => {
@@ -21,12 +22,12 @@ export default function AdminPage() {
       ]);
       setStats({ gallery: g.count ?? 0, catalogs: c.count ?? 0, faqs: f.count ?? 0, dealers: d.count ?? 0, requests: r.count ?? 0, contact: ct.count ?? 0 });
 
-      const { data } = await supabase.from('pool_configs').select('id, total_price, created_at').order('created_at', { ascending: false }).limit(5);
+      const { data } = await supabase.from('pool_configs').select('id, total_price, created_at, currency:config->>currency').order('created_at', { ascending: false }).limit(5);
       setRequests(data ?? []);
     })();
   }, []);
 
-  const fmt = (n: number) => new Intl.NumberFormat('tr-TR', { style: 'currency', currency: 'TRY', maximumFractionDigits: 0 }).format(n);
+  const fmt = (n: number, currency?: string | null) => formatPrice(n, (currency as Currency | null) ?? 'TRY');
 
 /* ─── SVG Icons ─────────────────────────────────────────────── */
 const ic = { viewBox:'0 0 24 24', fill:'none', stroke:'currentColor', strokeWidth:1.75, strokeLinecap:'round' as const, strokeLinejoin:'round' as const, className:'h-5 w-5' };
@@ -102,7 +103,7 @@ function IconBriefcase() { return <svg {...ic}><rect x="2" y="7" width="20" heig
               <div key={r.id} className="flex items-center justify-between py-3 text-sm">
                 <span className="font-mono text-xs text-slate-400">{r.id.slice(0, 14)}…</span>
                 <span className="text-slate-500">{new Date(r.created_at).toLocaleDateString('tr-TR')}</span>
-                <span className="font-semibold text-slate-900">{fmt(r.total_price)}</span>
+                <span className="font-semibold text-slate-900">{fmt(r.total_price, r.currency)}</span>
               </div>
             ))}
           </div>

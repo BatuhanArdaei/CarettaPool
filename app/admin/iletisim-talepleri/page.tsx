@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
+import { deleteContactRequest, markContactRead } from './actions';
 
 interface ContactRequest {
   id: string;
@@ -29,12 +30,12 @@ export default function IletisimTalepleriPage() {
   useEffect(() => { load(); }, []);
 
   async function markRead(id: string) {
-    await supabase.from('contact_requests').update({ is_read: true }).eq('id', id);
+    await markContactRead(id);
     load();
   }
 
   async function remove(id: string) {
-    await supabase.from('contact_requests').delete().eq('id', id);
+    await deleteContactRequest(id);
     load();
   }
 

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
+import { saveSiteSection } from './actions';
 
 export default function AdminAyarlar() {
   const supabase = createClient();
@@ -21,14 +22,18 @@ export default function AdminAyarlar() {
 
   async function saveContact(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    await supabase.from('site_settings').upsert({ key: 'contact', value: contact, updated_at: new Date().toISOString() }, { onConflict: 'key' });
-    setMsg('İletişim bilgileri kaydedildi');
+    try {
+      await saveSiteSection('contact', contact);
+      setMsg('İletişim bilgileri kaydedildi');
+    } catch { setMsg('Kaydedilemedi'); }
   }
 
   async function saveSocial(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    await supabase.from('site_settings').upsert({ key: 'social', value: social, updated_at: new Date().toISOString() }, { onConflict: 'key' });
-    setMsg('Sosyal medya kaydedildi');
+    try {
+      await saveSiteSection('social', social);
+      setMsg('Sosyal medya kaydedildi');
+    } catch { setMsg('Kaydedilemedi'); }
   }
 
   return (

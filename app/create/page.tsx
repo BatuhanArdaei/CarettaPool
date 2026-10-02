@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server';
+import { dealerRegionOf } from '@/lib/priceServer';
 import ConfiguratorClient from './components/ConfiguratorClient';
 import BayiPopup from '@/components/BayiPopup';
 
@@ -17,6 +18,7 @@ export default async function CreatePage() {
       .single();
     profile = data;
   }
+  const dealerRegion = user && profile?.role === 'dealer' ? await dealerRegionOf(supabase, user.id) : null;
 
   return (
     <>
@@ -28,6 +30,7 @@ export default async function CreatePage() {
         userEmail={user?.email ?? ''}
         role={(profile?.role as 'customer' | 'dealer' | 'admin') ?? 'customer'}
         fullName={profile?.full_name ?? ''}
+        dealerRegion={dealerRegion}
       />
     </>
   );

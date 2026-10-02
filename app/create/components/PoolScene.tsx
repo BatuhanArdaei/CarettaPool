@@ -14,6 +14,8 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import {
   getPanelType,
+  sidePanelSegments,
+  poolEntryOf,
   type CladdingType,
   type FrameColor,
   type GroundType,
@@ -23,11 +25,25 @@ import {
   type PlatformDirection,
 } from '@/lib/types';
 import { CLADDING_TEXTURE_URLS, claddingSceneUrl, claddingTileSize } from '@/lib/claddingTextures';
-import { Beam, GlassMaterial, PowderCoatMaterial, WoodMaterial, getTileMaps, groundAntiTile, groundAntiTileKey } from './materials';
+import { Beam, GlassMaterial, PowderCoatMaterial, WoodMaterial, getSolarTexture, getTileMaps, groundAntiTile, groundAntiTileKey } from './materials';
 
 const POOL_HEIGHT = 1.5;
 const COPING_T = 0.10;
-const PANEL_W  = 2.40;  // fixed panel width in metres
+/**
+ * Kenardaki panellerin 3D konumları: standart 2,40 m camlar + kesik cam (sidePanelSegments),
+ * frame payı düşülmüş iç açıklığa orantılı yerleştirilir. Merkez 0'dan ölçülür.
+ */
+function panelBounds(side: PoolSide, config: PoolConfig, innerSpan: number): { start: number; end: number }[] {
+  const segs = sidePanelSegments(side, config);
+  const total = segs.reduce((a, b) => a + b, 0);
+  const k = innerSpan / total;
+  let x = -innerSpan / 2;
+  return segs.map((len) => {
+    const start = x;
+    x += len * k;
+    return { start, end: x };
+  });
+}
 const PANEL_H  = 1.20;  // fixed panel height in metres
 const COPING_W = 0.32;
 const FRAME_T = 0.10;
@@ -129,7 +145,7 @@ function useCameraFraming(config: PoolConfig) {
     const sx = fp.maxX - fp.minX + 1.4;
     const sz = fp.maxZ - fp.minZ + 1.4;
     const d = Math.max(sx, sz) * 0.9 + 2.4;
-    const ty = Math.max(0.3, (POOL_HEIGHT - sink) * 0.55);
+    const ty = Math.max(0.3, (POOL_HEIGHT - sink) * 0.55) + (config.liftDeck ? 0.9 : 0);
     const c = new THREE.Vector3((fp.minX + fp.maxX) / 2, ty, (fp.minZ + fp.maxZ) / 2);
     const front = sx >= sz ? new THREE.Vector3(0, d * 0.3, d) : new THREE.Vector3(d, d * 0.3, 0);
     const presets: Record<CamPreset, CamView> = {
@@ -139,7 +155,7 @@ function useCameraFraming(config: PoolConfig) {
     };
     return { presets, orbit: { radius: d * 0.95, height: ty + d * 0.4, target: c }, maxDistance: d * 2.2 };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [config.width, config.length, config.platformDirection, config.installation]);
+  }, [config.width, config.length, config.platformDirection, config.installation, config.liftDeck]);
 }
 
 interface CameraRigProps {
@@ -1810,12 +1826,11 @@ function OuterCladding({
   return (
     <group>
       {sides.flatMap((side) => {
-        const segments = Math.max(1, Math.round(side.spanInner / PANEL_W));
-        const segLen = side.spanInner / segments;
-        return Array.from({ length: segments }, (_, i) => {
+        const bounds = panelBounds(side.name, config, side.spanInner);
+        return bounds.map((bd, i) => {
           if (getPanelType(config, side.name, i) === 'glass') return null;
-          const center = -side.spanInner / 2 + segLen * (i + 0.5);
-          const pLen = segLen - segGap;
+          const center = (bd.start + bd.end) / 2;
+          const pLen = bd.end - bd.start - segGap;
           const sign = side.wallCoord > 0 ? 1 : -1;
           const offset = sign * 0.002;
           const position: [number, number, number] = side.axis === 'x'
@@ -1866,6 +1881,8 @@ export function Pool({
   const claddingTex = useCladdingTexture(config.cladding);
   const sink = sinkDepth(config);
   const hole = sink > 0 ? poolFootprint(config) : null;
+  // Güverte aşağıdayken havuz ağzının üstündeki şelale sökülmüş sayılır
+  const deckDown = config.liftDeck && config.liftDeckUp === false;
 
   return (
     <group>
@@ -1985,7 +2002,12 @@ export function Pool({
       )}
 
       {/* Stainless steel waterfall feature (optional) */}
-      {config.waterfall && <Waterfall halfL={halfL} top={top} />}
+      {config.waterfall && !deckDown && <Waterfall halfL={halfL} top={top} />}
+
+      {/* Hareketli güverte: köşe kolonlarında yukarı/aşağı */}
+      {config.liftDeck && (
+        <LiftDeck w={w} l={l} top={top} groundY={sink} frame={frame} up={!deckDown} isNight={isNight} solar={config.liftDeckSolar} />
+      )}
 
       {/* Automatic slatted roller cover (optional) — slides closed when enabled */}
       {config.poolCover && (
@@ -2000,14 +2022,15 @@ export function Pool({
         />
       )}
 
-      {/* In-pool ladder (optional) */}
-      {config.innerLadder && (
-        <PoolLadder
+      {/* Havuza giriş: havuz içi basamaklar */}
+      {poolEntryOf(config) !== 'none' && (
+        <PoolSteps
+          entry={poolEntryOf(config)}
           halfW={halfW}
           halfL={halfL}
-          top={top}
-          waterY={waterY}
           platformDirection={config.platformDirection}
+          color={inner}
+          claddingTex={claddingTex}
         />
       )}
 
@@ -2019,7 +2042,7 @@ export function Pool({
         direction={config.platformDirection}
         frameColor={frame}
         showStairs
-        showRailings={config.railings}
+        showRailings={config.railings && config.installation !== 'sunken'}
         extended={config.platformExtension}
         groundY={sink}
         blockStairs={config.stairStyle === 'block'}
@@ -2077,8 +2100,11 @@ function Mullions({
   const mullionD = 0.09; // depth into the wall (slightly more than panel)
   const innerW = halfW * 2 - FRAME_T;
   const innerL = halfL * 2 - FRAME_T;
-  const segsX = Math.max(1, Math.round(innerW / PANEL_W)); // north/south walls
-  const segsZ = Math.max(1, Math.round(innerL / PANEL_W)); // east/west walls
+  // Panel sınırları (standart 2,40 m camlar + kesik cam); kuzey/güney X boyunca, doğu/batı Z boyunca
+  const boundsX = panelBounds('south', config, innerW);
+  const boundsZ = panelBounds('east', config, innerL);
+  const segsX = boundsX.length;
+  const segsZ = boundsZ.length;
 
   const hasGlass = (side: PoolSide, segs: number) =>
     Array.from({ length: segs }, (_, i) => i).some(
@@ -2090,15 +2116,9 @@ function Mullions({
   const eastHasGlass  = hasGlass('east',  segsZ);
   const westHasGlass  = hasGlass('west',  segsZ);
 
-  // Distribute (segs - 1) mullions evenly along each side.
-  const offsetsX: number[] = [];
-  const offsetsZ: number[] = [];
-  for (let i = 1; i < segsX; i++) {
-    offsetsX.push(-halfW + FRAME_T / 2 + (i / segsX) * innerW);
-  }
-  for (let i = 1; i < segsZ; i++) {
-    offsetsZ.push(-halfL + FRAME_T / 2 + (i / segsZ) * innerL);
-  }
+  // Dikmeler panel birleşim noktalarında
+  const offsetsX = boundsX.slice(0, -1).map((b) => b.end);
+  const offsetsZ = boundsZ.slice(0, -1).map((b) => b.end);
 
   return (
     <group>
@@ -2177,13 +2197,13 @@ function SidePanels({
   return (
     <group>
       {sides.flatMap((side) => {
-        const segments = Math.max(1, Math.round(side.spanInner / PANEL_W));
-        const segLen = side.spanInner / segments;
+        const bounds = panelBounds(side.name, config, side.spanInner);
+        const segments = bounds.length;
         const sign = Math.sign(side.wallCoord);
         // Inner face position: panel center ± half thickness toward pool center
         const innerCoord = side.wallCoord - sign * (PANEL_T / 2 + 0.003);
 
-        return Array.from({ length: segments }, (_, i) => {
+        return bounds.map((bd, i) => {
           const type = getPanelType(config, side.name, i);
           const isGlass = type === 'glass';
 
@@ -2191,8 +2211,8 @@ function SidePanels({
           const isLast  = i === segments - 1;
           const leftGap  = isFirst ? 0 : segGap / 2;
           const rightGap = isLast  ? 0 : segGap / 2;
-          const sizeAlong = segLen - leftGap - rightGap;
-          const center = -side.spanInner / 2 + segLen * (i + 0.5) + (leftGap - rightGap) / 2;
+          const sizeAlong = bd.end - bd.start - leftGap - rightGap;
+          const center = (bd.start + bd.end) / 2 + (leftGap - rightGap) / 2;
           const args: [number, number, number] =
             side.axis === 'x'
               ? [sizeAlong, panelHeight, side.panelDepth]
@@ -2815,103 +2835,232 @@ function Coping({ w, l, y }: { w: number; l: number; y: number }) {
   );
 }
 
-/** Parametrik eğri: t ∈ [0,1] → nokta (yay parçaları için). */
-class FnCurve extends THREE.Curve<THREE.Vector3> {
-  constructor(private fn: (t: number) => THREE.Vector3) {
-    super();
-  }
-  getPoint(t: number, target = new THREE.Vector3()) {
-    return target.copy(this.fn(t));
-  }
-}
-
-function PoolLadder({
-  halfW,
-  halfL,
-  top,
-  waterY: _waterY,
-  platformDirection,
-}: {
-  halfW: number;
-  halfL: number;
-  top: number;
-  waterY: number;
-  platformDirection: PlatformDirection;
-}) {
-  // Havuz merdiveni: kenar ahşabına çıpalı iki boru küpeşte, kenar üstünde yarım daire
-  // yay, havuz içinde dikey inen kolonlar ve aralarında düz basamak plakaları.
-  const railSpacing = 0.5;
-  const railR = 0.021;
-  const anchorU = 0.12;  // kenar ahşabı üstünde, duvarın dışına doğru (m)
-  const innerU = -0.17;  // havuz içinde, duvarın iç yüzünden içeri (m)
-  const riseAbove = 0.5; // küpeştenin kenar üstünden yükselmesi
-  const bottomY = BASIN_FLOOR + 0.35;
-  const color = '#17191c';
-
-  const isEW = platformDirection === 'east' || platformDirection === 'west';
-  const sign = platformDirection === 'east' || platformDirection === 'south' ? 1 : -1;
-  const wall = (isEW ? halfW : halfL) - PANEL_T;
-
-  const geometries = useMemo(() => {
-    // (u: duvara dik dışa doğru, y, s: duvar boyunca) → havuz koordinatı
-    const at = (u: number, y: number, sAlong: number) =>
-      isEW ? new THREE.Vector3(sign * (wall + u), y, sAlong) : new THREE.Vector3(sAlong, y, sign * (wall + u));
-    const r = (anchorU - innerU) / 2;
-    const cu = (anchorU + innerU) / 2;
-    const yArc = top + riseAbove;
-
-    return [-railSpacing / 2, railSpacing / 2].map((sAlong) => {
-      const path = new THREE.CurvePath<THREE.Vector3>();
-      path.add(new THREE.LineCurve3(at(anchorU, top, sAlong), at(anchorU, yArc, sAlong)));
-      path.add(new FnCurve((t) => {
-        const a = Math.PI * t;
-        return at(cu + r * Math.cos(a), yArc + r * Math.sin(a), sAlong);
-      }));
-      path.add(new THREE.LineCurve3(at(innerU, yArc, sAlong), at(innerU, bottomY, sAlong)));
-      return {
-        tube: new THREE.TubeGeometry(path, 96, railR, 12, false),
-        anchor: at(anchorU, top + 0.006, sAlong),
-        foot: at(innerU, bottomY, sAlong),
-      };
-    });
-  }, [isEW, sign, wall, top, bottomY]);
-
-  useEffect(() => () => geometries.forEach((g) => g.tube.dispose()), [geometries]);
-
-  // Basamaklar: kenarın 30 cm altından başlayıp 27 cm arayla
-  const treads: number[] = [];
-  for (let y = top - 0.3; y > bottomY + 0.05; y -= 0.27) treads.push(y);
-  const treadU = innerU + 0.03;
-  const treadPos = (y: number): [number, number, number] =>
-    isEW ? [sign * (wall + treadU), y, 0] : [0, y, sign * (wall + treadU)];
-  const treadArgs: [number, number, number] = isEW
-    ? [0.09, 0.022, railSpacing - 0.02]
-    : [railSpacing - 0.02, 0.022, 0.09];
+/**
+ * Güneş paneli dizisi: standart 1,13 × 1,72 m paneller, aralarında 2 cm boşluk, alana ortalanmış ızgara.
+ * Panelin uzun kenarı alanın uzun kenarına paralel dizilir.
+ */
+function SolarArray({ width, depth, y }: { width: number; depth: number; y: number }) {
+  const tex = useMemo(getSolarTexture, []);
+  const gap = 0.02;
+  const longX = width >= depth;
+  const pw = longX ? 1.72 : 1.13; // X boyutu
+  const pd = longX ? 1.13 : 1.72; // Z boyutu
+  const nx = Math.max(1, Math.floor((width + gap) / (pw + gap)));
+  const nz = Math.max(1, Math.floor((depth + gap) / (pd + gap)));
+  const s = Math.min(1, width / (nx * pw + (nx - 1) * gap), depth / (nz * pd + (nz - 1) * gap));
+  const cw = pw * s;
+  const cd = pd * s;
+  const x0 = -((nx * cw + (nx - 1) * gap) / 2) + cw / 2;
+  const z0 = -((nz * cd + (nz - 1) * gap) / 2) + cd / 2;
+  const panels: [number, number][] = [];
+  for (let i = 0; i < nx; i++) for (let j = 0; j < nz; j++) panels.push([x0 + i * (cw + gap), z0 + j * (cd + gap)]);
 
   return (
-    <group>
-      {geometries.map((g, i) => (
-        <group key={i}>
-          <mesh geometry={g.tube} castShadow>
-            <PowderCoatMaterial color={color} roughness={0.3} metalness={0.45} />
+    <group position={[0, y, 0]}>
+      {panels.map(([x, z], i) => (
+        <group key={i} position={[x, 0, z]}>
+          {/* Alüminyum çerçeve */}
+          <mesh position={[0, 0.0175, 0]} castShadow receiveShadow>
+            <boxGeometry args={[cw, 0.035, cd]} />
+            <meshStandardMaterial color="#b9bec4" roughness={0.35} metalness={0.8} />
           </mesh>
-          {/* Kenar üstündeki çıpa plakası */}
-          <mesh position={g.anchor} castShadow>
-            <cylinderGeometry args={[0.042, 0.046, 0.012, 20]} />
-            <PowderCoatMaterial color={color} roughness={0.3} metalness={0.45} />
-          </mesh>
-          {/* Boru ucu kapağı */}
-          <mesh position={g.foot}>
-            <sphereGeometry args={[railR, 12, 8]} />
-            <PowderCoatMaterial color={color} roughness={0.3} metalness={0.45} />
+          {/* Hücreler + cam */}
+          <mesh position={[0, 0.04, 0]} rotation={[-Math.PI / 2, 0, longX ? Math.PI / 2 : 0]}>
+            <planeGeometry args={longX ? [cd - 0.03, cw - 0.03] : [cw - 0.03, cd - 0.03]} />
+            <meshStandardMaterial map={tex} roughness={0.8} metalness={0} envMapIntensity={0.25} />
           </mesh>
         </group>
       ))}
-      {treads.map((y) => (
-        <Beam key={y} args={treadArgs} radius={0.004} position={treadPos(y)} castShadow receiveShadow>
-          <PowderCoatMaterial color={color} roughness={0.45} metalness={0.4} />
+    </group>
+  );
+}
+
+/**
+ * Hareketli güverte: havuzun dört köşesindeki kolonlarda yukarı/aşağı hareket eder.
+ * Kompozit panel üst yüz; aşağıda havuz ağzını tamamen kapatır, yukarıda gölgelik olur.
+ */
+const LIFT_TRAVEL = 2.3; // m, kapalı konumdan yükselme
+const LIFT_THICK = 0.2;
+
+function LiftDeck({
+  w,
+  l,
+  top,
+  groundY,
+  frame,
+  up,
+  isNight,
+  solar = false,
+}: {
+  w: number;
+  l: number;
+  top: number;
+  groundY: number;
+  frame: string;
+  up: boolean;
+  isNight: boolean;
+  /** Üst yüzde kompozit yerine güneş paneli dizisi */
+  solar?: boolean;
+}) {
+  const out = COPING_W - FRAME_T;
+  const dw = w + out * 2 + 0.04;
+  const dl = l + out * 2 + 0.04;
+  const post = 0.15;
+  const px = dw / 2 + post / 2 + 0.02;
+  const pz = dl / 2 + post / 2 + 0.02;
+  const postTop = top + LIFT_TRAVEL + LIFT_THICK + 0.35;
+  const postH = postTop - groundY;
+
+  const deckRef = useRef<THREE.Group>(null);
+  const progress = useRef(up ? 1 : 0); // 0 = kapalı (havuz üstü), 1 = yukarıda
+  const yFor = (p: number) => top + 0.005 + LIFT_THICK / 2 + p * LIFT_TRAVEL;
+
+  useFrame((state, delta) => {
+    const target = up ? 1 : 0;
+    const p = progress.current;
+    if (Math.abs(p - target) < 0.0005) return;
+    // ~5 sn uçtan uca, yumuşak kalkış/duruş
+    const step = delta * 0.2;
+    const next = p < target ? Math.min(target, p + step) : Math.max(target, p - step);
+    progress.current = next;
+    const eased = next * next * (3 - 2 * next);
+    if (deckRef.current) deckRef.current.position.y = yFor(eased);
+    state.invalidate();
+  });
+
+  // Alt yüzdeki spotlar
+  const spots: [number, number][] = [];
+  const nx = Math.max(2, Math.round(dw / 1.6));
+  const nz = Math.max(2, Math.round(dl / 1.6));
+  for (let i = 0; i < nx; i++) for (let j = 0; j < nz; j++) {
+    spots.push([-dw / 2 + (dw * (i + 0.5)) / nx, -dl / 2 + (dl * (j + 0.5)) / nz]);
+  }
+  const rim = 0.08;
+
+  return (
+    <group>
+      {/* Köşe kolonları */}
+      {[[px, pz], [-px, pz], [px, -pz], [-px, -pz]].map(([x, z], i) => (
+        <Beam key={i} args={[post, postH, post]} radius={0.01} position={[x, groundY + postH / 2, z]} castShadow receiveShadow>
+          <PowderCoatMaterial color={frame} roughness={0.55} metalness={0.35} />
         </Beam>
       ))}
+
+      {/* Hareket eden güverte */}
+      <group ref={deckRef} position={[0, yFor(up ? 1 : 0), 0]}>
+        {/* Çevre kirişi */}
+        {[
+          { args: [dw, LIFT_THICK, rim] as [number, number, number], pos: [0, 0, dl / 2 - rim / 2] as [number, number, number] },
+          { args: [dw, LIFT_THICK, rim] as [number, number, number], pos: [0, 0, -dl / 2 + rim / 2] as [number, number, number] },
+          { args: [rim, LIFT_THICK, dl - rim * 2] as [number, number, number], pos: [dw / 2 - rim / 2, 0, 0] as [number, number, number] },
+          { args: [rim, LIFT_THICK, dl - rim * 2] as [number, number, number], pos: [-dw / 2 + rim / 2, 0, 0] as [number, number, number] },
+        ].map((b, i) => (
+          <Beam key={i} args={b.args} radius={0.008} position={b.pos} castShadow receiveShadow>
+            <PowderCoatMaterial color={frame} roughness={0.55} metalness={0.35} />
+          </Beam>
+        ))}
+        {/* Kolonlara bağlanan köşe kulakları */}
+        {[[1, 1], [-1, 1], [1, -1], [-1, -1]].map(([sx, sz], i) => (
+          <Beam key={`e${i}`} args={[post + 0.08, LIFT_THICK * 0.8, post + 0.08]} radius={0.008} position={[sx * px, 0, sz * pz]} castShadow>
+            <PowderCoatMaterial color={frame} roughness={0.55} metalness={0.35} />
+          </Beam>
+        ))}
+        {/* Üst yüz: tek parça kompozit panel (gövde renginde, düz, hafif saten) */}
+        <Beam args={[dw - rim * 2 + 0.01, 0.03, dl - rim * 2 + 0.01]} radius={0.004} position={[0, LIFT_THICK / 2 - 0.015, 0]} castShadow receiveShadow>
+          <meshStandardMaterial color={frame} roughness={0.42} metalness={0.25} envMapIntensity={0.9} />
+        </Beam>
+        {solar && <SolarArray width={dw - rim * 2} depth={dl - rim * 2} y={LIFT_THICK / 2} />}
+        {/* Alt yüz: açık renkli tavan paneli */}
+        <mesh position={[0, -LIFT_THICK / 2 + 0.01, 0]} rotation={[Math.PI / 2, 0, 0]} receiveShadow>
+          <planeGeometry args={[dw - rim * 2, dl - rim * 2]} />
+          <meshStandardMaterial color="#e9ecee" roughness={0.7} side={THREE.DoubleSide} />
+        </mesh>
+        {/* Spotlar */}
+        {spots.map(([x, z], i) => (
+          <mesh key={`s${i}`} position={[x, -LIFT_THICK / 2 + 0.005, z]} rotation={[Math.PI / 2, 0, 0]}>
+            <circleGeometry args={[0.045, 16]} />
+            <meshStandardMaterial color="#fff6e0" emissive="#ffe8b0" emissiveIntensity={isNight ? 3 : 0.6} side={THREE.DoubleSide} />
+          </mesh>
+        ))}
+        {isNight && <pointLight position={[0, -LIFT_THICK / 2 - 0.3, 0]} intensity={4} distance={6} color="#ffe2b0" />}
+      </group>
+    </group>
+  );
+}
+
+/**
+ * Havuz içi basamaklar (iç kaplamayla kaplı). Şelalenin karşısındaki kısa uçta, platform tarafındaki
+ * köşeden başlar. Yükseklikler kenar ağzından (POOL_HEIGHT − COPING_T) aşağı 35 cm'lik kademelerle.
+ */
+function PoolSteps({
+  entry,
+  halfW,
+  halfL,
+  platformDirection,
+  color,
+  claddingTex,
+}: {
+  entry: 'small_stairs' | 'wide_stairs' | 'bench' | 'none';
+  halfW: number;
+  halfL: number;
+  platformDirection: PlatformDirection;
+  color: string;
+  claddingTex: THREE.Texture | null;
+}) {
+  const rim = POOL_HEIGHT - COPING_T;
+  const rise = 0.35;
+  const run = 0.35;
+  const floor = BASIN_FLOOR;
+  // İç yüzler
+  const ix = halfW - PANEL_T - 0.005;
+  const iz = halfL - PANEL_T - 0.005;
+  // Basamak ucu: kısa kenar (genişlik uzunluktan küçükse Z uçları)
+  const alongX = halfW <= halfL;
+  const span = alongX ? ix * 2 : iz * 2;
+  const wallCoord = alongX ? iz : ix; // +uç (şelale −Z ucunda)
+  // Köşe tarafı: platform bu kısa kenara dikse platforma yakın köşe
+  const corner =
+    alongX
+      ? platformDirection === 'west' ? -1 : 1
+      : platformDirection === 'north' ? -1 : 1;
+
+  // (s: kenar boyunca merkezden, d: duvardan içeri) → havuz koordinatı
+  type Box = { s0: number; s1: number; d: number; y: number };
+  const boxes: Box[] = [];
+  const addStairs = (s0: number, s1: number) => {
+    for (let k = 1; k <= 3; k++) boxes.push({ s0, s1, d: run * k, y: rim - rise * k });
+  };
+
+  if (entry === 'wide_stairs') {
+    addStairs(-span / 2, span / 2);
+  } else if (entry === 'small_stairs') {
+    const w = Math.min(1.0, span * 0.5);
+    corner > 0 ? addStairs(span / 2 - w, span / 2) : addStairs(-span / 2, -span / 2 + w);
+  } else if (entry === 'bench') {
+    const w = Math.min(0.9, span * 0.4);
+    const [a, b] = corner > 0 ? [span / 2 - w, span / 2] : [-span / 2, -span / 2 + w];
+    addStairs(a, b);
+    // Oturma bankı: basamakların yanında kenar boyunca
+    const [c0, c1] = corner > 0 ? [-span / 2, a] : [b, span / 2];
+    boxes.push({ s0: c0, s1: c1, d: 0.45, y: rim - 0.55 });
+  }
+
+  return (
+    <group>
+      {boxes.map((bx, i) => {
+        const len = bx.s1 - bx.s0;
+        const h = bx.y - floor;
+        const sc = (bx.s0 + bx.s1) / 2;
+        const dc = wallCoord - bx.d / 2;
+        const position: [number, number, number] = alongX ? [sc, floor + h / 2, dc] : [dc, floor + h / 2, sc];
+        const args: [number, number, number] = alongX ? [len, h, bx.d] : [bx.d, h, len];
+        return (
+          <mesh key={i} position={position} castShadow receiveShadow>
+            <boxGeometry args={args} />
+            <CladdingMat tex={claddingTex} color={color} sw={len} sh={Math.max(h, bx.d)} roughness={0.8} metalness={0.01} />
+          </mesh>
+        );
+      })}
     </group>
   );
 }
@@ -3976,7 +4125,7 @@ function claddingColor(c: CladdingType): string {
     case 'blue_mosaic':return '#2563eb';
     case 'gray_stone': return '#6b7280';
     case 'turquoise':  return '#14b8a6';
-    default:           return '#cfd5dc'; // texture path — colour unused
+    default:           return c.startsWith('#') ? c : '#cfd5dc'; // palet hex rengi; doku yolunda renk kullanılmaz
   }
 }
 

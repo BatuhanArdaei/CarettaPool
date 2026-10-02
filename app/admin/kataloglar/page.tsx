@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
+import { deleteCatalog, toggleCatalogPublish, uploadCatalog } from './actions';
 
 const LANGUAGES = [
   { name: 'Türkçe', code: 'tr', flag: '🇹🇷' },
@@ -39,32 +40,23 @@ export default function AdminKataloglar() {
     if (file.type !== 'application/pdf') { setMsg('Sadece PDF kabul edilir'); return; }
     setUploading(true); setMsg('');
     try {
-      const path = `catalogs/${selLang.code}-${Date.now()}.pdf`;
-      const { error } = await supabase.storage.from('catalogs').upload(path, file, { contentType: 'application/pdf' });
-      if (error) throw error;
-      const { data: { publicUrl } } = supabase.storage.from('catalogs').getPublicUrl(path);
-      await supabase.from('catalogs').insert({
-        language: selLang.name,
-        language_code: selLang.code,
-        flag: selLang.flag,
-        title: title.trim() || `${selLang.name} Kataloğu`,
-        file_url: publicUrl,
-        storage_path: path,
-        published: true
-      });
+      // Yükleme sunucuda: admin kontrolü ve PDF imza doğrulaması
+      const fd = new FormData();
+      fd.set('file', file); fd.set('language', selLang.name); fd.set('languageCode', selLang.code);
+      fd.set('flag', selLang.flag); fd.set('title', title.trim());
+      await uploadCatalog(fd);
       setMsg('Katalog yüklendi!'); setFile(null); setTitle(''); load();
     } catch (err) { setMsg((err as Error).message); }
     setUploading(false);
   }
 
   async function toggle(c: Catalog) {
-    await supabase.from('catalogs').update({ published: !c.published }).eq('id', c.id);
+    await toggleCatalogPublish(c.id, !c.published);
     load();
   }
 
   async function remove(c: Catalog) {
-    await supabase.storage.from('catalogs').remove([c.storage_path]);
-    await supabase.from('catalogs').delete().eq('id', c.id);
+    await deleteCatalog(c.id);
     load();
   }
 

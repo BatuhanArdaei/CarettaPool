@@ -3,6 +3,7 @@
 import { useEffect, useState, useRef } from 'react';
 import Image from 'next/image';
 import { createClient } from '@/lib/supabase/client';
+import { deleteGalleryItem, toggleGalleryPublish, uploadGalleryImage } from './actions';
 
 const CATS = ['havuz', 'fuar', 'fabrika'] as const;
 type Cat = typeof CATS[number];
@@ -34,12 +35,10 @@ export default function AdminGaleri() {
     if (!file) return;
     setUploading(true); setMsg('');
     try {
-      const ext = file.name.split('.').pop();
-      const path = `gallery/${category}/${Date.now()}.${ext}`;
-      const { error: upErr } = await supabase.storage.from('gallery').upload(path, file, { contentType: file.type });
-      if (upErr) throw upErr;
-      const { data: { publicUrl } } = supabase.storage.from('gallery').getPublicUrl(path);
-      await supabase.from('gallery_items').insert({ src_url: publicUrl, storage_path: path, alt: file.name, category, published: true });
+      // Yükleme sunucuda: admin kontrolü, tür ve boyut doğrulaması
+      const fd = new FormData();
+      fd.set('file', file); fd.set('category', category); fd.set('alt', file.name);
+      await uploadGalleryImage(fd);
       setMsg('Yüklendi!'); setFile(null); setPreview(null);
       formRef.current?.reset(); load();
     } catch (err) { setMsg((err as Error).message); }
@@ -47,13 +46,12 @@ export default function AdminGaleri() {
   }
 
   async function toggle(item: GalleryItem) {
-    await supabase.from('gallery_items').update({ published: !item.published }).eq('id', item.id);
+    await toggleGalleryPublish(item.id, !item.published);
     load();
   }
 
   async function remove(item: GalleryItem) {
-    await supabase.storage.from('gallery').remove([item.storage_path]);
-    await supabase.from('gallery_items').delete().eq('id', item.id);
+    await deleteGalleryItem(item.id);
     load();
   }
 

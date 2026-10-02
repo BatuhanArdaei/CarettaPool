@@ -1,10 +1,10 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
-import { applyDealerDiscount, calculateBasePrice, type CustomPrices } from '@/lib/pricing';
+import { computePrice } from '@/lib/priceServer';
 import type { PoolConfig } from '@/lib/types';
 
 export async function POST(request: NextRequest) {
-  let body: { config?: PoolConfig };
+  let body: { config?: PoolConfig; region?: string };
   try {
     body = await request.json();
   } catch {
@@ -16,77 +16,19 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'invalid_config' }, { status: 400 });
   }
 
-  const supabase = createClient();
+  const ctx = await computePrice(createClient(), config, body.region);
 
-  // 1. Fetch global site prices and show_prices toggle from site_settings
-  let globalPrices: CustomPrices | null = null;
-  let showPrices = true;
-  const { data: allSettings } = await supabase
-    .from('site_settings')
-    .select('key, value')
-    .in('key', ['prices', 'show_prices']);
-  for (const row of allSettings ?? []) {
-    if (row.key === 'prices' && row.value && typeof row.value === 'object') {
-      globalPrices = row.value as CustomPrices;
-    }
-    if (row.key === 'show_prices') {
-      showPrices = row.value !== false;
-    }
+  // Fiyat gösterilmeyecekse (misafir, ya da site ayarı kapalı) fiyat bilgisi hiç gönderilmez
+  if (!ctx.showPrices) {
+    return NextResponse.json({ breakdown: null, isDealer: ctx.isDealer, discountRate: 0, showPrices: false, region: ctx.region });
   }
-
-  // 2. Fetch logged-in user and dealer info
-  const { data: { user } } = await supabase.auth.getUser();
-
-  let isDealer = false;
-  let discountRate = 0;
-  let discountType: 'percentage' | 'custom' = 'percentage';
-  let dealerCustomPrices: CustomPrices | null = null;
-
-  if (user) {
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('role')
-      .eq('id', user.id)
-      .single();
-
-    if (profile?.role === 'dealer') {
-      const { data: dealer } = await supabase
-        .from('dealers')
-        .select('discount_rate, discount_type, custom_prices, is_active')
-        .eq('user_id', user.id)
-        .single();
-
-      if (dealer && dealer.is_active !== false) {
-        isDealer = true;
-        discountRate = Number(dealer.discount_rate ?? 0);
-        discountType = (dealer.discount_type ?? 'percentage') as 'percentage' | 'custom';
-        dealerCustomPrices = (dealer.custom_prices ?? null) as CustomPrices | null;
-      }
-    }
-  }
-
-  // 3. Build effective prices:
-  //    globalPrices override code defaults;
-  //    dealerCustomPrices override globalPrices (only in 'custom' mode)
-  let effectivePrices: CustomPrices | null = globalPrices;
-
-  if (isDealer && discountType === 'custom' && dealerCustomPrices) {
-    effectivePrices = { ...globalPrices, ...dealerCustomPrices };
-  }
-
-  // 4. Calculate
-  const breakdown = calculateBasePrice(config, effectivePrices);
-
-  // 5. Apply percentage discount (only in 'percentage' mode)
-  const finalBreakdown =
-    isDealer && discountType === 'percentage' && discountRate > 0
-      ? applyDealerDiscount(breakdown, discountRate)
-      : breakdown;
 
   return NextResponse.json({
-    breakdown: finalBreakdown,
-    isDealer,
-    discountRate: discountType === 'custom' ? 0 : discountRate,
-    showPrices,
+    breakdown: ctx.breakdown,
+    isDealer: ctx.isDealer,
+    discountRate: ctx.discountRate,
+    showPrices: true,
+    region: ctx.region,
+    currency: ctx.currency,
   });
 }

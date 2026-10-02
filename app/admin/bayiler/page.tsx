@@ -3,6 +3,9 @@
 import { useEffect, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { DEFAULT_PRICES } from '@/lib/pricing';
+import { EQUIPMENT } from '@/lib/equipment';
+import { REGIONS, getRegion } from '@/lib/regions';
+import { updateDealer } from './actions';
 
 type PriceItem = { key: string; label: string; default: number };
 type PriceGroup = { label: string; icon: string; items: PriceItem[] };
@@ -45,6 +48,7 @@ const PRICE_GROUPS: PriceGroup[] = [
       { key: 'cladding_turquoise',   label: 'Kaplama – Turkuaz',             default: DEFAULT_PRICES.cladding_turquoise },
       { key: 'cladding_texture',     label: 'Kaplama – Doku (tüm desenler)', default: DEFAULT_PRICES.cladding_texture },
       { key: 'cladding_white',       label: 'Kaplama – Beyaz (standart)',    default: DEFAULT_PRICES.cladding_white },
+      { key: 'cladding_color',       label: 'Kaplama – Diğer palet renkleri', default: DEFAULT_PRICES.cladding_color },
     ],
   },
   {
@@ -69,6 +73,8 @@ const PRICE_GROUPS: PriceGroup[] = [
     items: [
       { key: 'pool_cover_manual',    label: 'Üst Kapak – Manuel',    default: DEFAULT_PRICES.pool_cover_manual },
       { key: 'pool_cover_automatic', label: 'Üst Kapak – Otomatik',  default: DEFAULT_PRICES.pool_cover_automatic },
+      { key: 'lift_deck',            label: 'Hareketli Güverte',     default: DEFAULT_PRICES.lift_deck },
+      { key: 'lift_deck_solar',      label: 'Güverte – Güneş Paneli', default: DEFAULT_PRICES.lift_deck_solar },
     ],
   },
   {
@@ -76,8 +82,16 @@ const PRICE_GROUPS: PriceGroup[] = [
     icon: '🪜',
     items: [
       { key: 'railings', label: 'Korkuluk',    default: DEFAULT_PRICES.railings },
-      { key: 'ladder',   label: 'İç Merdiven', default: DEFAULT_PRICES.ladder },
+      { key: 'entry_small_stairs', label: 'Havuz İçi – Küçük Basamak',    default: DEFAULT_PRICES.entry_small_stairs },
+      { key: 'entry_wide_stairs',  label: 'Havuz İçi – Geniş Basamak',    default: DEFAULT_PRICES.entry_wide_stairs },
+      { key: 'entry_bench',        label: 'Havuz İçi – Oturaklı Basamak', default: DEFAULT_PRICES.entry_bench },
+      { key: 'stairs_block',       label: 'Blok Basamak (platform merdiveni)', default: DEFAULT_PRICES.stairs_block },
     ],
+  },
+  {
+    label: 'Ekipmanlar',
+    icon: '⚙️',
+    items: EQUIPMENT.map((e) => ({ key: e.priceKey as string, label: e.adminLabel, default: DEFAULT_PRICES[e.priceKey] })),
   },
 ];
 
@@ -92,6 +106,8 @@ interface Dealer {
   is_active: boolean;
   discount_type: 'percentage' | 'custom';
   custom_prices: Record<string, number>;
+  /** Bayinin fiyat aldığı bölge (konfigüratörde bölge sorulmaz) */
+  region: string;
 }
 
 function CustomPriceEditor({
@@ -184,6 +200,7 @@ export default function AdminBayiler() {
   const [form, setForm] = useState({
     company_name: '', email: '', password: '', full_name: '',
     discount_type: 'percentage' as 'percentage' | 'custom',
+    region: 'turkey',
     discount_rate: 0,
     custom_prices: {} as Record<string, number>,
   });
@@ -200,6 +217,7 @@ export default function AdminBayiler() {
       is_active: d.is_active ?? true,
       discount_type: d.discount_type ?? 'percentage',
       custom_prices: d.custom_prices ?? {},
+      region: d.region ?? 'turkey',
     })));
   }
   useEffect(() => { load(); }, []);
@@ -216,7 +234,7 @@ export default function AdminBayiler() {
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? 'Hata');
       setMsg('Bayi oluşturuldu!');
-      setForm({ company_name: '', email: '', password: '', full_name: '', discount_type: 'percentage', discount_rate: 0, custom_prices: {} });
+      setForm({ company_name: '', email: '', password: '', full_name: '', discount_type: 'percentage', region: 'turkey', discount_rate: 0, custom_prices: {} });
       const init: Record<string, number> = {};
       PRICE_ITEMS.forEach(i => { init[i.key] = i.default; });
       setFormCustomPrices(init);
@@ -227,7 +245,7 @@ export default function AdminBayiler() {
 
   async function toggleActive(d: Dealer) {
     const next = !d.is_active;
-    await supabase.from('dealers').update({ is_active: next }).eq('id', d.id);
+    await updateDealer(d.id, { is_active: next });
     await fetch('/api/admin/update-user', {
       method: 'POST', headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ user_id: d.user_id, ban: !next }),
@@ -236,18 +254,25 @@ export default function AdminBayiler() {
   }
 
   async function saveRate(d: Dealer, rate: number) {
-    await supabase.from('dealers').update({ discount_rate: rate }).eq('id', d.id);
+    const { error } = await updateDealer(d.id, { discount_rate: rate });
+    if (error) setMsg(error);
+    load();
+  }
+
+  async function saveRegion(d: Dealer, region: string) {
+    const { error } = await updateDealer(d.id, { region });
+    if (error) setMsg('Bölge kaydedilemedi: veritabanına "region" kolonu eklenmeli (supabase/dealer-region.sql).');
     load();
   }
 
   async function saveDiscountType(d: Dealer, type: 'percentage' | 'custom') {
-    await supabase.from('dealers').update({ discount_type: type }).eq('id', d.id);
+    await updateDealer(d.id, { discount_type: type });
     load();
   }
 
   async function saveCustomPrice(d: Dealer, key: string, value: number) {
     const next = { ...d.custom_prices, [key]: value };
-    await supabase.from('dealers').update({ custom_prices: next }).eq('id', d.id);
+    await updateDealer(d.id, { custom_prices: next });
     load();
   }
 
@@ -282,6 +307,10 @@ export default function AdminBayiler() {
             <div className="grid gap-3 sm:grid-cols-2">
               <div><label className="label">Firma Adı</label>
                 <input className="input" required value={form.company_name} onChange={e => setForm(p => ({ ...p, company_name: e.target.value }))} /></div>
+              <div><label className="label">Bölge</label>
+                <select className="input" value={form.region} onChange={e => setForm(p => ({ ...p, region: e.target.value }))}>
+                  {REGIONS.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
+                </select></div>
               <div><label className="label">Yetkili Adı</label>
                 <input className="input" value={form.full_name} onChange={e => setForm(p => ({ ...p, full_name: e.target.value }))} /></div>
               <div><label className="label">E-posta</label>
@@ -374,6 +403,18 @@ export default function AdminBayiler() {
                     {d.is_active ? 'Aktif' : 'Pasif'}
                   </span>
                 </div>
+                <div className="mt-1 flex items-center gap-2">
+                  <label className="text-xs text-slate-500" htmlFor={`region-${d.id}`}>Bölge</label>
+                  <select
+                    id={`region-${d.id}`}
+                    className="rounded-md border border-slate-200 bg-white px-2 py-1 text-xs"
+                    value={d.region}
+                    onChange={e => saveRegion(d, e.target.value)}
+                  >
+                    {REGIONS.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
+                  </select>
+                  <span className="text-[11px] text-slate-400">{getRegion(d.region).note}</span>
+                </div>
                 <p className="text-xs text-slate-400">ID: {d.user_id.slice(0, 14)}…</p>
               </div>
 
@@ -443,9 +484,9 @@ export default function AdminBayiler() {
                 {/* Custom price mode */}
                 {d.discount_type === 'custom' && (
                   <CustomPriceEditor dealer={d} onSave={async (prices) => {
-                    await supabase.from('dealers').update({ custom_prices: prices }).eq('id', d.id);
+                    const { error } = await updateDealer(d.id, { custom_prices: prices });
                     load();
-                    setMsg('Özel fiyatlar kaydedildi.');
+                    setMsg(error ? `Kaydedilemedi: ${error}` : 'Özel fiyatlar kaydedildi.');
                   }} />
                 )}
               </div>

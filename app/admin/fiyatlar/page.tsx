@@ -3,6 +3,10 @@
 import { useEffect, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { DEFAULT_PRICES, type PriceKey } from '@/lib/pricing';
+import { EQUIPMENT } from '@/lib/equipment';
+import { REGIONS, getRegion } from '@/lib/regions';
+import { savePriceSettings } from './actions';
+import { CURRENCIES, REGION_DEFAULT_CURRENCY, type Currency, type RegionPriceList, type RegionalPrices } from '@/lib/regionalPricing';
 
 const PRICE_GROUPS = [
   {
@@ -41,6 +45,7 @@ const PRICE_GROUPS = [
       { key: 'cladding_turquoise'   as PriceKey, label: 'Kaplama – Turkuaz',            unit: 'TL' },
       { key: 'cladding_texture'     as PriceKey, label: 'Kaplama – Doku (tüm desenler)',unit: 'TL' },
       { key: 'cladding_white'       as PriceKey, label: 'Kaplama – Beyaz (standart)',   unit: 'TL' },
+      { key: 'cladding_color'       as PriceKey, label: 'Kaplama – Diğer palet renkleri', unit: 'TL' },
     ],
   },
   {
@@ -67,6 +72,8 @@ const PRICE_GROUPS = [
     items: [
       { key: 'pool_cover_manual'    as PriceKey, label: 'Üst Kapak – Manuel',    unit: 'TL' },
       { key: 'pool_cover_automatic' as PriceKey, label: 'Üst Kapak – Otomatik',  unit: 'TL' },
+      { key: 'lift_deck'            as PriceKey, label: 'Hareketli Güverte',     unit: 'TL' },
+      { key: 'lift_deck_solar'      as PriceKey, label: 'Güverte – Güneş Paneli', unit: 'TL' },
     ],
   },
   {
@@ -75,20 +82,39 @@ const PRICE_GROUPS = [
     items: [
       { key: 'railings' as PriceKey, label: 'Korkuluk',    unit: 'TL' },
       { key: 'stairs_block' as PriceKey, label: 'Blok Basamak (platform merdiveni)', unit: 'TL' },
-      { key: 'ladder'   as PriceKey, label: 'İç Merdiven', unit: 'TL' },
+      { key: 'entry_small_stairs' as PriceKey, label: 'Havuz İçi – Küçük Basamak',   unit: 'TL' },
+      { key: 'entry_wide_stairs'  as PriceKey, label: 'Havuz İçi – Geniş Basamak',   unit: 'TL' },
+      { key: 'entry_bench'        as PriceKey, label: 'Havuz İçi – Oturaklı Basamak', unit: 'TL' },
     ],
+  },
+  {
+    label: 'Ekipmanlar',
+    icon: '⚙️',
+    items: EQUIPMENT.map((e) => ({ key: e.priceKey, label: e.adminLabel, unit: 'TL' })),
   },
 ];
 
 type Prices = Record<string, number>;
 
+/** TL listelerinde tanımsız kalem kod varsayılanını, diğer para birimlerinde 0'ı kullanır. */
+function valueOf(list: RegionPriceList, key: PriceKey): number {
+  const v = list.prices?.[key];
+  if (typeof v === 'number') return v;
+  return list.currency === 'TRY' ? DEFAULT_PRICES[key] : 0;
+}
+
+function fullList(currency: Currency, source?: Partial<Record<string, number>>): RegionPriceList {
+  const prices: Prices = {};
+  PRICE_GROUPS.forEach(g => g.items.forEach(i => {
+    prices[i.key] = source?.[i.key] ?? (currency === 'TRY' ? DEFAULT_PRICES[i.key] : 0);
+  }));
+  return { currency, prices };
+}
+
 export default function AdminFiyatlar() {
   const supabase = createClient();
-  const [prices, setPrices] = useState<Prices>(() => {
-    const init: Prices = {};
-    PRICE_GROUPS.forEach(g => g.items.forEach(i => { init[i.key] = DEFAULT_PRICES[i.key]; }));
-    return init;
-  });
+  const [regional, setRegional] = useState<RegionalPrices>({});
+  const [regionId, setRegionId] = useState<string>('turkey');
   const [showPricesEnabled, setShowPricesEnabled] = useState<boolean>(true);
   const [status, setStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const [loaded, setLoaded] = useState(false);
@@ -96,12 +122,16 @@ export default function AdminFiyatlar() {
   useEffect(() => {
     Promise.all([
       supabase.from('site_settings').select('value').eq('key', 'prices').maybeSingle(),
+      supabase.from('site_settings').select('value').eq('key', 'regional_prices').maybeSingle(),
       supabase.from('site_settings').select('value').eq('key', 'show_prices').maybeSingle(),
-    ]).then(([pricesRes, showRes]) => {
-      if (pricesRes.data?.value && typeof pricesRes.data.value === 'object') {
-        const stored = pricesRes.data.value as Prices;
-        setPrices(prev => ({ ...prev, ...stored }));
-      }
+    ]).then(([legacyRes, regionalRes, showRes]) => {
+      const stored = (regionalRes.data?.value && typeof regionalRes.data.value === 'object'
+        ? regionalRes.data.value
+        : {}) as RegionalPrices;
+      // Geriye uyum: eski tek liste Türkiye listesi olarak yüklenir
+      const legacy = (legacyRes.data?.value && typeof legacyRes.data.value === 'object' ? legacyRes.data.value : undefined) as Prices | undefined;
+      const turkey = stored.turkey ?? fullList('TRY', legacy);
+      setRegional({ ...stored, turkey: { ...turkey, prices: { ...fullList(turkey.currency).prices, ...turkey.prices } } });
       if (showRes.data !== null && showRes.data?.value !== undefined) {
         setShowPricesEnabled(Boolean(showRes.data.value));
       }
@@ -109,21 +139,34 @@ export default function AdminFiyatlar() {
     });
   }, []);
 
+  const region = getRegion(regionId);
+  const list = regional[regionId];
+  const symbol = CURRENCIES.find(c => c.id === list?.currency)?.symbol ?? '';
+
+  function updateList(next: RegionPriceList | undefined) {
+    setRegional(prev => {
+      const copy = { ...prev };
+      if (next) copy[regionId] = next;
+      else delete copy[regionId];
+      return copy;
+    });
+  }
+
   async function save() {
     setStatus('saving');
-    const [r1, r2] = await Promise.all([
-      supabase.from('site_settings').upsert({ key: 'prices', value: prices }, { onConflict: 'key' }),
-      supabase.from('site_settings').upsert({ key: 'show_prices', value: showPricesEnabled }, { onConflict: 'key' }),
-    ]);
-    const error = r1.error || r2.error;
-    setStatus(error ? 'error' : 'saved');
-    if (!error) setTimeout(() => setStatus('idle'), 2500);
+    try {
+      // Yazma sunucuda, admin kontrolü ve doğrulamayla yapılır
+      await savePriceSettings(regional, showPricesEnabled);
+      setStatus('saved');
+      setTimeout(() => setStatus('idle'), 2500);
+    } catch {
+      setStatus('error');
+    }
   }
 
   function reset() {
-    const init: Prices = {};
-    PRICE_GROUPS.forEach(g => g.items.forEach(i => { init[i.key] = DEFAULT_PRICES[i.key]; }));
-    setPrices(init);
+    if (!list) return;
+    updateList(fullList(list.currency));
   }
 
   if (!loaded) {
@@ -143,7 +186,7 @@ export default function AdminFiyatlar() {
             <p className="font-semibold text-slate-900">Fiyatlar Gözüksün Mü?</p>
             <p className="mt-0.5 text-sm text-slate-500">
               {showPricesEnabled
-                ? 'Fiyatlar tüm kullanıcılara (müşteri dahil) gösterilmektedir.'
+                ? 'Fiyatlar giriş yapmış müşterilere de gösterilir (misafirlere hiçbir zaman gösterilmez).'
                 : 'Fiyatlar gizli — sadece bayi ve admin hesapları görebilir.'}
             </p>
           </div>
@@ -152,9 +195,7 @@ export default function AdminFiyatlar() {
               type="button"
               onClick={() => setShowPricesEnabled(true)}
               className={`rounded-md px-5 py-2 text-sm font-semibold transition ${
-                showPricesEnabled
-                  ? 'bg-emerald-500 text-white shadow'
-                  : 'text-slate-500 hover:text-slate-800'
+                showPricesEnabled ? 'bg-emerald-500 text-white shadow' : 'text-slate-500 hover:text-slate-800'
               }`}
             >
               Evet
@@ -163,9 +204,7 @@ export default function AdminFiyatlar() {
               type="button"
               onClick={() => setShowPricesEnabled(false)}
               className={`rounded-md px-5 py-2 text-sm font-semibold transition ${
-                !showPricesEnabled
-                  ? 'bg-slate-700 text-white shadow'
-                  : 'text-slate-500 hover:text-slate-800'
+                !showPricesEnabled ? 'bg-slate-700 text-white shadow' : 'text-slate-500 hover:text-slate-800'
               }`}
             >
               Hayır
@@ -179,24 +218,21 @@ export default function AdminFiyatlar() {
         <div>
           <h1 className="text-2xl font-bold text-slate-900">Fiyat Yönetimi</h1>
           <p className="mt-1 text-sm text-slate-500">
-            Tüm müşteri ve bayi hesaplarına uygulanacak site genelindeki temel fiyatlar.
-            Bayi özel fiyatları bu değerleri geçersiz kılar.
+            Her bölgenin kendi fiyat listesi ve para birimi vardır. Bayi, kayıtlı olduğu bölgenin
+            listesini görür; bayi özel fiyatları bu değerleri geçersiz kılar.
           </p>
         </div>
         <div className="flex shrink-0 gap-2">
-          <button
-            type="button"
-            onClick={reset}
-            className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50 transition"
-          >
-            Varsayılana Dön
-          </button>
-          <button
-            type="button"
-            onClick={save}
-            disabled={status === 'saving'}
-            className="btn-primary px-6"
-          >
+          {list && (
+            <button
+              type="button"
+              onClick={reset}
+              className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-medium text-slate-600 transition hover:bg-slate-50"
+            >
+              Varsayılana Dön
+            </button>
+          )}
+          <button type="button" onClick={save} disabled={status === 'saving'} className="btn-primary px-6">
             {status === 'saving' ? 'Kaydediliyor…' : 'Fiyatları Kaydet'}
           </button>
         </div>
@@ -213,18 +249,101 @@ export default function AdminFiyatlar() {
         </div>
       )}
 
+      {/* Bölge sekmeleri */}
+      <div className="flex flex-wrap gap-2" role="tablist" aria-label="Bölge">
+        {REGIONS.map(r => {
+          const active = r.id === regionId;
+          const has = Boolean(regional[r.id]);
+          return (
+            <button
+              key={r.id}
+              type="button"
+              role="tab"
+              aria-selected={active}
+              onClick={() => setRegionId(r.id)}
+              className={`flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium ring-1 transition ${
+                active ? 'bg-brand-600 text-white ring-brand-600' : 'bg-white text-slate-700 ring-slate-200 hover:bg-slate-50'
+              }`}
+            >
+              {r.name}
+              <span className={`rounded px-1.5 py-0.5 text-[11px] ${active ? 'bg-white/20' : has ? 'bg-slate-100 text-slate-600' : 'bg-amber-100 text-amber-800'}`}>
+                {has ? regional[r.id]!.currency : 'tanımsız'}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Bölge liste ayarları */}
+      <div className="rounded-xl bg-white p-5 ring-1 ring-slate-200">
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div>
+            <p className="font-semibold text-slate-900">{region.name} fiyat listesi</p>
+            <p className="text-xs text-slate-500">{region.note}</p>
+          </div>
+          {list && (
+            <div className="flex items-center gap-3">
+              <label className="text-sm text-slate-600" htmlFor="currency">Para birimi</label>
+              <select
+                id="currency"
+                className="input w-44"
+                value={list.currency}
+                onChange={e => updateList({ ...list, currency: e.target.value as Currency })}
+              >
+                {CURRENCIES.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
+              </select>
+              {regionId !== 'turkey' && (
+                <button
+                  type="button"
+                  onClick={() => updateList(undefined)}
+                  className="rounded-lg border border-red-200 px-3 py-2 text-xs font-medium text-red-700 hover:bg-red-50"
+                >
+                  Listeyi kaldır
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+
+        {!list && (
+          <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+            <p>
+              Bu bölge için ayrı fiyat listesi yok. Şu an <strong>Türkiye listesi ({regional.turkey?.currency ?? 'TRY'})</strong> kullanılıyor.
+            </p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <button
+                type="button"
+                className="btn-primary"
+                onClick={() => updateList(fullList(REGION_DEFAULT_CURRENCY[regionId] ?? 'TRY', regional.turkey?.prices))}
+              >
+                Türkiye fiyatlarından kopyala ({REGION_DEFAULT_CURRENCY[regionId] ?? 'TRY'})
+              </button>
+              <button
+                type="button"
+                className="btn-outline"
+                onClick={() => updateList(fullList(REGION_DEFAULT_CURRENCY[regionId] ?? 'TRY'))}
+              >
+                Boş liste oluştur
+              </button>
+            </div>
+            <p className="mt-2 text-xs">Kopyalanan tutarlar sayısal olarak aktarılır; para birimine göre güncellemeyi unutmayın.</p>
+          </div>
+        )}
+      </div>
+
       {/* Info box */}
       <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
         <p className="font-semibold">Fiyat katmanları nasıl çalışır?</p>
         <ol className="mt-1.5 list-inside list-decimal space-y-0.5">
-          <li>Bu sayfadaki değerler site geneli varsayılan olarak uygulanır.</li>
-          <li>Bayi "Yüzdelik İndirim" modundaysa → bu fiyatlar üzerine indirim eklenir.</li>
-          <li>Bayi "Özel Fiyatlar" modundaysa → bayi fiyatları bu değerleri kalem kalem geçersiz kılar.</li>
+          <li>Müşteri seçtiği bölgenin, bayi kayıtlı olduğu bölgenin listesini görür (listesi olmayan bölge Türkiye listesini kullanır).</li>
+          <li>Bayi &quot;Yüzdelik İndirim&quot; modundaysa → bölge fiyatları üzerine indirim uygulanır.</li>
+          <li>Bayi &quot;Özel Fiyatlar&quot; modundaysa → bayi fiyatları bölge fiyatlarını kalem kalem geçersiz kılar.</li>
+          <li>Misafir kullanıcılar hiçbir zaman fiyat görmez.</li>
         </ol>
       </div>
 
-      {/* Price groups — sadece showPricesEnabled açıksa göster */}
-      {showPricesEnabled && (
+      {/* Price groups */}
+      {showPricesEnabled && list && (
         <div className="space-y-5">
           {PRICE_GROUPS.map(group => (
             <div key={group.label} className="rounded-xl bg-white ring-1 ring-slate-200">
@@ -234,7 +353,8 @@ export default function AdminFiyatlar() {
               </div>
               <div className="grid gap-3 p-5 sm:grid-cols-2 lg:grid-cols-3">
                 {group.items.map(item => {
-                  const isDefault = prices[item.key] === DEFAULT_PRICES[item.key];
+                  const value = valueOf(list, item.key);
+                  const isDefault = list.currency === 'TRY' && value === DEFAULT_PRICES[item.key];
                   return (
                     <div
                       key={item.key}
@@ -244,23 +364,25 @@ export default function AdminFiyatlar() {
                     >
                       <div className="min-w-0 flex-1">
                         <p className="truncate text-sm font-medium text-slate-800">{item.label}</p>
-                        <p className="text-[11px] text-slate-400">
-                          Kod varsayılanı: {DEFAULT_PRICES[item.key].toLocaleString('tr-TR')} {item.unit}
-                        </p>
+                        {list.currency === 'TRY' && (
+                          <p className="text-[11px] text-slate-400">
+                            Kod varsayılanı: {DEFAULT_PRICES[item.key].toLocaleString('tr-TR')} ₺
+                          </p>
+                        )}
                       </div>
                       <div className="flex shrink-0 items-center gap-1.5">
                         <input
                           type="number"
                           inputMode="decimal"
                           min={0}
-                          step={100}
-                          value={prices[item.key]}
+                          step={list.currency === 'TRY' ? 100 : 10}
+                          value={value}
                           onChange={e =>
-                            setPrices(p => ({ ...p, [item.key]: Math.max(0, Number(e.target.value)) }))
+                            updateList({ ...list, prices: { ...list.prices, [item.key]: Math.max(0, Number(e.target.value)) } })
                           }
                           className="input w-28 text-right text-sm"
                         />
-                        <span className="text-xs text-slate-500">{item.unit}</span>
+                        <span className="w-4 text-xs text-slate-500">{symbol}</span>
                       </div>
                     </div>
                   );
@@ -273,18 +395,13 @@ export default function AdminFiyatlar() {
 
       {!showPricesEnabled && (
         <div className="rounded-xl bg-white p-8 text-center ring-1 ring-slate-200">
-          <p className="text-slate-400 text-sm">Fiyat paneli gizli — fiyatları göstermek için yukarıdaki toggleı "Evet" yapın.</p>
+          <p className="text-sm text-slate-400">Fiyat paneli gizli — fiyatları göstermek için yukarıdaki toggleı &quot;Evet&quot; yapın.</p>
         </div>
       )}
 
       {/* Save bar (sticky bottom) */}
       <div className="sticky bottom-4 z-10 flex justify-end">
-        <button
-          type="button"
-          onClick={save}
-          disabled={status === 'saving'}
-          className="btn-primary px-8 py-3 shadow-lg"
-        >
+        <button type="button" onClick={save} disabled={status === 'saving'} className="btn-primary px-8 py-3 shadow-lg">
           {status === 'saving' ? 'Kaydediliyor…' : '✓ Kaydet'}
         </button>
       </div>

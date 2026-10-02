@@ -13,6 +13,7 @@ import ConfigTour from './ConfigTour';
 import { CLADDING_TEXTURE_URLS, claddingThumbUrl } from '@/lib/claddingTextures';
 import { POOL_TEMPLATES, getTemplate } from '@/lib/pool/templates';
 import TemplateView from './TemplateView';
+import type { Currency } from '@/lib/regionalPricing';
 import VenueSelector from './VenueSelector';
 import PlacementBar, { PlacementButton } from './PlacementBar';
 import { NO_ADJUST, clampAdjust, type PlacementAdjust } from './TemplateScene';
@@ -37,12 +38,16 @@ interface Props {
   userEmail: string;
   role: 'customer' | 'dealer' | 'admin';
   fullName: string;
+  /** Bayinin kayıtlı bölgesi: bayiye bölge sorulmaz, bu bölgenin sınırlarıyla başlar */
+  dealerRegion?: string | null;
 }
 
-export default function ConfiguratorClient({ userId, userEmail, role, fullName }: Props) {
+export default function ConfiguratorClient({ userId, userEmail, role, fullName, dealerRegion }: Props) {
   const { t } = useLanguage();
   const [modelLoading, setModelLoading] = useState(false);
-  const [region,       setRegion]       = useState<Region | null>(null);
+  const [region,       setRegion]       = useState<Region | null>(() =>
+    role === 'dealer' && dealerRegion ? getRegion(dealerRegion) : null,
+  );
   const [config, setConfig] = useState<PoolConfig>(defaultPoolConfig);
   const [viewMode, setViewMode] = useState<'studio' | 'place'>('studio');
   // undefined = henüz seçilmedi, null = mekânsız (3D Stüdyo)
@@ -63,6 +68,7 @@ export default function ConfiguratorClient({ userId, userEmail, role, fullName }
   const [isDealer, setIsDealer] = useState(false);
   const [discountRate, setDiscountRate] = useState(0);
   const [showPrices, setShowPrices] = useState(true);
+  const [currency, setCurrency] = useState<Currency>('TRY');
   const [priceLoading, setPriceLoading] = useState(false);
   const [priceError, setPriceError] = useState<string | null>(null);
 
@@ -87,12 +93,14 @@ export default function ConfiguratorClient({ userId, userEmail, role, fullName }
         const res = await fetch('/api/price', {
           method: 'POST',
           headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({ config }),
+          body: JSON.stringify({ config, region: region?.id }),
           signal: controller.signal,
         });
         if (!res.ok) throw new Error('Fiyat alınamadı');
         const data = await res.json();
-        setBreakdown(data.breakdown);
+        // Misafire fiyat gönderilmez (breakdown: null)
+        if (data.breakdown) setBreakdown(data.breakdown);
+        if (data.currency) setCurrency(data.currency);
         setIsDealer(Boolean(data.isDealer));
         setDiscountRate(Number(data.discountRate ?? 0));
         setShowPrices(data.showPrices !== false);
@@ -104,7 +112,7 @@ export default function ConfiguratorClient({ userId, userEmail, role, fullName }
       }
     }, 300);
     return () => { controller.abort(); clearTimeout(t); };
-  }, [debounceKey, config]);
+  }, [debounceKey, config, region?.id]);
 
   /* Show region selector until a region is chosen */
   if (!region) {
@@ -232,6 +240,7 @@ export default function ConfiguratorClient({ userId, userEmail, role, fullName }
             isDealer={isDealer}
             discountRate={discountRate}
             showPrices={showPrices}
+            currency={currency}
             loading={priceLoading}
             priceError={priceError}
             userId={userId}

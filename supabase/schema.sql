@@ -1,6 +1,8 @@
 -- ============================================================================
 -- CarettaPool — Tam Veritabanı Şeması
 -- Supabase SQL Editor'de çalıştırın (önce varsa tabloları drop edin)
+-- ÖNEMLİ: Ardından mutlaka supabase/security-hardening.sql dosyasını çalıştırın
+-- (rol yükseltme koruması ve sıkı RLS politikaları).
 -- ============================================================================
 
 -- ─── PROFILES ────────────────────────────────────────────────────────────────

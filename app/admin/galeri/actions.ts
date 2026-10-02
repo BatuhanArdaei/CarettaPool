@@ -1,20 +1,10 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
-import { createAdminClient, createClient } from '@/lib/supabase/server';
+import { assertAdmin } from '@/lib/supabase/adminGuard';
 
 const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
-
-async function assertAdmin() {
-  const supabase = createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) throw new Error('Yetki yok');
-  const { data: profile } = await supabase
-    .from('profiles').select('role').eq('id', user.id).single();
-  if (profile?.role !== 'admin') throw new Error('Yetki yok');
-  return createAdminClient();
-}
 
 export async function uploadGalleryImage(formData: FormData) {
   const supabase = await assertAdmin();
@@ -56,9 +46,10 @@ export async function toggleGalleryPublish(id: string, published: boolean) {
   revalidatePath('/galeri');
 }
 
-export async function deleteGalleryItem(id: string, storagePath: string) {
+export async function deleteGalleryItem(id: string) {
   const supabase = await assertAdmin();
-  await supabase.storage.from('gallery').remove([storagePath]);
+  const { data: item } = await supabase.from('gallery_items').select('storage_path').eq('id', id).single();
+  if (item?.storage_path) await supabase.storage.from('gallery').remove([item.storage_path]);
   await supabase.from('gallery_items').delete().eq('id', id);
   revalidatePath('/admin/galeri');
   revalidatePath('/galeri');

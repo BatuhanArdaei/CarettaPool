@@ -5,12 +5,13 @@ import {
   POOL_SIDES,
   getPanelType,
   panelKey,
-  segmentsForSide,
+  sidePanelSegments,
   type CladdingType,
   type FrameColor,
   type GroundType,
   type InstallationType,
   type StairStyle,
+  type PoolEntry,
   type LightColor,
   type PanelType,
   type PoolConfig,
@@ -19,13 +20,15 @@ import {
 } from '@/lib/types';
 import { useState as useStateR } from 'react';
 import { useRouter } from 'next/navigation';
-import { createClient } from '@/lib/supabase/client';
-import { formatTRY, type PriceBreakdown } from '@/lib/pricing';
-import { countPanels } from '@/lib/types';
+import type { PriceBreakdown } from '@/lib/pricing';
+import { formatPrice, type Currency } from '@/lib/regionalPricing';
+import { countPanels, isSunken, poolEntryOf } from '@/lib/types';
 import type { Region } from '@/lib/regions';
 import { useLanguage } from '@/contexts/LanguageContext';
 import CountryPhoneInput from '@/components/CountryPhoneInput';
 import { CLADDING_TEXTURES, claddingThumbUrl } from '@/lib/claddingTextures';
+import { POOL_COLORS, isTileCladding } from '@/lib/poolColors';
+import { EQUIPMENT } from '@/lib/equipment';
 
 interface Props {
   config: PoolConfig;
@@ -35,6 +38,8 @@ interface Props {
   isDealer: boolean;
   discountRate: number;
   showPrices?: boolean;
+  /** Fiyatların para birimi (bölgeye göre) */
+  currency?: Currency;
   loading: boolean;
   priceError: string | null;
   userId: string;
@@ -43,27 +48,31 @@ interface Props {
   role: 'customer' | 'dealer' | 'admin';
 }
 
-type StepKey = 'size' | 'frame' | 'panels' | 'waterfall' | 'lighting' | 'ground' | 'finish' | 'preview' | 'summary';
+type StepKey = 'size' | 'install' | 'frame' | 'panels' | 'waterfall' | 'lighting' | 'ground' | 'finish' | 'preview' | 'equipment' | 'summary';
 
 export default function ConfigPanel({
   config, onChange,
   region,
-  breakdown, isDealer, discountRate, showPrices: showPricesSetting, loading, priceError,
+  breakdown, isDealer, discountRate, showPrices: showPricesSetting, currency = 'TRY', loading, priceError,
   userId, userEmail, fullName, role,
 }: Props) {
   const { t } = useLanguage();
   const [stepIdx, setStepIdx] = useState(0);
   const [tipOpen, setTipOpen] = useState(true);
 
+  // Sıra: kurulum tipi erken (cam/korkuluk/merdiven buna bağlı); opsiyonel özellikler ve
+  // ekipmanlar sonda (kullanıcı eklerken fiyatı görür)
   const STEPS: { key: StepKey; title: string; short: string; tip: string }[] = [
     { key: 'size',      title: t('configurator.size'),          short: t('configurator.size'),          tip: t('configurator.size_tip') },
+    { key: 'install',   title: t('configurator.install_step_title'), short: t('configurator.install_step_short'), tip: t('configurator.install_step_tip') },
     { key: 'frame',     title: t('configurator.frame_title'),   short: t('configurator.frame'),         tip: t('configurator.frame_tip') },
     { key: 'panels',    title: t('configurator.panels_title'),  short: t('configurator.panels_short'),  tip: t('configurator.panels_tip') },
-    { key: 'waterfall', title: t('configurator.options_title'), short: t('configurator.options_title'), tip: t('configurator.options_tip') },
     { key: 'lighting',  title: t('configurator.lighting'),      short: t('configurator.lighting_short'),tip: t('configurator.lighting_tip') },
     { key: 'ground',    title: t('configurator.ground_title'),  short: t('configurator.ground_short'),  tip: t('configurator.ground_tip') },
     { key: 'finish',    title: t('configurator.finish_title'),   short: t('configurator.finish_short'),   tip: t('configurator.finish_tip') },
+    { key: 'waterfall', title: t('configurator.options_title'), short: t('configurator.options_title'), tip: t('configurator.options_tip') },
     { key: 'preview',   title: t('configurator.preview_title'),  short: t('configurator.preview_short'),  tip: t('configurator.preview_tip') },
+    { key: 'equipment', title: t('configurator.equipment_title'), short: t('configurator.equipment_short'), tip: t('configurator.equipment_tip') },
     { key: 'summary',   title: t('configurator.summary_title'), short: t('configurator.summary_short'),  tip: t('configurator.summary_tip') },
   ];
 
@@ -162,7 +171,9 @@ export default function ConfigPanel({
         {step.key === 'panels'    && <PanelsStep config={config} set={set} onChange={onChange} />}
         {step.key === 'waterfall' && <WaterfallStep config={config} set={set} />}
         {step.key === 'lighting'  && <LightingStep config={config} set={set} />}
+        {step.key === 'install'   && <InstallStep config={config} set={set} onChange={onChange} />}
         {step.key === 'ground'    && <GroundStep config={config} set={set} />}
+        {step.key === 'equipment' && <EquipmentStep config={config} set={set} />}
         {step.key === 'finish'    && <FinishStep config={config} set={set} />}
         {step.key === 'preview'   && <PreviewStep config={config} set={set} />}
         {step.key === 'summary'   && (
@@ -172,6 +183,8 @@ export default function ConfigPanel({
             isDealer={isDealer}
             discountRate={discountRate}
             showPrices={showPricesSetting ?? true}
+            currency={currency}
+            region={region.id}
             loading={loading}
             priceError={priceError}
             userId={userId}
@@ -308,11 +321,14 @@ function PanelsStep({
   onChange: (next: PoolConfig) => void;
 }) {
   const { t } = useLanguage();
+  const locked = isSunken(config);
   return (
     <div className="space-y-4">
+      {locked && <SunkenNotice text={t('configurator.sunken_panels')} />}
       <div>
         <p className="label">{t('configurator.all_default')}</p>
         <Toggle
+          disabled={locked}
           options={[
             { value: 'glass',  label: t('configurator.glass_panel') },
             { value: 'closed', label: t('configurator.closed_panel') },
@@ -337,12 +353,27 @@ function PanelsStep({
             </button>
           )}
         </div>
-        <div className="space-y-1.5">
+        <div className="mb-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-slate-500">
+          <span className="flex items-center gap-1">
+            <span className="flex h-4 w-5 items-center justify-center rounded-sm border border-sky-300 bg-sky-100 text-sky-600"><PanelIcon glass /></span>
+            {t('configurator.glass_btn')}
+          </span>
+          <span className="flex items-center gap-1">
+            <span className="flex h-4 w-5 items-center justify-center rounded-sm border border-slate-400 bg-slate-700 text-slate-300"><PanelIcon glass={false} /></span>
+            {t('configurator.closed')}
+          </span>
+          <span className="flex items-center gap-1">
+            <span className="h-4 w-5 rounded-sm border border-dashed border-slate-400" />
+            {t('configurator.panel_cut_legend')}
+          </span>
+        </div>
+        <div className="space-y-2">
           {POOL_SIDES.map((side) => (
             <PanelRow
               key={side}
               side={side}
               config={config}
+              locked={locked}
               onToggle={(idx) => {
                 if (side === 'east') return;
                 const k = panelKey(side, idx);
@@ -408,6 +439,29 @@ function WaterfallStep({
       </div>
 
       <div className="space-y-2">
+        <p className="label">{t('configurator.lift_label')}</p>
+        <Toggle
+          options={[{ value: 'on', label: onLabel }, { value: 'off', label: offLabel }]}
+          value={config.liftDeck ? 'on' : 'off'}
+          onChange={(v) => set('liftDeck', v === 'on')}
+        />
+        <p className="text-sm text-slate-500">{t('configurator.lift_note')}</p>
+      </div>
+
+      <div className="space-y-2">
+        <p className="label">{t('configurator.solar_label')}</p>
+        <Toggle
+          options={[{ value: 'on', label: onLabel }, { value: 'off', label: offLabel }]}
+          value={config.liftDeck && config.liftDeckSolar ? 'on' : 'off'}
+          onChange={(v) => set('liftDeckSolar', v === 'on')}
+          disabled={!config.liftDeck}
+        />
+        <p className="text-sm text-slate-500">
+          {config.liftDeck ? t('configurator.solar_note') : t('configurator.solar_hint')}
+        </p>
+      </div>
+
+      <div className="space-y-2">
         <p className="label">{t('configurator.ext_label')}</p>
         <Toggle
           options={[{ value: 'on', label: onLabel }, { value: 'off', label: offLabel }]}
@@ -418,13 +472,18 @@ function WaterfallStep({
       </div>
 
       <div className="space-y-2">
-        <p className="label">{t('configurator.ladder_label')}</p>
-        <Toggle
-          options={[{ value: 'on', label: onLabel }, { value: 'off', label: offLabel }]}
-          value={config.innerLadder ? 'on' : 'off'}
-          onChange={(v) => set('innerLadder', v === 'on')}
+        <p className="label">{t('configurator.entry_label')}</p>
+        <SelectGrid
+          options={[
+            { value: 'small_stairs', label: t('configurator.entry_small') },
+            { value: 'wide_stairs',  label: t('configurator.entry_wide') },
+            { value: 'bench',        label: t('configurator.entry_bench') },
+            { value: 'none',         label: t('configurator.none') },
+          ]}
+          value={poolEntryOf(config)}
+          onChange={(v) => set('poolEntry', v as PoolEntry)}
         />
-        <p className="text-sm text-slate-500">{t('configurator.ladder_note')}</p>
+        <p className="text-sm text-slate-500">{t('configurator.entry_note')}</p>
       </div>
 
       <div className="space-y-2">
@@ -436,18 +495,24 @@ function WaterfallStep({
           ]}
           value={config.stairStyle ?? 'open'}
           onChange={(v) => set('stairStyle', v as StairStyle)}
+          disabled={isSunken(config)}
         />
-        <p className="text-sm text-slate-500">{t('configurator.stair_style_note')}</p>
+        <p className="text-sm text-slate-500">
+          {isSunken(config) ? t('configurator.sunken_unavailable') : t('configurator.stair_style_note')}
+        </p>
       </div>
 
       <div className="space-y-2">
         <p className="label">{t('configurator.railings_label')}</p>
         <Toggle
           options={[{ value: 'on', label: onLabel }, { value: 'off', label: offLabel }]}
-          value={config.railings ? 'on' : 'off'}
+          value={config.railings && !isSunken(config) ? 'on' : 'off'}
           onChange={(v) => set('railings', v === 'on')}
+          disabled={isSunken(config)}
         />
-        <p className="text-sm text-slate-500">{t('configurator.railings_note')}</p>
+        <p className="text-sm text-slate-500">
+          {isSunken(config) ? t('configurator.sunken_unavailable') : t('configurator.railings_note')}
+        </p>
       </div>
     </div>
   );
@@ -509,12 +574,75 @@ function LightingStep({
 
 
 
-function GroundStep({
+/** Teknik ekipmanlar: 3D'de görünmez, seçilip fiyatlanır */
+function EquipmentStep({
   config,
   set,
 }: {
   config: PoolConfig;
   set: <K extends keyof PoolConfig>(key: K, value: PoolConfig[K]) => void;
+}) {
+  const { t } = useLanguage();
+  const eq = config.equipment ?? {};
+  return (
+    <div className="space-y-2">
+      {EQUIPMENT.map((e) => {
+        const on = Boolean(eq[e.id]);
+        return (
+          <button
+            key={e.id}
+            type="button"
+            role="checkbox"
+            aria-checked={on}
+            onClick={() => set('equipment', { ...eq, [e.id]: !on })}
+            className={`flex w-full items-start gap-3 rounded-xl border p-3 text-left transition ${
+              on ? 'border-brand-500 bg-brand-50 ring-1 ring-brand-200' : 'border-slate-200 hover:bg-slate-50'
+            }`}
+          >
+            <span
+              className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded border-2 ${
+                on ? 'border-brand-500 bg-brand-500 text-white' : 'border-slate-300 bg-white'
+              }`}
+              aria-hidden
+            >
+              {on && (
+                <svg viewBox="0 0 20 20" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth={3} strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M5 10.5l3.5 3.5L15 6.5" />
+                </svg>
+              )}
+            </span>
+            <span className="min-w-0">
+              <span className={`block text-sm font-semibold ${on ? 'text-brand-700' : 'text-slate-800'}`}>{t(e.labelKey)}</span>
+              <span className="mt-0.5 block text-xs leading-snug text-slate-500">{t(e.noteKey)}</span>
+            </span>
+          </button>
+        );
+      })}
+      <p className="pt-1 text-xs text-slate-500">{t('configurator.equipment_note')}</p>
+    </div>
+  );
+}
+
+/** Tam gömülü kurulumda kaldırılan seçimler için bilgi kutusu */
+function SunkenNotice({ text }: { text: string }) {
+  return (
+    <div className="flex gap-2 rounded-lg bg-amber-50 p-3 text-sm leading-relaxed text-amber-900 ring-1 ring-amber-200">
+      <svg viewBox="0 0 20 20" className="mt-0.5 h-4 w-4 shrink-0" fill="currentColor" aria-hidden>
+        <path d="M10 2a8 8 0 1 0 0 16 8 8 0 0 0 0-16Zm-.75 4.5h1.5v5h-1.5v-5Zm0 6.5h1.5v1.5h-1.5V13Z" />
+      </svg>
+      <span>{text}</span>
+    </div>
+  );
+}
+
+function InstallStep({
+  config,
+  set,
+  onChange,
+}: {
+  config: PoolConfig;
+  set: <K extends keyof PoolConfig>(key: K, value: PoolConfig[K]) => void;
+  onChange: (next: PoolConfig) => void;
 }) {
   const { t } = useLanguage();
   return (
@@ -528,10 +656,34 @@ function GroundStep({
             { value: 'sunken',  label: t('configurator.install_sunken') },
           ]}
           value={config.installation ?? 'ground'}
-          onChange={(v) => set('installation', v as InstallationType)}
+          onChange={(v) =>
+            v === 'sunken'
+              ? // Tam gömülü: korkuluk ve cam paneller kaldırılır (dış merdiven zaten çizilmez)
+                onChange({ ...config, installation: 'sunken', railings: false, panel: 'closed', panelOverrides: {} })
+              : set('installation', v as InstallationType)
+          }
         />
         <p className="mt-2 text-sm text-slate-500">{t('configurator.install_note')}</p>
+        {isSunken(config) && (
+          <div className="mt-3">
+            <SunkenNotice text={t('configurator.sunken_notice')} />
+          </div>
+        )}
       </div>
+    </div>
+  );
+}
+
+function GroundStep({
+  config,
+  set,
+}: {
+  config: PoolConfig;
+  set: <K extends keyof PoolConfig>(key: K, value: PoolConfig[K]) => void;
+}) {
+  const { t } = useLanguage();
+  return (
+    <div className="space-y-4">
       <div>
         <p className="label">{t('configurator.ground_type')}</p>
         <SelectGrid
@@ -550,8 +702,9 @@ function GroundStep({
   );
 }
 
-const COLOR_PRESETS = ['white', 'blue_mosaic', 'gray_stone', 'turquoise'] as const;
 const MOBILE_INIT = 6; // İlk yüklenen texture sayısı (mobil)
+
+type FinishMode = 'color' | 'tile';
 
 function FinishStep({
   config,
@@ -561,88 +714,115 @@ function FinishStep({
   set: <K extends keyof PoolConfig>(key: K, value: PoolConfig[K]) => void;
 }) {
   const { t } = useLanguage();
+  const mode: FinishMode = isTileCladding(config.cladding) ? 'tile' : 'color';
+  // Mod değişince her moddaki son seçim geri gelsin
+  const [lastColor, setLastColor] = useStateR<CladdingType>(mode === 'color' ? config.cladding : 'white');
+  const [lastTile, setLastTile] = useStateR<CladdingType>(
+    mode === 'tile' ? config.cladding : (`/textures/${CLADDING_TEXTURES[0].file}` as CladdingType),
+  );
+  const pick = (v: CladdingType) => {
+    if (isTileCladding(v)) setLastTile(v);
+    else setLastColor(v);
+    set('cladding', v);
+  };
 
   // Mobil: 6'dan başla, +1 ile yükle. Masaüstü: hepsini göster.
   const [visible, setVisible] = useStateR(MOBILE_INIT);
   useEffect(() => {
     if (window.innerWidth >= 768) setVisible(CLADDING_TEXTURES.length);
   }, []);
-
-  const colorLabels: Record<string, string> = {
-    white:       t('configurator.white_cladding'),
-    blue_mosaic: t('configurator.blue_mosaic'),
-    gray_stone:  t('configurator.gray_stone'),
-    turquoise:   t('configurator.turquoise_cladding'),
-  };
-
   const remaining = CLADDING_TEXTURES.length - visible;
 
   return (
-    <div className="space-y-2">
-      {/* Renk seçenekleri — tek satır */}
-      <div className="grid grid-cols-4 gap-1.5">
-        {COLOR_PRESETS.map((v) => (
-          <button
-            key={v}
-            type="button"
-            onClick={() => set('cladding', v as CladdingType)}
-            className={`rounded-lg border px-1 py-2 text-xs min-h-[36px] transition truncate ${
-              config.cladding === v
-                ? 'border-brand-600 bg-brand-50 font-medium text-brand-700'
-                : 'border-slate-200 text-slate-600 hover:bg-slate-50'
-            }`}
-          >
-            {colorLabels[v]}
-          </button>
-        ))}
-      </div>
+    <div className="space-y-3">
+      <Toggle
+        options={[
+          { value: 'color', label: t('configurator.finish_mode_color') },
+          { value: 'tile',  label: t('configurator.finish_mode_tile') },
+        ]}
+        value={mode}
+        onChange={(v) => set('cladding', v === 'tile' ? lastTile : lastColor)}
+      />
+      <p className="text-sm text-slate-500">
+        {mode === 'color' ? t('configurator.finish_color_note') : t('configurator.finish_tile_note')}
+      </p>
 
-      {/* Texture grid — 6 sütun, yalnızca visible kadar render edilir */}
-      <div className="grid grid-cols-6 gap-1">
-        {CLADDING_TEXTURES.slice(0, visible).map((tex) => {
-          const val = `/textures/${tex.file}`;
-          const selected = config.cladding === val;
-          return (
-            <button
-              key={tex.file}
-              type="button"
-              onClick={() => set('cladding', val as CladdingType)}
-              title={tex.name}
-              className={`relative h-10 overflow-hidden rounded-md border-2 transition-all ${
-                selected
-                  ? 'border-cyan-400 ring-1 ring-cyan-200'
-                  : 'border-slate-200 hover:border-slate-400'
-              }`}
-            >
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={claddingThumbUrl(val)}
-                alt={tex.name}
-                className="absolute inset-0 h-full w-full object-cover"
-                loading="eager"
-                decoding="async"
-              />
-              {selected && (
-                <span className="absolute inset-0 flex items-center justify-center bg-cyan-500/30">
-                  <span className="text-sm text-white drop-shadow">✓</span>
+      {mode === 'color' ? (
+        /* Renk paleti */
+        <div className="grid grid-cols-3 gap-2">
+          {POOL_COLORS.map((c) => {
+            const selected = config.cladding === c.value;
+            return (
+              <button
+                key={c.value}
+                type="button"
+                onClick={() => pick(c.value)}
+                className={`flex items-center gap-2 rounded-lg border p-1.5 text-left transition ${
+                  selected ? 'border-brand-600 bg-brand-50 ring-1 ring-brand-200' : 'border-slate-200 hover:bg-slate-50'
+                }`}
+              >
+                <span
+                  className="h-7 w-7 shrink-0 rounded-md ring-1 ring-inset ring-black/10"
+                  style={{ background: c.hex }}
+                  aria-hidden
+                />
+                <span className={`min-w-0 text-xs leading-tight ${selected ? 'font-medium text-brand-700' : 'text-slate-600'}`}>
+                  {t(c.labelKey)}
                 </span>
-              )}
-            </button>
-          );
-        })}
+              </button>
+            );
+          })}
+        </div>
+      ) : (
+        /* Döşeme (seramik doku) ızgarası — 6 sütun, yalnızca visible kadar render edilir */
+        <div className="grid grid-cols-6 gap-1">
+          {CLADDING_TEXTURES.slice(0, visible).map((tex) => {
+            const val = `/textures/${tex.file}` as CladdingType;
+            const selected = config.cladding === val;
+            return (
+              <button
+                key={tex.file}
+                type="button"
+                onClick={() => pick(val)}
+                title={tex.name}
+                className={`relative h-10 overflow-hidden rounded-md border-2 transition-all ${
+                  selected ? 'border-cyan-400 ring-1 ring-cyan-200' : 'border-slate-200 hover:border-slate-400'
+                }`}
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={claddingThumbUrl(val)}
+                  alt={tex.name}
+                  className="absolute inset-0 h-full w-full object-cover"
+                  loading="eager"
+                  decoding="async"
+                />
+                {selected && (
+                  <span className="absolute inset-0 flex items-center justify-center bg-cyan-500/30">
+                    <span className="text-sm text-white drop-shadow">✓</span>
+                  </span>
+                )}
+              </button>
+            );
+          })}
 
-        {/* +1 butonu — visible'dan sonraki hücreye otur */}
-        {remaining > 0 && (
-          <button
-            type="button"
-            onClick={() => setVisible((v) => Math.min(v + 1, CLADDING_TEXTURES.length))}
-            className="relative h-10 overflow-hidden rounded-md border-2 border-dashed border-slate-300 bg-slate-50 flex items-center justify-center text-slate-500 hover:border-slate-400 hover:bg-slate-100 transition text-xs font-semibold"
-            title={`${remaining} kaplama daha`}
-          >
-            +1
-          </button>
-        )}
-      </div>
+          {remaining > 0 && (
+            <button
+              type="button"
+              onClick={() => setVisible((v) => Math.min(v + 1, CLADDING_TEXTURES.length))}
+              className="relative flex h-10 items-center justify-center overflow-hidden rounded-md border-2 border-dashed border-slate-300 bg-slate-50 text-xs font-semibold text-slate-500 transition hover:border-slate-400 hover:bg-slate-100"
+              title={`${remaining} kaplama daha`}
+            >
+              +1
+            </button>
+          )}
+        </div>
+      )}
+      {mode === 'tile' && (
+        <p className="text-xs text-slate-500">
+          {CLADDING_TEXTURES.find((x) => `/textures/${x.file}` === config.cladding)?.name}
+        </p>
+      )}
     </div>
   );
 }
@@ -651,51 +831,85 @@ function FinishStep({
 // Reusable controls
 // ============================================================================
 
+/** Cam (açık, pencere çizgili) ya da kapalı panel (dolu) simgesi */
+function PanelIcon({ glass }: { glass: boolean }) {
+  return glass ? (
+    <svg viewBox="0 0 16 16" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.4" aria-hidden>
+      <rect x="2" y="2" width="12" height="12" rx="1.5" />
+      <path d="M5 11l6-6M8 12l4-4" strokeLinecap="round" />
+    </svg>
+  ) : (
+    <svg viewBox="0 0 16 16" className="h-4 w-4" fill="currentColor" aria-hidden>
+      <rect x="2" y="2" width="12" height="12" rx="1.5" />
+    </svg>
+  );
+}
+
 function PanelRow({
   side,
   config,
   onToggle,
+  locked = false,
 }: {
   side: PoolSide;
   config: PoolConfig;
   onToggle: (index: number) => void;
+  /** Tam gömülü kurulumda paneller değiştirilemez */
+  locked?: boolean;
 }) {
-  const { t } = useLanguage();
+  const { t, lang } = useLanguage();
   const sideLabel: Record<PoolSide, string> = {
     north: t('configurator.north'),
     south: t('configurator.south'),
     east:  t('configurator.east'),
     west:  t('configurator.west'),
   };
+  const m = (v: number) => v.toLocaleString(lang, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const segs = sidePanelSegments(side, config);
+  const isCut = (len: number) => Math.abs(len - 2.4) > 0.001;
+  const full = segs.filter((len) => !isCut(len)).length;
+  const cut = segs.find(isCut);
+  const summary = [
+    full > 0 ? `${full} × ${m(2.4)} m` : null,
+    cut !== undefined ? `${m(cut)} m ${t('configurator.panel_cut')}` : null,
+  ].filter(Boolean).join(' + ');
+
   return (
-    <div className="flex items-center gap-2">
-      <span className="w-12 shrink-0 text-xs font-medium text-slate-600">
+    <div className="flex items-start gap-2">
+      <span className="w-12 shrink-0 pt-2.5 text-xs font-medium text-slate-600">
         {sideLabel[side]}
       </span>
-      <div className="flex flex-1 gap-1">
-        {Array.from({ length: segmentsForSide(side, config) }, (_, i) => {
-          const isEast = side === 'east';
-          const type = isEast ? 'closed' : getPanelType(config, side, i);
-          const isGlass = type === 'glass';
-          return (
-            <button
-              key={i}
-              type="button"
-              onClick={() => !isEast && onToggle(i)}
-              disabled={isEast}
-              title={isEast ? t('configurator.closed') : isGlass ? t('configurator.toggle_to_closed') : t('configurator.toggle_to_glass')}
-              className={`h-11 flex-1 rounded border text-[11px] font-medium transition ${
-                isGlass
-                  ? 'border-sky-300 bg-sky-100 text-sky-700 hover:bg-sky-200'
-                  : isEast
-                  ? 'border-slate-400 bg-slate-700 text-white opacity-60 cursor-not-allowed'
-                  : 'border-slate-400 bg-slate-700 text-white hover:bg-slate-800'
-              }`}
-            >
-              {isGlass ? t('configurator.glass_btn') : t('configurator.closed')}
-            </button>
-          );
-        })}
+      <div className="min-w-0 flex-1">
+        {/* Butonlar camın gerçek genişliğiyle orantılı; içinde yalnızca simge (yazı taşmaz) */}
+        <div className="flex gap-1">
+          {segs.map((len, i) => {
+            const isEast = side === 'east';
+            const type = isEast ? 'closed' : getPanelType(config, side, i);
+            const isGlass = type === 'glass';
+            const label = `${isGlass ? t('configurator.glass_btn') : t('configurator.closed')} · ${m(len)} m${isCut(len) ? ` (${t('configurator.panel_cut')})` : ''}`;
+            return (
+              <button
+                key={i}
+                type="button"
+                onClick={() => !isEast && !locked && onToggle(i)}
+                disabled={isEast || locked}
+                title={label}
+                aria-label={label}
+                style={{ flexGrow: len, flexBasis: 0 }}
+                className={`relative flex h-10 min-w-[1.25rem] items-center justify-center rounded border transition ${
+                  isGlass
+                    ? 'border-sky-300 bg-sky-100 text-sky-600 hover:bg-sky-200'
+                    : isEast
+                    ? 'cursor-not-allowed border-slate-400 bg-slate-700 text-slate-300 opacity-60'
+                    : 'border-slate-400 bg-slate-700 text-slate-300 hover:bg-slate-800'
+                } ${isCut(len) ? 'border-dashed' : ''}`}
+              >
+                <PanelIcon glass={isGlass} />
+              </button>
+            );
+          })}
+        </div>
+        <p className="mt-0.5 text-[11px] text-slate-500">{summary}</p>
       </div>
     </div>
   );
@@ -863,23 +1077,38 @@ function PreviewStep({
           <p className="text-xs text-slate-500">{t('configurator.cover_preview_hint')}</p>
         )}
       </div>
+
+      <div className="space-y-2">
+        <p className="label">{t('configurator.lift_position')}</p>
+        <Toggle
+          options={[
+            { value: 'up',   label: t('configurator.lift_up') },
+            { value: 'down', label: t('configurator.lift_down') },
+          ]}
+          value={config.liftDeckUp === false ? 'down' : 'up'}
+          onChange={(v) => set('liftDeckUp', v === 'up')}
+          disabled={!config.liftDeck}
+        />
+        {!config.liftDeck && (
+          <p className="text-xs text-slate-500">{t('configurator.lift_preview_hint')}</p>
+        )}
+      </div>
     </div>
   );
 }
 
 /* ─── Summary & Quote ─────────────────────────────────────────────── */
 function SummaryStep({
-  config, breakdown, isDealer, discountRate, showPrices: showPricesSetting, loading, priceError,
+  config, breakdown, isDealer, discountRate, showPrices: showPricesSetting, currency, region, loading, priceError,
   userId, userEmail, fullName, role,
 }: {
   config: PoolConfig; breakdown: PriceBreakdown; isDealer: boolean; discountRate: number;
-  showPrices?: boolean;
+  showPrices?: boolean; currency: Currency; region: string;
   loading: boolean; priceError: string | null; userId: string; userEmail: string;
   fullName: string; role: 'customer' | 'dealer' | 'admin';
 }) {
   const { t, lang } = useLanguage();
   const router = useRouter();
-  const supabase = createClient();
   const [saving, setSaving] = useStateR(false);
   const [saved, setSaved] = useStateR(false);
   const [saveError, setSaveError] = useStateR<string | null>(null);
@@ -893,22 +1122,20 @@ function SummaryStep({
   const [contact, setContact] = useStateR({ name: '', email: '', phone: '', dialCode: LANG_DIAL[lang] ?? '+90' });
 
   const isGuest = !userId;
-  const showPrices = role === 'dealer' || role === 'admin' || (showPricesSetting ?? true);
+  const fmtMoney = (v: number) => formatPrice(v, currency);
+  // Misafir kullanıcıya fiyat asla gösterilmez
+  const showPrices = !isGuest && (role === 'dealer' || role === 'admin' || (showPricesSetting ?? true));
 
   async function submitRequest(contactInfo?: { name: string; email: string; phone: string }) {
     setSaving(true); setSaveError(null); setSaved(false);
     try {
-      await supabase.from('pool_configs').insert({
-        user_id: userId || null,
-        config: config as unknown as Record<string, unknown>,
-        total_price: breakdown.total,
+      // Tutar sunucuda hesaplanır; misafire fiyat dönmez
+      const res = await fetch('/api/quote', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ config, region, contact: isGuest ? contactInfo : undefined }),
       });
-      if (isGuest && contactInfo) {
-        await supabase.from('contact_requests').insert({
-          name: contactInfo.name, email: contactInfo.email, phone: contactInfo.phone || null,
-          message: `Havuz Teklif Talebi — ${config.length.toFixed(1)}×${config.width.toFixed(1)} m, ${formatTRY(breakdown.total)}`,
-        });
-      }
+      if (!res.ok) throw new Error((await res.json().catch(() => null))?.error ?? 'Hata');
       setSaved(true); setShowPopup(false); router.refresh();
     } catch (err) { setSaveError(err instanceof Error ? err.message : 'Hata'); }
     setSaving(false);
@@ -932,12 +1159,6 @@ function SummaryStep({
     grass:    t('configurator.grass'),
     concrete: t('configurator.concrete'),
   };
-  const claddingLabel: Record<string, string> = {
-    white:       t('configurator.white_cladding'),
-    blue_mosaic: t('configurator.blue_mosaic'),
-    gray_stone:  t('configurator.gray_stone'),
-    turquoise:   t('configurator.turquoise_cladding'),
-  };
 
   const rows: [string, string][] = [
     [t('configurator.row_size'),      `${config.length.toFixed(1)} × ${config.width.toFixed(1)} m`],
@@ -945,11 +1166,22 @@ function SummaryStep({
     [t('configurator.row_panel'),     t('configurator.panel_glass_count').replace('{glass}', String(panels.glass)).replace('{closed}', String(panels.closed))],
     [t('configurator.row_lighting'),  config.lighting.enabled ? t('configurator.light_on_status').replace('{color}', config.lighting.color.toUpperCase()) : t('configurator.none')],
     [t('configurator.row_waterfall'), config.waterfall ? t('configurator.yes') : t('configurator.none')],
+    [t('configurator.entry_label'), ({
+      small_stairs: t('configurator.entry_small'),
+      wide_stairs: t('configurator.entry_wide'),
+      bench: t('configurator.entry_bench'),
+      none: t('configurator.none'),
+    } as Record<string, string>)[poolEntryOf(config)]],
+    [t('configurator.lift_label'), config.liftDeck ? t('configurator.yes') : t('configurator.none')],
+    ...(config.liftDeck ? [[t('configurator.solar_label'), config.liftDeckSolar ? t('configurator.yes') : t('configurator.none')] as [string, string]] : []),
+    [t('configurator.row_equipment'), EQUIPMENT.filter((e) => config.equipment?.[e.id]).map((e) => t(e.labelKey)).join(', ') || t('configurator.none')],
     [t('configurator.row_cover'),     config.poolCover ? (config.poolCoverType === 'manual' ? t('configurator.cover_manual') : t('configurator.cover_auto')) : t('configurator.none')],
     [t('configurator.row_installation'), installationLabel[config.installation ?? 'ground']],
-    [t('configurator.stair_style_label'), config.stairStyle === 'block' ? t('configurator.stair_block') : t('configurator.stair_open')],
+    [t('configurator.stair_style_label'), isSunken(config) ? t('configurator.none') : config.stairStyle === 'block' ? t('configurator.stair_block') : t('configurator.stair_open')],
     [t('configurator.row_ground'),    groundLabel[config.ground] ?? config.ground],
-    [t('configurator.row_cladding'),  claddingLabel[config.cladding] ?? t('configurator.cladding_custom')],
+    [t('configurator.row_cladding'),  isTileCladding(config.cladding)
+      ? `${t('configurator.finish_mode_tile')} · ${CLADDING_TEXTURES.find((x) => `/textures/${x.file}` === config.cladding)?.name ?? t('configurator.cladding_custom')}`
+      : `${t('configurator.finish_mode_color')} · ${t(POOL_COLORS.find((c) => c.value === config.cladding)?.labelKey ?? 'configurator.cladding_custom')}`],
   ];
 
   return (
@@ -986,25 +1218,27 @@ function SummaryStep({
             breakdown.lighting > 0 ? [t('configurator.lighting'),          breakdown.lighting] : null,
             breakdown.waterfall> 0 ? [t('configurator.waterfall'),         breakdown.waterfall]: null,
             breakdown.poolCover> 0 ? [t('configurator.cover_label'),       breakdown.poolCover]: null,
+            breakdown.liftDeck > 0 ? [t('configurator.lift_label'),        breakdown.liftDeck] : null,
+            breakdown.equipment > 0 ? [t('configurator.equipment_title'),  breakdown.equipment] : null,
           ].filter(Boolean).map((row) => {
             const [label, val] = row as [string, number];
             return (
               <div key={label} className="flex justify-between text-sm text-slate-600">
                 <span>{label}</span>
-                <span>{formatTRY(val)}</span>
+                <span>{fmtMoney(val)}</span>
               </div>
             );
           })}
           {isDealer && breakdown.discount > 0 && (
             <div className="flex justify-between text-sm text-emerald-700 pt-1">
               <span>{t('configurator.dealer_discount_pct').replace('{n}', String(discountRate))}</span>
-              <span>-{formatTRY(breakdown.discount)}</span>
+              <span>-{fmtMoney(breakdown.discount)}</span>
             </div>
           )}
           <div className="flex items-baseline justify-between border-t border-slate-200 pt-3 mt-2">
             <span className="text-sm font-semibold text-slate-700">{t('configurator.total')}</span>
             <span className="text-2xl font-bold text-brand-700">
-              {loading ? '…' : formatTRY(breakdown.total)}
+              {loading ? '…' : fmtMoney(breakdown.total)}
             </span>
           </div>
           {priceError && <p className="text-xs text-red-600">{priceError}</p>}

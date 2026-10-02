@@ -14,6 +14,8 @@ export type PlatformDirection = 'north' | 'south' | 'east' | 'west';
 export type PoolCoverType = 'automatic' | 'manual';
 export type InstallationType = 'ground' | 'partial' | 'sunken';
 export type StairStyle = 'open' | 'block';
+/** Havuza giriş: iç merdiven ya da havuz içi basamak tipleri */
+export type PoolEntry = 'small_stairs' | 'wide_stairs' | 'bench' | 'none';
 export type PoolSide = 'north' | 'south' | 'east' | 'west';
 
 export const POOL_SIDES: PoolSide[] = ['north', 'south', 'east', 'west'];
@@ -35,11 +37,18 @@ export interface PoolConfig {
   platformExtension: boolean;
   railings: boolean;
   stairStyle: StairStyle; // platform merdiveni: açık basamak / blok basamak
-  innerLadder: boolean;
+  poolEntry: PoolEntry;
+  /** @deprecated eski kayıtlar için; yerine poolEntry */
+  innerLadder?: boolean;
   waterfall: boolean;
   poolCover: boolean;   // optional slatted roller cover over the water
   poolCoverType: PoolCoverType; // automatic or manual operation (roller either way)
-  poolCoverClosed: boolean; // preview-only: show the cover closed (true) or open/retracted (false)
+  poolCoverClosed: boolean;
+  liftDeck: boolean;      // köşe kolonlarında yukarı/aşağı hareket eden güverte (havuz üstünü kapatır)
+  liftDeckUp: boolean;    // önizleme: güverte yukarıda (true) ya da havuzu kapatmış (false)
+  liftDeckSolar: boolean; // güverte üstünde güneş paneli (yalnızca liftDeck ile)
+  /** 3D'de görünmeyen teknik ekipmanlar (ısı pompası, swimjet, dozaj, tuz elektrolizi, UV) */
+  equipment: Partial<Record<'heatPump' | 'swimJet' | 'dosing' | 'saltChlorinator' | 'blueLagoon', boolean>>; // preview-only: show the cover closed (true) or open/retracted (false)
   showWater: boolean;
 }
 
@@ -57,13 +66,22 @@ export const defaultPoolConfig: PoolConfig = {
   platformExtension: false,
   railings: false,
   stairStyle: 'open',
-  innerLadder: true,
+  poolEntry: 'small_stairs',
   waterfall: false,
   poolCover: false,
   poolCoverType: 'automatic',
   poolCoverClosed: true,
+  liftDeck: false,
+  liftDeckUp: true,
+  liftDeckSolar: false,
+  equipment: {},
   showWater: false,
 };
+
+/** Tam gömülü kurulum: korkuluk, dış merdiven ve cam panel kullanılmaz. */
+export function isSunken(config: Pick<PoolConfig, 'installation'>): boolean {
+  return config.installation === 'sunken';
+}
 
 export function panelKey(side: PoolSide, index: number): string {
   return `${side}-${index}`;
@@ -75,21 +93,44 @@ export function getPanelType(
   index: number
 ): PanelType {
   if (side === 'east') return 'closed'; // makine dairesi — her zaman kapalı
+  if (isSunken(config)) return 'closed'; // tam gömülü: paneller toprak altında, cam kullanılmaz
   return config.panelOverrides[panelKey(side, index)] ?? config.panel;
 }
 
 /** Fixed real-world panel width used to auto-calculate segment counts. */
 export const PANEL_W = 2.40;
 
+/** Kesik camın en küçük boyu: bundan kısa artık, son cama eklenir (ayrı parça kesilmez). */
+export const PANEL_MIN_CUT = 0.05;
+
 /**
- * Returns the number of panels per side based on the pool's inner span.
- * The inner span for the short sides (north/south) is config.width minus
- * two frame thicknesses, and for the long sides (east/west) it is
- * config.length minus two frame thicknesses.
+ * Kenar boyunca cam/panel ölçüleri (metre): standart 2,40 m camlar dizilir, kalan ara ölçü
+ * için tek bir kesik cam eklenir. Örn. 5 m → [2.40, 2.40, 0.20], 6 m → [2.40, 2.40, 1.20],
+ * 2,3 m → [2.30].
  */
+export function panelSegments(span: number): number[] {
+  const full = Math.floor((span + 1e-6) / PANEL_W);
+  const rest = Math.round((span - full * PANEL_W) * 1000) / 1000;
+  if (full === 0) return [span];
+  const segs: number[] = Array(full).fill(PANEL_W);
+  if (rest >= PANEL_MIN_CUT) segs.push(rest);
+  else if (rest > 0) segs[segs.length - 1] += rest;
+  return segs;
+}
+
+/** Kenarın nominal boyu: kuzey/güney → genişlik, doğu/batı → uzunluk. */
+export function sideSpan(side: PoolSide, config: Pick<PoolConfig, 'width' | 'length'>): number {
+  return side === 'north' || side === 'south' ? config.width : config.length;
+}
+
+/** Bir kenardaki cam/panel ölçüleri. */
+export function sidePanelSegments(side: PoolSide, config: Pick<PoolConfig, 'width' | 'length'>): number[] {
+  return panelSegments(sideSpan(side, config));
+}
+
+/** Bir kenardaki panel sayısı (standart 2,40 m camlar + varsa kesik cam). */
 export function segmentsForSide(side: PoolSide, config: PoolConfig): number {
-  const span = side === 'north' || side === 'south' ? config.width : config.length;
-  return Math.max(1, Math.round(span / PANEL_W));
+  return sidePanelSegments(side, config).length;
 }
 
 export function countPanels(config: PoolConfig): { glass: number; closed: number } {
@@ -131,4 +172,15 @@ export interface DealerPrice {
   dealer_id: string;
   product_id: string;
   custom_price: number;
+}
+
+/**
+ * Havuza giriş tipi. Metal merdiven kaldırıldı: eski kayıtlardaki merdiven (poolEntry 'ladder'
+ * ya da innerLadder) küçük basamak olarak açılır.
+ */
+export function poolEntryOf(config: Pick<PoolConfig, 'poolEntry' | 'innerLadder'>): PoolEntry {
+  const e = config.poolEntry as string | undefined;
+  if (e && e !== 'ladder') return e as PoolEntry;
+  if (!e && config.innerLadder === false) return 'none';
+  return 'small_stairs';
 }

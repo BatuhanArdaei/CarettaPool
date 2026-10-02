@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
+import { createFaq, deleteFaq, toggleFaqPublish } from './actions';
 
 interface Faq { id: string; question: string; answer: string; published: boolean; }
 
@@ -20,17 +21,22 @@ export default function AdminSss() {
 
   async function add(e: React.FormEvent) {
     e.preventDefault();
-    await supabase.from('faqs').insert({ question: q, answer: a, published: false });
-    setQ(''); setA(''); setMsg('Eklendi (taslak)'); load();
+    const fd = new FormData();
+    fd.set('question', q); fd.set('answer', a);
+    try {
+      await createFaq(fd);
+      setQ(''); setA(''); setMsg('Eklendi (taslak)');
+    } catch { setMsg('Eklenemedi'); }
+    load();
   }
 
   async function toggle(f: Faq) {
-    await supabase.from('faqs').update({ published: !f.published }).eq('id', f.id);
+    await toggleFaqPublish(f.id, !f.published);
     load();
   }
 
   async function remove(id: string) {
-    await supabase.from('faqs').delete().eq('id', id);
+    await deleteFaq(id);
     load();
   }
 

@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import PoolPreview from './PoolPreview';
+import { formatPrice, type Currency } from '@/lib/regionalPricing';
 
 interface Config {
   id: string;
@@ -12,8 +13,9 @@ interface Config {
   created_at: string;
 }
 
-const fmt = (n: number) =>
-  new Intl.NumberFormat('tr-TR', { style: 'currency', currency: 'TRY', maximumFractionDigits: 0 }).format(n);
+/** Teklif, hesaplandığı bölgenin para birimiyle gösterilir (eski kayıtlar TL) */
+const fmt = (n: number, config?: Record<string, unknown>) =>
+  formatPrice(n, ((config?.currency as Currency | undefined) ?? 'TRY'));
 
 const CONFIG_LABELS: Record<string, Record<string, string>> = {
   frameColor:         { anthracite: 'Antrasit', blue: 'Mavi', white: 'Beyaz' },
@@ -82,7 +84,7 @@ export default function TaleplerPage() {
                         {r.user_id ? `Üye: ${r.user_id.slice(0, 8)}…` : 'Misafir'}
                       </p>
                     </div>
-                    <span className="text-lg font-bold text-brand-700 shrink-0">{fmt(r.total_price)}</span>
+                    <span className="text-lg font-bold text-brand-700 shrink-0">{fmt(r.total_price, r.config)}</span>
                     <button
                       onClick={() => setOpen(isOpen ? null : r.id)}
                       className="shrink-0 rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 transition-colors"
@@ -114,7 +116,7 @@ export default function TaleplerPage() {
                           </dl>
                           <div className="mt-4 flex items-center justify-between rounded-xl bg-brand-50 px-4 py-3">
                             <span className="text-sm font-medium text-slate-700">Toplam Tutar</span>
-                            <span className="text-xl font-bold text-brand-700">{fmt(r.total_price)}</span>
+                            <span className="text-xl font-bold text-brand-700">{fmt(r.total_price, r.config)}</span>
                           </div>
                         </div>
                       </div>

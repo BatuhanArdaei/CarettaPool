@@ -1,19 +1,9 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
-import { createAdminClient, createClient } from '@/lib/supabase/server';
+import { assertAdmin } from '@/lib/supabase/adminGuard';
 
 const MAX_PDF_SIZE = 50 * 1024 * 1024; // 50 MB
-
-async function assertAdmin() {
-  const supabase = createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) throw new Error('Yetki yok');
-  const { data: profile } = await supabase
-    .from('profiles').select('role').eq('id', user.id).single();
-  if (profile?.role !== 'admin') throw new Error('Yetki yok');
-  return createAdminClient();
-}
 
 /** Triple-layered PDF validation:
  *  1. Extension must be .pdf
@@ -42,6 +32,7 @@ export async function uploadCatalog(formData: FormData) {
   const language = String(formData.get('language') ?? '').trim();
   const languageCode = String(formData.get('languageCode') ?? '').trim();
   const flag = String(formData.get('flag') ?? '').trim();
+  const title = String(formData.get('title') ?? '').trim().slice(0, 200);
 
   if (!file || file.size === 0) throw new Error('PDF dosyası seçilmedi');
   await validatePdf(file);
@@ -59,7 +50,7 @@ export async function uploadCatalog(formData: FormData) {
 
   const { error: dbErr } = await supabase
     .from('catalogs')
-    .insert({ language, language_code: languageCode, flag, file_url: publicUrl, storage_path: path, published: true });
+    .insert({ language, language_code: languageCode, flag, title: title || `${language} Kataloğu`, file_url: publicUrl, storage_path: path, published: true });
   if (dbErr) throw new Error(dbErr.message);
 
   revalidatePath('/admin/kataloglar');
@@ -73,9 +64,10 @@ export async function toggleCatalogPublish(id: string, published: boolean) {
   revalidatePath('/kataloglar');
 }
 
-export async function deleteCatalog(id: string, storagePath: string) {
+export async function deleteCatalog(id: string) {
   const supabase = await assertAdmin();
-  await supabase.storage.from('catalogs').remove([storagePath]);
+  const { data: item } = await supabase.from('catalogs').select('storage_path').eq('id', id).single();
+  if (item?.storage_path) await supabase.storage.from('catalogs').remove([item.storage_path]);
   await supabase.from('catalogs').delete().eq('id', id);
   revalidatePath('/admin/kataloglar');
   revalidatePath('/kataloglar');
