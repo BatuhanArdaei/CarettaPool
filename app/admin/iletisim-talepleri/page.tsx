@@ -9,6 +9,8 @@ interface ContactRequest {
   name: string;
   email: string;
   phone: string | null;
+  address?: string | null;
+  postal_code?: string | null;
   message: string;
   created_at: string;
   is_read: boolean;
@@ -72,11 +74,16 @@ export default function IletisimTalepleriPage() {
                       <span className="text-sm text-slate-500">{r.email}</span>
                       {r.phone && <span className="text-sm text-slate-500">• {r.phone}</span>}
                     </div>
+                    {r.address && (
+                      <p className="mt-1 text-sm text-slate-600">
+                        {r.address}{r.postal_code ? ` · ${r.postal_code}` : ''}
+                      </p>
+                    )}
                     <p className="mt-1 text-xs text-slate-400">
                       {new Date(r.created_at).toLocaleString('tr-TR')}
                     </p>
                     {open === r.id && (
-                      <p className="mt-3 rounded-lg bg-white p-3 text-sm text-slate-700 ring-1 ring-slate-200">
+                      <p className="mt-3 whitespace-pre-line rounded-lg bg-white p-3 text-sm text-slate-700 ring-1 ring-slate-200">
                         {r.message}
                       </p>
                     )}
