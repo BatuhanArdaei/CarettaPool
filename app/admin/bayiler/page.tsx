@@ -55,7 +55,8 @@ const PRICE_GROUPS: PriceGroup[] = [
     label: 'Işıklandırma',
     icon: '💡',
     items: [
-      { key: 'lighting', label: 'Işıklandırma', default: DEFAULT_PRICES.lighting },
+      { key: 'lighting', label: 'İç Aydınlatma (RGB)', default: DEFAULT_PRICES.lighting },
+      { key: 'light_strip_outdoor', label: 'Dış – Şerit LED', default: DEFAULT_PRICES.light_strip_outdoor },
     ],
   },
   {
@@ -64,6 +65,7 @@ const PRICE_GROUPS: PriceGroup[] = [
     items: [
       { key: 'platform',           label: 'Yan Platform (standart)', default: DEFAULT_PRICES.platform },
       { key: 'platform_extension', label: 'Platform Genişletme',     default: DEFAULT_PRICES.platform_extension },
+      { key: 'side_extension',     label: 'Kenar Terası (kenar başı)', default: DEFAULT_PRICES.side_extension },
       { key: 'waterfall',          label: 'Şelale',                  default: DEFAULT_PRICES.waterfall },
     ],
   },

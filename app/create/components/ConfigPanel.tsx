@@ -22,7 +22,7 @@ import { useState as useStateR } from 'react';
 import { useRouter } from 'next/navigation';
 import type { PriceBreakdown } from '@/lib/pricing';
 import { formatPrice, type Currency } from '@/lib/regionalPricing';
-import { countPanels, isSunken, poolEntryOf } from '@/lib/types';
+import { countPanels, extensionSidesOf, isSunken, outdoorLightingOf, poolEntryOf, type OutdoorLighting } from '@/lib/types';
 import type { Region } from '@/lib/regions';
 import { useLanguage } from '@/contexts/LanguageContext';
 import CountryPhoneInput from '@/components/CountryPhoneInput';
@@ -48,7 +48,7 @@ interface Props {
   role: 'customer' | 'dealer' | 'admin';
 }
 
-type StepKey = 'size' | 'install' | 'frame' | 'panels' | 'waterfall' | 'lighting' | 'ground' | 'finish' | 'preview' | 'equipment' | 'summary';
+type StepKey = 'size' | 'install' | 'frame' | 'panels' | 'waterfall' | 'lift' | 'lighting' | 'ground' | 'finish' | 'preview' | 'equipment' | 'summary';
 
 export default function ConfigPanel({
   config, onChange,
@@ -61,17 +61,18 @@ export default function ConfigPanel({
   const [tipOpen, setTipOpen] = useState(true);
 
   // Sıra: kurulum tipi erken (cam/korkuluk/merdiven buna bağlı); opsiyonel özellikler ve
-  // ekipmanlar sonda (kullanıcı eklerken fiyatı görür)
+  // ekipmanlar sonda (kullanıcı eklerken fiyatı görür): … ışık, üst kapak ve güverte, ekipmanlar, özet
   const STEPS: { key: StepKey; title: string; short: string; tip: string }[] = [
     { key: 'size',      title: t('configurator.size'),          short: t('configurator.size'),          tip: t('configurator.size_tip') },
     { key: 'install',   title: t('configurator.install_step_title'), short: t('configurator.install_step_short'), tip: t('configurator.install_step_tip') },
     { key: 'frame',     title: t('configurator.frame_title'),   short: t('configurator.frame'),         tip: t('configurator.frame_tip') },
     { key: 'panels',    title: t('configurator.panels_title'),  short: t('configurator.panels_short'),  tip: t('configurator.panels_tip') },
-    { key: 'lighting',  title: t('configurator.lighting'),      short: t('configurator.lighting_short'),tip: t('configurator.lighting_tip') },
     { key: 'ground',    title: t('configurator.ground_title'),  short: t('configurator.ground_short'),  tip: t('configurator.ground_tip') },
     { key: 'finish',    title: t('configurator.finish_title'),   short: t('configurator.finish_short'),   tip: t('configurator.finish_tip') },
     { key: 'waterfall', title: t('configurator.options_title'), short: t('configurator.options_title'), tip: t('configurator.options_tip') },
     { key: 'preview',   title: t('configurator.preview_title'),  short: t('configurator.preview_short'),  tip: t('configurator.preview_tip') },
+    { key: 'lighting',  title: t('configurator.lighting'),      short: t('configurator.lighting_short'),tip: t('configurator.lighting_tip') },
+    { key: 'lift',      title: t('configurator.lift_step_title'), short: t('configurator.lift_step_short'), tip: t('configurator.lift_step_tip') },
     { key: 'equipment', title: t('configurator.equipment_title'), short: t('configurator.equipment_short'), tip: t('configurator.equipment_tip') },
     { key: 'summary',   title: t('configurator.summary_title'), short: t('configurator.summary_short'),  tip: t('configurator.summary_tip') },
   ];
@@ -170,6 +171,7 @@ export default function ConfigPanel({
         {step.key === 'frame'     && <FrameStep config={config} set={set} />}
         {step.key === 'panels'    && <PanelsStep config={config} set={set} onChange={onChange} />}
         {step.key === 'waterfall' && <WaterfallStep config={config} set={set} />}
+        {step.key === 'lift'      && <LiftDeckStep config={config} set={set} />}
         {step.key === 'lighting'  && <LightingStep config={config} set={set} />}
         {step.key === 'install'   && <InstallStep config={config} set={set} onChange={onChange} />}
         {step.key === 'ground'    && <GroundStep config={config} set={set} />}
@@ -412,52 +414,12 @@ function WaterfallStep({
         <p className="label">{t('configurator.waterfall')}</p>
         <Toggle
           options={[{ value: 'on', label: onLabel }, { value: 'off', label: offLabel }]}
-          value={config.waterfall ? 'on' : 'off'}
+          value={config.waterfall && !config.liftDeck ? 'on' : 'off'}
           onChange={(v) => set('waterfall', v === 'on')}
-        />
-        <p className="text-sm text-slate-500">{t('configurator.waterfall_note')}</p>
-      </div>
-
-      <div className="space-y-2">
-        <p className="label">{t('configurator.cover_label')}</p>
-        <Toggle
-          options={[{ value: 'on', label: onLabel }, { value: 'off', label: offLabel }]}
-          value={config.poolCover ? 'on' : 'off'}
-          onChange={(v) => set('poolCover', v === 'on')}
-        />
-        {config.poolCover && (
-          <Toggle
-            options={[
-              { value: 'automatic', label: t('configurator.cover_auto') },
-              { value: 'manual', label: t('configurator.cover_manual') },
-            ]}
-            value={config.poolCoverType}
-            onChange={(v) => set('poolCoverType', v as PoolCoverType)}
-          />
-        )}
-        <p className="text-sm text-slate-500">{t('configurator.cover_note')}</p>
-      </div>
-
-      <div className="space-y-2">
-        <p className="label">{t('configurator.lift_label')}</p>
-        <Toggle
-          options={[{ value: 'on', label: onLabel }, { value: 'off', label: offLabel }]}
-          value={config.liftDeck ? 'on' : 'off'}
-          onChange={(v) => set('liftDeck', v === 'on')}
-        />
-        <p className="text-sm text-slate-500">{t('configurator.lift_note')}</p>
-      </div>
-
-      <div className="space-y-2">
-        <p className="label">{t('configurator.solar_label')}</p>
-        <Toggle
-          options={[{ value: 'on', label: onLabel }, { value: 'off', label: offLabel }]}
-          value={config.liftDeck && config.liftDeckSolar ? 'on' : 'off'}
-          onChange={(v) => set('liftDeckSolar', v === 'on')}
-          disabled={!config.liftDeck}
+          disabled={config.liftDeck}
         />
         <p className="text-sm text-slate-500">
-          {config.liftDeck ? t('configurator.solar_note') : t('configurator.solar_hint')}
+          {config.liftDeck ? t('configurator.waterfall_blocked_lift') : t('configurator.waterfall_note')}
         </p>
       </div>
 
@@ -469,6 +431,34 @@ function WaterfallStep({
           onChange={(v) => set('platformExtension', v === 'on')}
         />
         <p className="text-sm text-slate-500">{t('configurator.ext_note')}</p>
+      </div>
+
+      <div className="space-y-2">
+        <p className="label">{t('configurator.ext_sides_label')}</p>
+        <div className="grid grid-cols-3 gap-2">
+          {POOL_SIDES.filter((s) => s !== config.platformDirection).map((side) => {
+            const active = extensionSidesOf(config).includes(side);
+            return (
+              <button
+                key={side}
+                type="button"
+                aria-pressed={active}
+                onClick={() => {
+                  const cur = extensionSidesOf(config);
+                  set('extensionSides', active ? cur.filter((x) => x !== side) : [...cur, side]);
+                }}
+                className={`rounded-lg border px-3 py-2 text-sm min-h-[44px] transition ${
+                  active
+                    ? 'border-brand-600 bg-brand-50 font-medium text-brand-700'
+                    : 'border-slate-200 text-slate-600 hover:bg-slate-50'
+                }`}
+              >
+                {t(`configurator.${side}`)}
+              </button>
+            );
+          })}
+        </div>
+        <p className="text-sm text-slate-500">{t('configurator.ext_sides_note')}</p>
       </div>
 
       <div className="space-y-2">
@@ -490,6 +480,7 @@ function WaterfallStep({
         <p className="label">{t('configurator.stair_style_label')}</p>
         <Toggle
           options={[
+            { value: 'none',  label: t('configurator.none') },
             { value: 'open',  label: t('configurator.stair_open') },
             { value: 'block', label: t('configurator.stair_block') },
           ]}
@@ -527,48 +518,87 @@ function LightingStep({
 }) {
   const { t } = useLanguage();
   const disabled = !config.lighting.enabled;
-  const ALL_COLORS: LightColor[] = [
-    'blue', 'white', 'warm_white', 'green', 'cyan', 'turquoise',
-    'red', 'orange', 'pink', 'purple', 'rgb', 'blue_purple',
+  // Yalnızca beyaz ve RGB (eski kayıtlardaki diğer renkler sahnede aynen gösterilir)
+  const ALL_COLORS: LightColor[] = ['white', 'rgb'];
+
+  const outdoor = outdoorLightingOf(config);
+  const setOutdoor = (key: keyof OutdoorLighting, on: boolean) =>
+    set('outdoorLighting', { ...outdoor, [key]: on });
+  const onOff = [
+    { value: 'on' as const,  label: t('configurator.open') },
+    { value: 'off' as const, label: t('configurator.closed') },
+  ];
+  const OUTDOOR: { key: keyof OutdoorLighting; label: string; note: string }[] = [
+    { key: 'strip',  label: t('configurator.light_strip_label'), note: t('configurator.light_strip_note') },
   ];
 
   return (
-    <div className="space-y-4">
-      {/* On / Off */}
-      <Toggle
-        options={[
-          { value: 'on',  label: t('configurator.open') },
-          { value: 'off', label: t('configurator.closed') },
-        ]}
-        value={config.lighting.enabled ? 'on' : 'off'}
-        onChange={(v) => set('lighting', { ...config.lighting, enabled: v === 'on' })}
-      />
-
-      {/* Color */}
-      <div>
-        <p className="label">{t('configurator.color_label')}</p>
-        <div className="flex flex-wrap gap-2">
-          {ALL_COLORS.map((c) => (
-            <button
-              key={c}
-              type="button"
-              disabled={disabled}
-              onClick={() => set('lighting', { ...config.lighting, color: c })}
-              className={`h-9 w-9 rounded-full border border-white shadow-sm transition-all duration-200 ${
-                config.lighting.color === c
-                  ? 'scale-110 ring-2 ring-brand-600 ring-offset-2'
-                  : 'ring-1 ring-slate-200 hover:scale-105 hover:ring-brand-400'
-              } ${disabled ? 'opacity-40' : ''}`}
-              style={{ background: lightCssColor(c) }}
-              title={lightColorName(c)}
-              aria-label={lightColorName(c)}
-            />
-          ))}
+    <div className="space-y-6">
+      {/* İç aydınlatma: havuz içi RGB */}
+      <section className="space-y-3">
+        <h3 className="text-sm font-semibold text-slate-900">{t('configurator.lighting_inner_label')}</h3>
+        <div className="space-y-1.5">
+          <OptionalBadge />
+          <Toggle
+            options={onOff}
+            value={config.lighting.enabled ? 'on' : 'off'}
+            onChange={(v) => set('lighting', { ...config.lighting, enabled: v === 'on' })}
+          />
         </div>
-      </div>
+
+        <div>
+          <p className="label">{t('configurator.color_label')}</p>
+          <div className="flex flex-wrap gap-2">
+            {ALL_COLORS.map((c) => (
+              <button
+                key={c}
+                type="button"
+                disabled={disabled}
+                onClick={() => set('lighting', { ...config.lighting, color: c })}
+                className={`h-9 w-9 rounded-full border border-white shadow-sm transition-all duration-200 ${
+                  config.lighting.color === c
+                    ? 'scale-110 ring-2 ring-brand-600 ring-offset-2'
+                    : 'ring-1 ring-slate-200 hover:scale-105 hover:ring-brand-400'
+                } ${disabled ? 'opacity-40' : ''}`}
+                style={{ background: lightCssColor(c) }}
+                title={lightColorName(c)}
+                aria-label={lightColorName(c)}
+              />
+            ))}
+          </div>
+        </div>
+        <p className="text-sm text-slate-500">{t('configurator.lighting_inner_note')}</p>
+      </section>
+
+      {/* Dış aydınlatma: her seçenek ayrı */}
+      <section className="space-y-4 border-t border-slate-100 pt-5">
+        <h3 className="text-sm font-semibold text-slate-900">{t('configurator.lighting_outer_label')}</h3>
+        {OUTDOOR.map((o) => (
+          <div key={o.key} className="space-y-1.5">
+            <p className="label">{o.label}</p>
+            <OptionalBadge />
+            <Toggle
+              options={onOff}
+              value={outdoor[o.key] ? 'on' : 'off'}
+              onChange={(v) => setOutdoor(o.key, v === 'on')}
+            />
+            <p className="text-sm text-slate-500">{o.note}</p>
+          </div>
+        ))}
+      </section>
 
       <p className="text-sm text-slate-500">{t('configurator.lighting_note')}</p>
     </div>
+  );
+}
+
+/** Açık/kapalı seçiminin üstündeki "OPSİYONEL" etiketi */
+function OptionalBadge() {
+  const { t } = useLanguage();
+  return (
+    <span className="inline-block rounded bg-amber-50 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-amber-700 ring-1 ring-amber-200">
+      {t('configurator.optional_badge')}
+    </span>
   );
 }
 
@@ -1062,8 +1092,51 @@ function PreviewStep({
         onChange={(v) => set('showWater', v === 'on')}
       />
 
+    </div>
+  );
+}
+
+/* ─── Üst kapak & hareketli güverte (birbirini dışlar) ──────────────── */
+function LiftDeckStep({
+  config,
+  set,
+}: {
+  config: PoolConfig;
+  set: <K extends keyof PoolConfig>(key: K, value: PoolConfig[K]) => void;
+}) {
+  const { t } = useLanguage();
+  const onLabel  = t('configurator.yes');
+  const offLabel = t('configurator.none');
+  // Havuz kapağıyla birlikte olamaz
+  const blocked = config.poolCover && !config.liftDeck;
+
+  return (
+    <div className="space-y-5">
       <div className="space-y-2">
         <p className="label">{t('configurator.cover_label')}</p>
+        <Toggle
+          options={[{ value: 'on', label: onLabel }, { value: 'off', label: offLabel }]}
+          value={config.poolCover && !config.liftDeck ? 'on' : 'off'}
+          onChange={(v) => set('poolCover', v === 'on')}
+          disabled={config.liftDeck}
+        />
+        {config.poolCover && !config.liftDeck && (
+          <Toggle
+            options={[
+              { value: 'automatic', label: t('configurator.cover_auto') },
+              { value: 'manual', label: t('configurator.cover_manual') },
+            ]}
+            value={config.poolCoverType}
+            onChange={(v) => set('poolCoverType', v as PoolCoverType)}
+          />
+        )}
+        <p className="text-sm text-slate-500">
+          {config.liftDeck ? t('configurator.cover_blocked_lift') : t('configurator.cover_note')}
+        </p>
+      </div>
+
+      <div className="space-y-2">
+        <p className="label">{t('configurator.cover_state_label')}</p>
         <Toggle
           options={[
             { value: 'closed', label: t('configurator.cover_closed') },
@@ -1071,11 +1144,21 @@ function PreviewStep({
           ]}
           value={config.poolCoverClosed ? 'closed' : 'open'}
           onChange={(v) => set('poolCoverClosed', v === 'closed')}
-          disabled={!config.poolCover}
+          disabled={!config.poolCover || config.liftDeck}
         />
-        {!config.poolCover && (
-          <p className="text-xs text-slate-500">{t('configurator.cover_preview_hint')}</p>
-        )}
+      </div>
+
+      <div className="space-y-2 border-t border-slate-100 pt-5">
+        <p className="label">{t('configurator.lift_label')}</p>
+        <Toggle
+          options={[{ value: 'on', label: onLabel }, { value: 'off', label: offLabel }]}
+          value={config.liftDeck ? 'on' : 'off'}
+          onChange={(v) => set('liftDeck', v === 'on')}
+          disabled={blocked}
+        />
+        <p className="text-sm text-slate-500">
+          {blocked ? t('configurator.lift_blocked_cover') : t('configurator.lift_note')}
+        </p>
       </div>
 
       <div className="space-y-2">
@@ -1089,9 +1172,19 @@ function PreviewStep({
           onChange={(v) => set('liftDeckUp', v === 'up')}
           disabled={!config.liftDeck}
         />
-        {!config.liftDeck && (
-          <p className="text-xs text-slate-500">{t('configurator.lift_preview_hint')}</p>
-        )}
+      </div>
+
+      <div className="space-y-2">
+        <p className="label">{t('configurator.solar_label')}</p>
+        <Toggle
+          options={[{ value: 'on', label: onLabel }, { value: 'off', label: offLabel }]}
+          value={config.liftDeck && config.liftDeckSolar ? 'on' : 'off'}
+          onChange={(v) => set('liftDeckSolar', v === 'on')}
+          disabled={!config.liftDeck}
+        />
+        <p className="text-sm text-slate-500">
+          {config.liftDeck ? t('configurator.solar_note') : t('configurator.solar_hint')}
+        </p>
       </div>
     </div>
   );
@@ -1119,14 +1212,48 @@ function SummaryStep({
     es: '+34', it: '+39', pt: '+351', pl: '+48', ro: '+40',
     no: '+47', da: '+45', lt: '+370', el: '+30', ar: '+966',
   };
-  const [contact, setContact] = useStateR({ name: '', email: '', phone: '', dialCode: LANG_DIAL[lang] ?? '+90' });
+  const [contact, setContact] = useStateR({
+    firstName: '', lastName: '', email: '', phone: '', dialCode: LANG_DIAL[lang] ?? '+90',
+    address: '', postalCode: '', code: '',
+  });
+  // Doğrulama kodunun gönderildiği adres (adres değişirse yeniden kod istenir)
+  const [codeSentTo, setCodeSentTo] = useStateR<string | null>(null);
+  const [sendingCode, setSendingCode] = useStateR(false);
+  const errText = (code: string) => {
+    const key = `configurator.err_${code}`;
+    const msg = t(key);
+    return msg === key ? t('configurator.err_generic') : msg;
+  };
+
+  async function sendCode() {
+    setSendingCode(true); setSaveError(null);
+    try {
+      const res = await fetch('/api/quote/verify', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ email: contact.email, lang }),
+      });
+      if (!res.ok) throw new Error((await res.json().catch(() => null))?.error ?? 'generic');
+      setCodeSentTo(contact.email.trim().toLowerCase());
+    } catch (err) { setSaveError(errText(err instanceof Error ? err.message : 'generic')); }
+    setSendingCode(false);
+  }
 
   const isGuest = !userId;
+  const emailLooksValid = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(contact.email.trim());
+  const guestReady =
+    !!contact.firstName.trim() && !!contact.lastName.trim() && emailLooksValid &&
+    !!contact.address.trim() && !!contact.postalCode.trim() &&
+    codeSentTo === contact.email.trim().toLowerCase() && /^\d{6}$/.test(contact.code);
   const fmtMoney = (v: number) => formatPrice(v, currency);
   // Misafir kullanıcıya fiyat asla gösterilmez
   const showPrices = !isGuest && (role === 'dealer' || role === 'admin' || (showPricesSetting ?? true));
 
-  async function submitRequest(contactInfo?: { name: string; email: string; phone: string }) {
+  type GuestContact = {
+    firstName: string; lastName: string; email: string; phone: string;
+    address: string; postalCode: string; code: string;
+  };
+  async function submitRequest(contactInfo?: GuestContact) {
     setSaving(true); setSaveError(null); setSaved(false);
     try {
       // Tutar sunucuda hesaplanır; misafire fiyat dönmez
@@ -1135,9 +1262,9 @@ function SummaryStep({
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ config, region, contact: isGuest ? contactInfo : undefined }),
       });
-      if (!res.ok) throw new Error((await res.json().catch(() => null))?.error ?? 'Hata');
+      if (!res.ok) throw new Error((await res.json().catch(() => null))?.error ?? 'generic');
       setSaved(true); setShowPopup(false); router.refresh();
-    } catch (err) { setSaveError(err instanceof Error ? err.message : 'Hata'); }
+    } catch (err) { setSaveError(errText(err instanceof Error ? err.message : 'generic')); }
     setSaving(false);
   }
 
@@ -1164,8 +1291,12 @@ function SummaryStep({
     [t('configurator.row_size'),      `${config.length.toFixed(1)} × ${config.width.toFixed(1)} m`],
     [t('configurator.row_frame'),     frameLabel[config.frameColor] ?? config.frameColor],
     [t('configurator.row_panel'),     t('configurator.panel_glass_count').replace('{glass}', String(panels.glass)).replace('{closed}', String(panels.closed))],
-    [t('configurator.row_lighting'),  config.lighting.enabled ? t('configurator.light_on_status').replace('{color}', config.lighting.color.toUpperCase()) : t('configurator.none')],
-    [t('configurator.row_waterfall'), config.waterfall ? t('configurator.yes') : t('configurator.none')],
+    [t('configurator.lighting_inner_label'), config.lighting.enabled ? t('configurator.light_on_status').replace('{color}', config.lighting.color.toUpperCase()) : t('configurator.none')],
+    [t('configurator.lighting_outer_label'), (() => {
+      const o = outdoorLightingOf(config);
+      return o.strip ? t('configurator.light_strip_label') : t('configurator.none');
+    })()],
+    [t('configurator.row_waterfall'), config.waterfall && !config.liftDeck ? t('configurator.yes') : t('configurator.none')],
     [t('configurator.entry_label'), ({
       small_stairs: t('configurator.entry_small'),
       wide_stairs: t('configurator.entry_wide'),
@@ -1175,9 +1306,10 @@ function SummaryStep({
     [t('configurator.lift_label'), config.liftDeck ? t('configurator.yes') : t('configurator.none')],
     ...(config.liftDeck ? [[t('configurator.solar_label'), config.liftDeckSolar ? t('configurator.yes') : t('configurator.none')] as [string, string]] : []),
     [t('configurator.row_equipment'), EQUIPMENT.filter((e) => config.equipment?.[e.id]).map((e) => t(e.labelKey)).join(', ') || t('configurator.none')],
-    [t('configurator.row_cover'),     config.poolCover ? (config.poolCoverType === 'manual' ? t('configurator.cover_manual') : t('configurator.cover_auto')) : t('configurator.none')],
+    [t('configurator.ext_sides_label'), extensionSidesOf(config).map((s) => t(`configurator.${s}`)).join(', ') || t('configurator.none')],
+    [t('configurator.row_cover'),     config.poolCover && !config.liftDeck ? (config.poolCoverType === 'manual' ? t('configurator.cover_manual') : t('configurator.cover_auto')) : t('configurator.none')],
     [t('configurator.row_installation'), installationLabel[config.installation ?? 'ground']],
-    [t('configurator.stair_style_label'), isSunken(config) ? t('configurator.none') : config.stairStyle === 'block' ? t('configurator.stair_block') : t('configurator.stair_open')],
+    [t('configurator.stair_style_label'), isSunken(config) || config.stairStyle === 'none' ? t('configurator.none') : config.stairStyle === 'block' ? t('configurator.stair_block') : t('configurator.stair_open')],
     [t('configurator.row_ground'),    groundLabel[config.ground] ?? config.ground],
     [t('configurator.row_cladding'),  isTileCladding(config.cladding)
       ? `${t('configurator.finish_mode_tile')} · ${CLADDING_TEXTURES.find((x) => `/textures/${x.file}` === config.cladding)?.name ?? t('configurator.cladding_custom')}`
@@ -1275,18 +1407,44 @@ function SummaryStep({
               </span>
             </div>
             <div className="mt-4 space-y-3">
-              <div>
-                <label className="label">{t('configurator.name_label')}</label>
-                <input type="text" className="input" value={contact.name}
-                  onChange={e => setContact(p => ({...p, name: e.target.value}))}
-                  placeholder={t('configurator.name_label').replace(' *', '')} />
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="label">{t('configurator.first_name_label')}</label>
+                  <input type="text" className="input" autoComplete="given-name" value={contact.firstName}
+                    onChange={e => setContact(p => ({ ...p, firstName: e.target.value }))} />
+                </div>
+                <div>
+                  <label className="label">{t('configurator.last_name_label')}</label>
+                  <input type="text" className="input" autoComplete="family-name" value={contact.lastName}
+                    onChange={e => setContact(p => ({ ...p, lastName: e.target.value }))} />
+                </div>
               </div>
               <div>
                 <label className="label">{t('configurator.email_label')}</label>
-                <input type="email" className="input" value={contact.email}
-                  onChange={e => setContact(p => ({...p, email: e.target.value}))}
-                  placeholder="email@example.com" />
+                <div className="flex gap-2">
+                  <input type="email" className="input flex-1" autoComplete="email" value={contact.email}
+                    onChange={e => {
+                      const v = e.target.value;
+                      setContact(p => ({ ...p, email: v, code: '' }));
+                      if (codeSentTo && v.trim().toLowerCase() !== codeSentTo) setCodeSentTo(null);
+                    }}
+                    placeholder="email@example.com" />
+                  <button type="button" onClick={sendCode}
+                    disabled={sendingCode || !emailLooksValid}
+                    className="shrink-0 rounded-lg border border-brand-600 px-3 text-sm font-medium text-brand-700 hover:bg-brand-50 disabled:opacity-40">
+                    {sendingCode ? t('configurator.sending_msg') : codeSentTo ? t('configurator.verify_resend') : t('configurator.verify_send')}
+                  </button>
+                </div>
               </div>
+              {codeSentTo && (
+                <div>
+                  <label className="label">{t('configurator.code_label')}</label>
+                  <input type="text" inputMode="numeric" autoComplete="one-time-code" maxLength={6}
+                    className="input tracking-[0.4em]" value={contact.code}
+                    onChange={e => setContact(p => ({ ...p, code: e.target.value.replace(/\D/g, '').slice(0, 6) }))} />
+                  <p className="mt-1 text-xs text-slate-500">{t('configurator.verify_sent').replace('{email}', codeSentTo)}</p>
+                </div>
+              )}
               <div>
                 <label className="label">{t('configurator.phone_label')}</label>
                 <CountryPhoneInput
@@ -1296,18 +1454,33 @@ function SummaryStep({
                   onPhoneChange={(ph) => setContact((p) => ({ ...p, phone: ph }))}
                 />
               </div>
+              <div>
+                <label className="label">{t('configurator.address_label')}</label>
+                <textarea className="input min-h-[64px]" rows={2} autoComplete="street-address" value={contact.address}
+                  onChange={e => setContact(p => ({ ...p, address: e.target.value }))} />
+              </div>
+              <div>
+                <label className="label">{t('configurator.postal_code_label')}</label>
+                <input type="text" className="input" autoComplete="postal-code" maxLength={20} value={contact.postalCode}
+                  onChange={e => setContact(p => ({ ...p, postalCode: e.target.value }))} />
+              </div>
             </div>
+            {saveError && <p className="mt-3 text-sm text-red-600">{saveError}</p>}
             <button
               type="button"
               onClick={() => {
-                if (!contact.name || !contact.email) return;
+                if (!guestReady) return;
                 submitRequest({
-                  name: contact.name,
+                  firstName: contact.firstName,
+                  lastName: contact.lastName,
                   email: contact.email,
                   phone: contact.phone ? `${contact.dialCode}${contact.phone}` : '',
+                  address: contact.address,
+                  postalCode: contact.postalCode,
+                  code: contact.code,
                 });
               }}
-              disabled={saving || !contact.name || !contact.email}
+              disabled={saving || !guestReady}
               className="btn-primary mt-6 w-full py-3 text-base disabled:opacity-50"
             >
               {saving ? t('configurator.sending_msg') : t('configurator.quote_send')}

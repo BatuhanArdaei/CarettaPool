@@ -36,9 +36,16 @@ function configSummary(cfg: Record<string, unknown>) {
     { label: 'Panel Boyutu',   value: '240×120 cm (otomatik)' },
     { label: 'Zemin',          value: CONFIG_LABELS.ground[String(cfg.ground ?? '')] ?? String(cfg.ground ?? '') },
     { label: 'Kaplama',        value: CONFIG_LABELS.cladding[String(cfg.cladding ?? '')] ?? String(cfg.cladding ?? '') },
-    { label: 'Işıklandırma',   value: lighting?.enabled ? `Açık (${(lighting.color ?? '').toUpperCase()})` : 'Kapalı' },
+    { label: 'İç Aydınlatma',  value: lighting?.enabled ? `Açık (${(lighting.color ?? '').toUpperCase()})` : 'Kapalı' },
+    { label: 'Dış Aydınlatma', value: (() => {
+      const o = cfg.outdoorLighting as { strip?: boolean } | undefined;
+      return o?.strip ? 'Şerit LED' : 'Yok';
+    })() },
     { label: 'Şelale',         value: cfg.waterfall ? 'Var' : 'Yok' },
     { label: 'Platform Yönü',  value: CONFIG_LABELS.platformDirection[String(cfg.platformDirection ?? '')] ?? String(cfg.platformDirection ?? '') },
+    { label: 'Kenar Terası',   value: (Array.isArray(cfg.extensionSides) && cfg.extensionSides.length
+      ? (cfg.extensionSides as string[]).map((s) => CONFIG_LABELS.platformDirection[s] ?? s).join(', ')
+      : 'Yok') },
   ];
 }
 

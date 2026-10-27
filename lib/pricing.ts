@@ -1,4 +1,4 @@
-import { countPanels, isSunken, poolEntryOf, type PoolConfig } from './types';
+import { countPanels, extensionSidesOf, isSunken, outdoorLightingOf, poolEntryOf, type PoolConfig } from './types';
 
 // ─── Global defaults (used when no site/dealer override is set) ──────────────
 export const DEFAULT_PRICES = {
@@ -19,9 +19,11 @@ export const DEFAULT_PRICES = {
   cladding_texture:      32000,
   cladding_color:        0,
   lighting:              9000,
+  light_strip_outdoor:   0,
   waterfall:             25000,
   platform:              35000,
   platform_extension:    0,
+  side_extension:        0,
   installation_partial:  0,
   installation_sunken:   0,
   railings:              0,
@@ -114,18 +116,23 @@ export function calculateBasePrice(
 
   const platform =
     pr(customPrices, 'platform') +
-    (config.platformExtension ? pr(customPrices, 'platform_extension') : 0);
+    (config.platformExtension ? pr(customPrices, 'platform_extension') : 0) +
+    extensionSidesOf(config).length * pr(customPrices, 'side_extension');
 
-  const lighting = config.lighting.enabled ? pr(customPrices, 'lighting') : 0;
+  const outdoor = outdoorLightingOf(config);
+  const lighting =
+    (config.lighting.enabled ? pr(customPrices, 'lighting') : 0) +
+    (outdoor.strip ? pr(customPrices, 'light_strip_outdoor') : 0);
 
-  const waterfall = config.waterfall ? pr(customPrices, 'waterfall') : 0;
+  // Hareketli güverte şelale ve havuz kapağıyla birlikte olamaz
+  const waterfall = config.waterfall && !config.liftDeck ? pr(customPrices, 'waterfall') : 0;
 
   const accessories =
     (config.railings && !isSunken(config) ? pr(customPrices, 'railings') : 0) +
     (config.stairStyle === 'block' && !isSunken(config) ? pr(customPrices, 'stairs_block') : 0) +
     ENTRY_PRICE[poolEntryOf(config)](customPrices);
 
-  const poolCover = config.poolCover
+  const poolCover = config.poolCover && !config.liftDeck
     ? pr(customPrices, config.poolCoverType === 'automatic' ? 'pool_cover_automatic' : 'pool_cover_manual')
     : 0;
 

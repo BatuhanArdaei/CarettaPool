@@ -4,7 +4,7 @@ import { Suspense, useCallback, useEffect, useMemo, useRef } from 'react';
 import { Canvas, useThree, type ThreeEvent } from '@react-three/fiber';
 import { Environment } from '@react-three/drei';
 import * as THREE from 'three';
-import { Pool, groundGeometry, poolFootprint, sinkDepth } from './PoolScene';
+import { Pool, groundGeometry, layoutFootprint, poolFootprint, sinkDepth } from './PoolScene';
 import { imageToPlane, planeToWorld, projectToImage, type CameraSolution, type Vec2 } from '@/lib/pool/calibration';
 import { DAY_ENVIRONMENT, NIGHT_ENVIRONMENT, type PoolTemplate, type TemplatePlacement, type TemplateSun } from '@/lib/pool/templates';
 import type { PoolConfig } from '@/lib/types';
@@ -208,7 +208,7 @@ function PlacedPool({
     }
 
     // Yerleşim noktası havuzun değil, havuz + platform bütününün merkezi olsun
-    const fp = poolFootprint(config);
+    const fp = layoutFootprint(config);
     const centerOffset = x.clone().multiplyScalar((fp.minX + fp.maxX) / 2).add(z.clone().multiplyScalar((fp.minZ + fp.maxZ) / 2));
 
     const pos = origin.sub(centerOffset);
@@ -238,7 +238,7 @@ function PlacedPool({
 
     return new THREE.Matrix4().makeBasis(x, y, z).setPosition(pos);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [solution.planeSign, solution.position, placement.centerA, placement.centerB, placement.rotation, longAxisIsX, config.platformDirection, config.width, config.length, userRotation, facade]);
+  }, [solution.planeSign, solution.position, placement.centerA, placement.centerB, placement.rotation, longAxisIsX, config.platformDirection, config.width, config.length, config.platformExtension, (config.extensionSides ?? []).join(), userRotation, facade]);
 
   // Havuzun tüm parçaları gölge atsın/alsın (ana sahnedeki EnableAllShadows'un karşılığı)
   useEffect(() => {
@@ -431,11 +431,9 @@ export default function TemplateScene({
   return (
     <Canvas
       frameloop="demand"
-      shadows
       dpr={[1, 1.5]}
       gl={{ alpha: true, antialias: true, powerPreference: 'high-performance', preserveDrawingBuffer: true }}
       onCreated={({ gl }) => {
-        gl.shadowMap.type = THREE.PCFSoftShadowMap;
         gl.toneMapping = THREE.NeutralToneMapping;
         gl.toneMappingExposure = 1;
       }}

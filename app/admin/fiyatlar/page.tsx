@@ -52,7 +52,8 @@ const PRICE_GROUPS = [
     label: 'Işıklandırma',
     icon: '💡',
     items: [
-      { key: 'lighting' as PriceKey, label: 'Işıklandırma', unit: 'TL' },
+      { key: 'lighting' as PriceKey, label: 'İç Aydınlatma (RGB)', unit: 'TL' },
+      { key: 'light_strip_outdoor' as PriceKey, label: 'Dış – Şerit LED', unit: 'TL' },
     ],
   },
   {
@@ -61,6 +62,7 @@ const PRICE_GROUPS = [
     items: [
       { key: 'platform'           as PriceKey, label: 'Yan Platform (standart)', unit: 'TL' },
       { key: 'platform_extension' as PriceKey, label: 'Platform Genişletme',     unit: 'TL' },
+      { key: 'side_extension'     as PriceKey, label: 'Kenar Terası (kenar başı)', unit: 'TL' },
       { key: 'installation_partial' as PriceKey, label: 'Kurulum – Yarı Gömülü (kazı)', unit: 'TL' },
       { key: 'installation_sunken'  as PriceKey, label: 'Kurulum – Tam Gömülü (kazı)',  unit: 'TL' },
       { key: 'waterfall'          as PriceKey, label: 'Şelale',                  unit: 'TL' },

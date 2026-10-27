@@ -13,12 +13,29 @@ export type CladdingType =
 export type PlatformDirection = 'north' | 'south' | 'east' | 'west';
 export type PoolCoverType = 'automatic' | 'manual';
 export type InstallationType = 'ground' | 'partial' | 'sunken';
-export type StairStyle = 'open' | 'block';
+export type StairStyle = 'none' | 'open' | 'block';
 /** Havuza giriş: iç merdiven ya da havuz içi basamak tipleri */
 export type PoolEntry = 'small_stairs' | 'wide_stairs' | 'bench' | 'none';
 export type PoolSide = 'north' | 'south' | 'east' | 'west';
 
 export const POOL_SIDES: PoolSide[] = ['north', 'south', 'east', 'west'];
+
+/**
+ * Dış aydınlatma: dış şerit LED. (Güneş enerjili lamba ve kapalı panel aplikleri kaldırıldı;
+ * eski kayıtlarda kalan `solar` / `panels` alanları yok sayılır.)
+ */
+export interface OutdoorLighting {
+  strip: boolean;
+}
+
+export function outdoorLightingOf(config: Pick<PoolConfig, 'outdoorLighting'>): OutdoorLighting {
+  return { strip: config.outdoorLighting?.strip === true };
+}
+
+/** Herhangi bir ışık açıkken sahne gece moduna geçer. */
+export function isNightScene(config: Pick<PoolConfig, 'lighting' | 'outdoorLighting'>): boolean {
+  return config.lighting.enabled || outdoorLightingOf(config).strip;
+}
 
 export interface PoolConfig {
   width: number;
@@ -26,17 +43,22 @@ export interface PoolConfig {
   frameColor: FrameColor;
   panel: PanelType;                       // global default applied to new segments
   panelOverrides: Record<string, PanelType>; // key: `${side}-${index}`
+  /** İç aydınlatma: havuz içi RGB LED (mobil uygulamadan kontrol) */
   lighting: {
     enabled: boolean;
     color: LightColor;
   };
+  /** Dış aydınlatma seçenekleri (eski kayıtlarda yok) */
+  outdoorLighting?: OutdoorLighting;
   ground: GroundType;
   installation: InstallationType; // yerüstü / yarı gömülü / tam gömülü
   cladding: CladdingType;
   platformDirection: PlatformDirection;
   platformExtension: boolean;
+  /** Makine dairesi dışındaki kenarlara eklenen dekorlu teras uzatmaları */
+  extensionSides?: PoolSide[];
   railings: boolean;
-  stairStyle: StairStyle; // platform merdiveni: açık basamak / blok basamak
+  stairStyle: StairStyle; // platform (dış) merdiveni: yok / açık basamak / blok basamak
   poolEntry: PoolEntry;
   /** @deprecated eski kayıtlar için; yerine poolEntry */
   innerLadder?: boolean;
@@ -56,17 +78,19 @@ export const defaultPoolConfig: PoolConfig = {
   width: 2.30,
   length: 4,
   frameColor: 'anthracite',
-  panel: 'glass',
+  panel: 'closed',
   panelOverrides: {},
-  lighting: { enabled: false, color: 'blue' },
+  lighting: { enabled: false, color: 'white' },
+  outdoorLighting: { strip: false },
   ground: 'grass',
   installation: 'ground',
   cladding: 'white',
   platformDirection: 'east',
   platformExtension: false,
+  extensionSides: [],
   railings: false,
-  stairStyle: 'open',
-  poolEntry: 'small_stairs',
+  stairStyle: 'none',
+  poolEntry: 'none',
   waterfall: false,
   poolCover: false,
   poolCoverType: 'automatic',
@@ -81,6 +105,12 @@ export const defaultPoolConfig: PoolConfig = {
 /** Tam gömülü kurulum: korkuluk, dış merdiven ve cam panel kullanılmaz. */
 export function isSunken(config: Pick<PoolConfig, 'installation'>): boolean {
   return config.installation === 'sunken';
+}
+
+/** Teras uzatması eklenmiş kenarlar (makine dairesi kenarı hariç, tekrarsız ve geçerli). */
+export function extensionSidesOf(config: Pick<PoolConfig, 'extensionSides' | 'platformDirection'>): PoolSide[] {
+  const list = Array.isArray(config.extensionSides) ? config.extensionSides : [];
+  return POOL_SIDES.filter((s) => s !== config.platformDirection && list.includes(s));
 }
 
 export function panelKey(side: PoolSide, index: number): string {

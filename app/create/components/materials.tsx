@@ -7,6 +7,7 @@
  *   keskin kutular "çizim" hissi verir. UV'ler metre cinsindendir (ExtrudeGeometry),
  *   bu yüzden dokular her boyutta aynı ölçekte durur.
  * - WoodMaterial: Poly Haven "Wood Floor Deck" PBR seti (CC0) — renk + normal + pürüz/AO.
+ * - DeckSurfaceMaterial: platform/kenar/teras/merdiven yüzeyi — şimdilik antrasit granit (GraniteMaterial).
  *   Tahtalar dokuda U yönünde uzanır; ahşap parçaların uzun kenarı X ekseninde olmalı.
  * - PowderCoatMaterial: RAL rengi + kodla üretilen "portakal kabuğu" boya dokusu.
  * - GlassMaterial: bakış açısına göre yansıyan cam (Fresnel). Transmission kullanılmaz;
@@ -71,6 +72,83 @@ export function WoodMaterial({ envMapIntensity = 0.7 }: { envMapIntensity?: numb
       envMapIntensity={envMapIntensity}
     />
   );
+}
+
+/* ── Antrasit granit (platform yüzeyi) ──────────────────────────────────── */
+
+const GRANITE_TILE_M = 0.6; // 60 × 60 cm plaka
+
+let graniteCache: { map: THREE.CanvasTexture; rough: THREE.CanvasTexture } | null = null;
+
+/** Benekli antrasit granit plaka dokusu + ince derz; renk ve pürüz haritası. */
+function getGraniteMaps() {
+  if (graniteCache) return graniteCache;
+  const S = 512;
+  const make = () => {
+    const c = document.createElement('canvas');
+    c.width = c.height = S;
+    return c;
+  };
+  const colorCv = make();
+  const roughCv = make();
+  const g = colorCv.getContext('2d')!;
+  const r = roughCv.getContext('2d')!;
+  g.fillStyle = '#323438';
+  g.fillRect(0, 0, S, S);
+  r.fillStyle = '#a8a8a8';
+  r.fillRect(0, 0, S, S);
+  // Sabit tohumlu sözde rastgele: her açılışta aynı desen
+  let seed = 7;
+  const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+  const tones = ['#2a2c2f', '#4a4d52', '#55585d', '#1f2123', '#6a6d72'];
+  for (let i = 0; i < 26000; i++) {
+    const x = rnd() * S;
+    const y = rnd() * S;
+    const rad = 0.5 + rnd() * 1.6;
+    g.fillStyle = tones[Math.floor(rnd() * tones.length)];
+    g.globalAlpha = 0.35 + rnd() * 0.5;
+    g.beginPath();
+    g.arc(x, y, rad, 0, Math.PI * 2);
+    g.fill();
+  }
+  // Seyrek parlak mika benekleri (pürüzde daha parlak)
+  for (let i = 0; i < 900; i++) {
+    const x = rnd() * S;
+    const y = rnd() * S;
+    g.globalAlpha = 0.6;
+    g.fillStyle = '#9a9ea4';
+    g.fillRect(x, y, 1.2, 1.2);
+    r.fillStyle = '#3c3c3c';
+    r.fillRect(x, y, 1.5, 1.5);
+  }
+  g.globalAlpha = 1;
+  // Plaka derzi (doku kenarı = plaka kenarı)
+  g.fillStyle = '#1b1c1e';
+  g.fillRect(0, 0, S, 2);
+  g.fillRect(0, 0, 2, S);
+  r.fillStyle = '#d8d8d8';
+  r.fillRect(0, 0, S, 2);
+  r.fillRect(0, 0, 2, S);
+
+  const map = new THREE.CanvasTexture(colorCv);
+  const rough = new THREE.CanvasTexture(roughCv);
+  tileWorld(map, GRANITE_TILE_M, true);
+  tileWorld(rough, GRANITE_TILE_M, false);
+  graniteCache = { map, rough };
+  return graniteCache;
+}
+
+export function GraniteMaterial() {
+  const { map, rough } = useMemo(getGraniteMaps, []);
+  return <meshStandardMaterial map={map} roughnessMap={rough} roughness={1} metalness={0} envMapIntensity={0.3} />;
+}
+
+/**
+ * Platform, kenar döşemesi, teras ve merdiven yüzeyleri. Şimdilik antrasit granit;
+ * firmadan döşeme dokuları geldiğinde yalnızca burası değişir.
+ */
+export function DeckSurfaceMaterial() {
+  return <GraniteMaterial />;
 }
 
 /* ── Prosedürel dokular (indirme gerektirmez) ───────────────────────────── */
@@ -265,7 +343,7 @@ export const groundAntiTileKey = () => 'caretta-ground-antitile';
 
 /* ── Karo derzi ─────────────────────────────────────────────────────────── */
 
-let tileMaps: { normal: THREE.Texture; rough: THREE.Texture } | null = null;
+let tileMaps: { normal: THREE.Texture; rough: THREE.Texture; mask: THREE.Texture } | null = null;
 
 /** Tek karo için derz haritaları (kaplama dokusuyla aynı repeat ile kullanılır). */
 export function getTileMaps() {
@@ -276,10 +354,14 @@ export function getTileMaps() {
   const surface = tileableNoise(size, 32, 29);
   const height = new Float32Array(size * size);
   const rough = new Float32Array(size * size);
+  const mask = new Float32Array(size * size);
   for (let y = 0; y < size; y++) {
     for (let x = 0; x < size; x++) {
       const edge = Math.min(x, y, size - 1 - x, size - 1 - y);
       const i = y * size + x;
+      // Kılavuz çizgi (derz) maskesi: derzde 0, karo kenarına doğru yumuşak geçiş; düz renk kaplamada
+      // da karo ızgarası okunsun diye derz normal haritasındakinden biraz geniş
+      mask[i] = Math.min(1, Math.max(0, (edge - grout - 1) / 2.5));
       if (edge < grout) {
         height[i] = 0;
         rough[i] = 1;
@@ -293,6 +375,7 @@ export function getTileMaps() {
   tileMaps = {
     normal: canvasTexture(heightToNormalCanvas(height, size, 1.4), [1, 1]),
     rough: canvasTexture(grayCanvas(rough, size), [1, 1]),
+    mask: canvasTexture(grayCanvas(mask, size), [1, 1]),
   };
   return tileMaps;
 }

@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import dynamic from 'next/dynamic';
-import { defaultPoolConfig, type PoolConfig } from '@/lib/types';
+import { defaultPoolConfig, isNightScene, type PoolConfig } from '@/lib/types';
 import { calculateBasePrice, type PriceBreakdown } from '@/lib/pricing';
 import { getRegion, REGIONS, type Region } from '@/lib/regions';
 import ConfigPanel from './ConfigPanel';
@@ -150,7 +150,7 @@ export default function ConfiguratorClient({ userId, userEmail, role, fullName, 
             <TemplateView
               template={venue}
               config={config}
-              night={config.lighting.enabled}
+              night={isNightScene(config)}
               alt={t(venue.nameKey)}
               adjust={adjust}
               onAdjust={placing ? setAdjust : undefined}
@@ -175,7 +175,7 @@ export default function ConfiguratorClient({ userId, userEmail, role, fullName, 
                   >
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img
-                      src={config.lighting.enabled ? v.nightThumb : v.dayThumb}
+                      src={isNightScene(config) ? v.nightThumb : v.dayThumb}
                       alt=""
                       className="absolute inset-0 h-full w-full object-cover"
                     />
