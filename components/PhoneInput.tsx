@@ -42,7 +42,7 @@ interface Props {
 }
 
 export default function PhoneInput({ value, onChange, placeholder, className, required, id }: Props) {
-  const [country, setCountry] = useState(COUNTRY_CODES[0]);
+  const [country, setCountry] = useState<typeof COUNTRY_CODES[number]>(COUNTRY_CODES[0]);
   const [number, setNumber] = useState('');
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState('');

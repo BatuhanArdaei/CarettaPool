@@ -29,7 +29,8 @@ export function useScrollAnimate<T extends HTMLElement>(
     const el = ref.current;
     if (!el) return;
 
-    let anime: typeof import('animejs').default | null = null;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let anime: any = null;
 
     const observe = async () => {
       try {
