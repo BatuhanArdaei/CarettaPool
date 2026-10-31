@@ -1,9 +1,14 @@
 import { createHmac, randomInt, timingSafeEqual } from 'crypto';
+import nodemailer from 'nodemailer';
 import { createAdminClient } from '@/lib/supabase/server';
 
 /**
- * Teklif formu için e-posta doğrulama: 6 haneli kod Resend ile noreply@carettapool.com
- * adresinden gönderilir. Kod yalnızca HMAC özeti olarak saklanır (email_verifications).
+ * Teklif formu için e-posta doğrulama: 6 haneli kod Yandex 360 SMTP üzerinden
+ * noreply@carettapool.com adresinden gönderilir (SPF/DKIM Yandex'te hazır).
+ * Kod yalnızca HMAC özeti olarak saklanır (email_verifications).
+ *
+ * Ortam değişkenleri: SMTP_USER (posta kutusu), SMTP_PASS (Yandex uygulama şifresi),
+ * isteğe bağlı SMTP_HOST / SMTP_PORT.
  */
 
 const CODE_TTL_MIN = 15;
@@ -49,10 +54,26 @@ const MAIL: Record<string, { subject: string; body: (code: string) => string }> 
   ar: { subject: 'رمز التحقق من Caretta Pool', body: (c) => `رمز التحقق لإكمال طلب عرض السعر: ${c}\n\nالرمز صالح لمدة ${CODE_TTL_MIN} دقيقة. إذا لم تقم بهذا الطلب، يمكنك تجاهل هذه الرسالة.` },
 };
 
-/** Yeni kod üretir, kaydeder ve Resend ile gönderir. */
+let transport: nodemailer.Transporter | null = null;
+
+function getTransport(): nodemailer.Transporter | null {
+  const user = process.env.SMTP_USER;
+  const pass = process.env.SMTP_PASS;
+  if (!user || !pass) return null;
+  const port = Number(process.env.SMTP_PORT ?? 465);
+  transport ??= nodemailer.createTransport({
+    host: process.env.SMTP_HOST ?? 'smtp.yandex.com',
+    port,
+    secure: port === 465,
+    auth: { user, pass },
+  });
+  return transport;
+}
+
+/** Yeni kod üretir, kaydeder ve SMTP ile gönderir. */
 export async function sendVerificationCode(email: string, lang: string): Promise<VerifyError | null> {
-  const apiKey = process.env.RESEND_API_KEY;
-  if (!apiKey) return 'email_unavailable';
+  const smtp = getTransport();
+  if (!smtp) return 'email_unavailable';
 
   const db = createAdminClient();
   const hourAgo = new Date(Date.now() - 3600_000).toISOString();
@@ -83,18 +104,20 @@ export async function sendVerificationCode(email: string, lang: string): Promise
 <p style="color:#64748b;font-size:13px">${text.split('\n\n')[1]}</p>
 <p style="color:#94a3b8;font-size:12px">Caretta Pool</p></div>`;
 
-  const res = await fetch('https://api.resend.com/emails', {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      from: process.env.EMAIL_FROM ?? 'Caretta Pool <noreply@carettapool.com>',
-      to: [email],
+  try {
+    await smtp.sendMail({
+      // Yandex yalnızca oturum açılan posta kutusu adına göndermeye izin verir
+      from: { name: 'Caretta Pool', address: process.env.SMTP_USER! },
+      to: email,
       subject: mail.subject,
       text,
       html,
-    }),
-  }).catch(() => null);
-  return res?.ok ? null : 'send_failed';
+    });
+    return null;
+  } catch (err) {
+    console.error('Doğrulama e-postası gönderilemedi:', err);
+    return 'send_failed';
+  }
 }
 
 /** En son gönderilen kodu doğrular; başarılıysa kodu kullanılmış olarak işaretler. */
