@@ -30,7 +30,7 @@ pm2 save >/dev/null
 
 # Site yanıt veriyor mu
 for i in $(seq 1 15); do
-  if curl -fsS -o /dev/null "http://127.0.0.1:$PORT/tr"; then break; fi
+  if curl -fs -o /dev/null "http://127.0.0.1:$PORT/tr"; then break; fi
   if [ "$i" = 15 ]; then echo "✗ Site yanıt vermiyor"; pm2 logs "$APP_NAME" --lines 30 --nostream; exit 1; fi
   sleep 2
 done
