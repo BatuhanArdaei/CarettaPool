@@ -16,6 +16,14 @@ const LEGACY: Record<string, string> = {
   '/login':      '/tr/login',
 };
 
+// Sunucuda uygulama nginx arkasında 127.0.0.1:3001'de çalışır ve request.url `localhost:3001` taşır.
+// Middleware mutlak adres istediğinden adresi ziyaretçinin geldiği Host başlığından kurarız.
+function redirectTo(path: string, request: NextRequest) {
+  const host = request.headers.get('host') ?? request.nextUrl.host;
+  const proto = request.headers.get('x-forwarded-proto')?.split(',')[0].trim() === 'https' ? 'https' : 'http';
+  return NextResponse.redirect(new URL(path, `${proto}://${host}`));
+}
+
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
@@ -34,17 +42,17 @@ export async function middleware(request: NextRequest) {
 
   // Root → default locale home
   if (pathname === '/') {
-    return NextResponse.redirect(new URL(`/${DEFAULT_LANG}`, request.url));
+    return redirectTo(`/${DEFAULT_LANG}`, request);
   }
 
   // Known legacy paths
   const legacy = LEGACY[pathname];
   if (legacy) {
-    return NextResponse.redirect(new URL(legacy, request.url));
+    return redirectTo(legacy, request);
   }
 
   // Anything else without a locale → prepend default
-  return NextResponse.redirect(new URL(`/${DEFAULT_LANG}${pathname}`, request.url));
+  return redirectTo(`/${DEFAULT_LANG}${pathname}`, request);
 }
 
 export const config = {
