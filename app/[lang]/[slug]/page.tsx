@@ -4,6 +4,7 @@ import Image from 'next/image';
 import { createClient } from '@/lib/supabase/server';
 import { SLUG_MAP, localePath } from '@/lib/i18n/routes';
 import { getMessages, createT } from '@/lib/i18n/server';
+import { pageAlternates } from '@/lib/site';
 import { POOL_PRODUCTS, formatDimensions, getProductSpecItems } from '@/lib/products-catalog';
 import GaleriGrid from '@/app/galeri/GaleriGrid';
 import ContactForm from '@/app/iletisim/ContactForm';
@@ -27,7 +28,7 @@ export async function generateMetadata({ params }: Props) {
     catalogs: `${t('catalog.title')} — CarettaPool`,
     faq:      `${t('faq.title')} — CarettaPool`,
   };
-  return { title: titles[pageKey] ?? 'CarettaPool' };
+  return { title: titles[pageKey] ?? 'CarettaPool', alternates: pageAlternates(lang, pageKey) };
 }
 
 // ─── Products ────────────────────────────────────────────────────────────────

@@ -5,7 +5,7 @@ import type { LangCode } from '@/lib/i18n';
 export async function generateMetadata({ params }: { params: { lang: string } }) {
   const msgs = await getMessages(params.lang as LangCode);
   const t = createT(msgs);
-  return { title: `${t('nav.adminLogin')} — CarettaPool` };
+  return { title: `${t('nav.adminLogin')} — CarettaPool`, robots: { index: false } };
 }
 
 export default function LoginPage({

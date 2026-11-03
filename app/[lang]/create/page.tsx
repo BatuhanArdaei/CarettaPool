@@ -2,8 +2,11 @@ import { createClient } from '@/lib/supabase/server';
 import { dealerRegionOf } from '@/lib/priceServer';
 import ConfiguratorClient from '@/app/create/components/ConfiguratorClient';
 import BayiPopup from '@/components/BayiPopup';
+import { pageAlternates } from '@/lib/site';
 
-export const metadata = { title: 'Tasarla — CarettaPool' };
+export function generateMetadata({ params }: { params: { lang: string } }) {
+  return { title: 'Tasarla — CarettaPool', alternates: pageAlternates(params.lang, 'create') };
+}
 
 export default async function LangCreatePage() {
   const supabase = createClient();
